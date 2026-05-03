@@ -32,7 +32,7 @@ export async function extractEpub(file) {
       spineItems.map(async (idref) => {
         const href = manifestMap[idref]
         if (!href) return ''
-        const chapterPath = opfDir + href
+        const chapterPath = opfDir + decodeURIComponent(href)
         const chapterFile = zip.file(chapterPath)
         if (!chapterFile) return ''
         const html = await chapterFile.async('string')

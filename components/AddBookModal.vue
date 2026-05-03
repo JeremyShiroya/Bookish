@@ -98,7 +98,7 @@
             <i class="ri-close-line"></i>
             Cancel
           </button>
-          <button type="submit" class="save-button" :disabled="!documentFile || isProcessing">
+          <button type="submit" class="save-button" :disabled="!documentFile || isProcessing || !!extractionError">
             <i class="ri-add-line" v-if="!isProcessing"></i>
             <i class="ri-loader-4-line spinner" v-else></i>
             {{ isProcessing ? 'Processing...' : 'Add Book' }}
@@ -217,7 +217,7 @@ const closeModal = () => {
 }
 
 const saveBook = () => {
-  if (!documentFile.value) return
+  if (!documentFile.value || isProcessing.value) return
 
   const bookToSave = {
     ...newBook.value,
