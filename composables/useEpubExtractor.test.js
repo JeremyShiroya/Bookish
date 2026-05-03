@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import JSZip from 'jszip'
 
-// Helper: build a minimal valid EPUB zip in memory
 async function buildMinimalEpub() {
   const zip = new JSZip()
 

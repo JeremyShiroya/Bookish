@@ -9,31 +9,25 @@ export async function extractEpub(file) {
     const arrayBuffer = await file.arrayBuffer()
     const zip = await JSZip.loadAsync(arrayBuffer)
 
-    // 1. Find OPF path from container.xml
     const containerXml = await zip.file('META-INF/container.xml').async('string')
     const containerDoc = parseXml(containerXml)
     const opfPath = containerDoc
       .querySelector('rootfile')
       .getAttribute('full-path')
 
-    // 2. Parse OPF for manifest and spine
     const opfXml = await zip.file(opfPath).async('string')
     const opfDoc = parseXml(opfXml)
 
-    // Build id -> href map from manifest
     const manifestMap = {}
     opfDoc.querySelectorAll('manifest item').forEach(item => {
       manifestMap[item.getAttribute('id')] = item.getAttribute('href')
     })
 
-    // Get spine order
     const spineItems = Array.from(opfDoc.querySelectorAll('spine itemref'))
       .map(ref => ref.getAttribute('idref'))
 
-    // 3. Base directory for relative hrefs (OPF may live in a subdirectory)
     const opfDir = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : ''
 
-    // 4. Read each chapter and extract body content
     const chapters = await Promise.all(
       spineItems.map(async (idref) => {
         const href = manifestMap[idref]
