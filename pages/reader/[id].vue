@@ -495,17 +495,24 @@ const isHtml = (content) => {
   .reader-header {
     padding: 0 1rem;
   }
-  
+
   .header-center {
     display: none;
   }
-  
+
   .book-title {
     max-width: 150px;
   }
-  
+
   .reader-content {
     padding: 2rem 1.5rem;
   }
+}
+
+.book-text :deep(.chapter-break) {
+  border: none;
+  border-top: 1px solid rgba(108, 151, 177, 0.3);
+  margin: 3rem auto;
+  width: 60%;
 }
 </style>
