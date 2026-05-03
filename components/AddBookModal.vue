@@ -98,7 +98,7 @@
             <i class="ri-close-line"></i>
             Cancel
           </button>
-          <button type="submit" class="save-button" :disabled="!documentFile || isProcessing || !!extractionError">
+          <button type="submit" class="save-button" :disabled="!documentFile || isProcessing">
             <i class="ri-add-line" v-if="!isProcessing"></i>
             <i class="ri-loader-4-line spinner" v-else></i>
             {{ isProcessing ? 'Processing...' : 'Add Book' }}
@@ -180,24 +180,31 @@ const handleDocumentChange = async (event) => {
       const { extractEpub } = await import('~/composables/useEpubExtractor.js')
       newBook.value.content = await extractEpub(file)
     } catch (err) {
-      extractionError.value = `EPUB error: ${err.message}`
+      extractionError.value = `Could not extract EPUB content. The book will be added without in-app reading.`
       newBook.value.content = null
     } finally {
       isProcessing.value = false
     }
 
   } else if (extension === 'pdf') {
-    isProcessing.value = true
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      newBook.value.content = e.target.result
-      isProcessing.value = false
+    const MAX_PDF_BYTES = 3 * 1024 * 1024
+    if (file.size > MAX_PDF_BYTES) {
+      extractionError.value = `PDF is too large to preview (${formatFileSize(file.size)}). The book will be added without in-app reading.`
+      newBook.value.content = null
+    } else {
+      isProcessing.value = true
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        newBook.value.content = e.target.result
+        isProcessing.value = false
+      }
+      reader.onerror = () => {
+        extractionError.value = 'Could not read PDF file. The book will be added without in-app reading.'
+        newBook.value.content = null
+        isProcessing.value = false
+      }
+      reader.readAsDataURL(file)
     }
-    reader.onerror = () => {
-      extractionError.value = 'Could not read PDF file.'
-      isProcessing.value = false
-    }
-    reader.readAsDataURL(file)
 
   } else {
     newBook.value.content = null
@@ -548,7 +555,7 @@ const saveBook = () => {
 
 .extraction-error {
   font-size: 0.75rem;
-  color: #ef4444;
+  color: #d97706;
   margin-top: 0.4rem;
 }
 </style>
