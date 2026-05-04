@@ -33,6 +33,7 @@ export function stripHtml(html) {
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
     .replace(/\s{2,}/g, ' ')
+    .trim()
 }
 
 export function splitToChunks(text, maxChars = 180) {
