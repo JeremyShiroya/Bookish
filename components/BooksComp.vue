@@ -202,12 +202,20 @@
             @click="router.push(`/reader/${book.id}`)"
           >
             <div class="book-cover">
-              <img :src="book.cover" :alt="book.title" />
+              <img :src="resolveBookCover(book)" :alt="book.title" @error="(e) => coverFallback(e, book.title)" />
               <button class="heart-btn" title="Add to favorites" @click.stop="toggleFavourite(book.id)">
                 <i :class="[book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line', { active: book.isFavourite }]"></i>
               </button>
-              <button class="play-btn" title="Play" @click.stop>
-                <i class="ri-play-fill"></i>
+              <button class="delete-btn" title="Delete book" @click.stop="openDeleteModal(book)">
+                <i class="ri-delete-bin-line"></i>
+              </button>
+              <button
+                class="play-btn"
+                :class="{ active: isBookActive(book) }"
+                title="Read aloud"
+                @click.stop="handlePlay(book)"
+              >
+                <i :class="isBookActive(book) ? 'ri-pause-fill' : 'ri-play-fill'"></i>
               </button>
             </div>
             <div class="book-info">
@@ -235,7 +243,7 @@
               <tr v-for="book in filteredBooks" :key="book.id" @click="router.push(`/reader/${book.id}`)">
                 <td class="book-cell">
                   <div class="table-book-info">
-                    <img :src="book.cover" :alt="book.title" class="table-cover" />
+                    <img :src="resolveBookCover(book)" :alt="book.title" class="table-cover" @error="(e) => coverFallback(e, book.title)" />
                     <span class="table-title">{{ book.title }}</span>
                   </div>
                 </td>
@@ -263,6 +271,9 @@
                     </button>
                     <button class="action-icon" @click="openEditModal(book)">
                       <i class="ri-edit-line"></i>
+                    </button>
+                    <button class="action-icon delete" @click="openDeleteModal(book)">
+                      <i class="ri-delete-bin-line"></i>
                     </button>
                   </div>
                 </td>
@@ -320,11 +331,21 @@ import AddBookModal from "./AddBookModal.vue";
 import DeleteConfirmModal from "./DeleteConfirmModal.vue";
 
 import { useBooks } from "~/composables/useBooks";
+import { useTTS } from "~/composables/useTTS";
 
 // Reactive data
 import EmptyState from "./EmptyState.vue";
 
 const { books, loading, updateBook, deleteBook: removeBookFromStore, addBook, toggleFavourite, fetchAllData } = useBooks();
+const { play: playTTS, ttsBook, ttsStatus } = useTTS()
+
+const isBookActive = (book) =>
+  ttsBook.value?.id === book.id && ttsStatus.value !== 'idle'
+
+const handlePlay = (book) => {
+  playTTS(book)
+}
+
 const router = useRouter();
 
 // Filter options
@@ -451,6 +472,29 @@ const handleBookAdded = async (newBook) => {
   }
   closeAddModal();
 };
+
+const STALE_COVERS = ['/Images/The Boyfriend.jpg']
+
+const resolveBookCover = (book) => {
+  if (!book.cover || STALE_COVERS.includes(book.cover)) {
+    return generateCoverPlaceholder(book.title)
+  }
+  return book.cover
+}
+
+const generateCoverPlaceholder = (title) => {
+  const colors = ['#6C97B1', '#5a8299', '#4a7a92', '#7fb3cc', '#3d6b80']
+  const hash = [...title].reduce((acc, c) => acc + c.charCodeAt(0), 0)
+  const color = colors[hash % colors.length]
+  const initial = title.trim()[0]?.toUpperCase() || '?'
+  const displayTitle = title.length > 18 ? title.substring(0, 18) + '…' : title
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="130" font-family="serif" font-size="100" fill="rgba(255,255,255,0.25)" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="rgba(255,255,255,0.65)" text-anchor="middle">${displayTitle}</text></svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
+const coverFallback = (event, title) => {
+  event.target.src = generateCoverPlaceholder(title)
+}
 
 const openDeleteModal = (book) => {
   selectedBook.value = book;
@@ -717,6 +761,37 @@ onUnmounted(() => {
   z-index: 10;
 }
 
+.delete-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  border: none;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+  color: #ef4444;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  z-index: 10;
+}
+
+.book-card:hover .delete-btn {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.delete-btn:hover {
+  background: white;
+  transform: scale(1.1) !important;
+}
+
 .play-btn {
   position: absolute;
   bottom: 10px;
@@ -757,6 +832,12 @@ onUnmounted(() => {
 .play-btn:hover {
   transform: scale(1.05) translateY(0) !important;
   background: #5a829b; /* Slightly darker on hover */
+}
+
+.play-btn.active {
+  opacity: 1;
+  transform: translateY(0);
+  background: #6C97B1;
 }
 
 .book-card:hover .book-cover {
@@ -920,6 +1001,40 @@ onUnmounted(() => {
   border-radius: 0.25rem;
   font-size: 0.75rem;
   font-weight: 500;
+}
+
+.table-actions {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.action-icon {
+  padding: 0.4rem;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-icon:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.action-icon.active {
+  color: #ef4444;
+}
+
+.action-icon.delete:hover {
+  background: #fef2f2;
+  color: #dc2626;
 }
 
 .actions-dropdown {
