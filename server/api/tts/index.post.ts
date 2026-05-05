@@ -1,13 +1,9 @@
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const voxcpmUrl = process.env.VOXCPM_URL
+  const voxcpmUrl = process.env.VOXCPM_URL || 'http://localhost:8000'
   const speaker = process.env.VOXCPM_SPEAKER || 'default'
   const apiKey = process.env.VOXCPM_API_KEY
   const ttsPath = process.env.VOXCPM_TTS_PATH || '/tts'
-
-  if (!voxcpmUrl) {
-    return { engine: 'webspeech' }
-  }
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`

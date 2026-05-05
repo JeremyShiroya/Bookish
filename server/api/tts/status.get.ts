@@ -1,6 +1,5 @@
 export default defineEventHandler(async () => {
-  const url = process.env.VOXCPM_URL
-  if (!url) return { available: false, engine: 'webspeech' }
+  const url = process.env.VOXCPM_URL || 'http://localhost:8000'
 
   try {
     const res = await fetch(`${url}/health`, {
