@@ -11,7 +11,7 @@
         <i class="ri-arrow-left-s-line"></i>
         Library
       </button>
-      <div class="reading-controls" v-if="book && !isPdf">
+      <div class="reading-controls" v-if="book">
         <button class="ctrl-btn small-a" @click="decreaseFontSize" title="Smaller text">A</button>
         <button class="ctrl-btn large-a" @click="increaseFontSize" title="Bigger text">A</button>
         <button class="ctrl-btn" @click="toggleTheme" :title="readerTheme === 'light' ? 'Dark mode' : 'Light mode'">
@@ -28,21 +28,7 @@
         <p>Opening book…</p>
       </div>
 
-      <!-- PDF -->
-      <template v-else-if="book && isPdf">
-        <div class="book-heading">
-          <h1>{{ book.title }}</h1>
-          <p class="by-line">{{ book.author }}</p>
-          <div class="heading-rule"></div>
-        </div>
-        <PdfViewer v-if="book.content" :src="book.content" />
-        <div v-else class="no-content">
-          <i class="ri-file-pdf-line"></i>
-          <p>PDF is too large to preview in-app.</p>
-        </div>
-      </template>
-
-      <!-- EPUB / text -->
+      <!-- Book (any format — content is always HTML text) -->
       <template v-else-if="book">
         <div class="book-heading">
           <h1>{{ book.title }}</h1>
@@ -55,6 +41,9 @@
           <p>Loading content…</p>
         </div>
 
+        <!-- Legacy: old PDF uploads stored as base64 data URL -->
+        <PdfViewer v-else-if="isLegacyPdf" :src="book.content" />
+
         <div
           v-else-if="book.content"
           class="book-text"
@@ -64,8 +53,8 @@
 
         <div v-else class="no-content">
           <i class="ri-book-2-line"></i>
-          <p>No in-app content available for this book.</p>
-          <p class="no-content-sub">Upload an EPUB to read here.</p>
+          <p>No readable content for this book.</p>
+          <p class="no-content-sub">Re-upload the file to enable in-app reading.</p>
         </div>
       </template>
 
@@ -98,7 +87,9 @@ const fontSize = ref(19);
 const readerTheme = ref('light');
 const scrollProgress = ref(0);
 
-const isPdf = computed(() => book.value?.format === 'pdf');
+const isLegacyPdf = computed(() =>
+  book.value?.format === 'pdf' && book.value?.content?.startsWith('data:')
+);
 
 const displayContent = computed(() => {
   if (!book.value?.content) return '';

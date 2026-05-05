@@ -144,8 +144,20 @@ const triggerDocumentInput = () => {
 const handleCoverChange = (event) => {
   const file = event.target.files[0]
   if (file) {
-    coverPreview.value = URL.createObjectURL(file)
+    const reader = new FileReader()
+    reader.onload = (e) => { coverPreview.value = e.target.result }
+    reader.readAsDataURL(file)
   }
+}
+
+const generateCoverPlaceholder = (title) => {
+  const colors = ['#6C97B1', '#5a8299', '#4a7a92', '#7fb3cc', '#3d6b80']
+  const hash = [...title].reduce((acc, c) => acc + c.charCodeAt(0), 0)
+  const color = colors[hash % colors.length]
+  const initial = title.trim()[0]?.toUpperCase() || '?'
+  const displayTitle = title.length > 18 ? title.substring(0, 18) + '…' : title
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="130" font-family="serif" font-size="100" fill="rgba(255,255,255,0.25)" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="rgba(255,255,255,0.65)" text-anchor="middle">${displayTitle}</text></svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
 const handleDocumentChange = async (event) => {
@@ -187,23 +199,15 @@ const handleDocumentChange = async (event) => {
     }
 
   } else if (extension === 'pdf') {
-    const MAX_PDF_BYTES = 3 * 1024 * 1024
-    if (file.size > MAX_PDF_BYTES) {
-      extractionError.value = `PDF is too large to preview (${formatFileSize(file.size)}). The book will be added without in-app reading.`
+    isProcessing.value = true
+    try {
+      const { extractPdf } = await import('~/composables/usePdfExtractor.js')
+      newBook.value.content = await extractPdf(file)
+    } catch (err) {
+      extractionError.value = 'Could not extract PDF text. The book will be added without in-app reading.'
       newBook.value.content = null
-    } else {
-      isProcessing.value = true
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        newBook.value.content = e.target.result
-        isProcessing.value = false
-      }
-      reader.onerror = () => {
-        extractionError.value = 'Could not read PDF file. The book will be added without in-app reading.'
-        newBook.value.content = null
-        isProcessing.value = false
-      }
-      reader.readAsDataURL(file)
+    } finally {
+      isProcessing.value = false
     }
 
   } else {
@@ -228,7 +232,7 @@ const saveBook = () => {
 
   const bookToSave = {
     ...newBook.value,
-    cover: coverPreview.value || '/Images/The Boyfriend.jpg'
+    cover: coverPreview.value || generateCoverPlaceholder(newBook.value.title || 'Book')
   }
   
   if (!bookToSave.series || bookToSave.series.trim() === '') {
