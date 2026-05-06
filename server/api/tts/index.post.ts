@@ -1,20 +1,21 @@
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const voxcpmUrl = process.env.VOXCPM_URL || 'http://localhost:8000'
-  const speaker = process.env.VOXCPM_SPEAKER || 'default'
+  const model = process.env.VOXCPM_MODEL || 'openbmb/VoxCPM2'
+  const voice = process.env.VOXCPM_SPEAKER || body.voice || 'default'
   const apiKey = process.env.VOXCPM_API_KEY
-  const ttsPath = process.env.VOXCPM_TTS_PATH || '/tts'
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
 
   try {
-    const response = await fetch(`${voxcpmUrl}${ttsPath}`, {
+    const response = await fetch(`${voxcpmUrl}/v1/audio/speech`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        text: body.text,
-        speaker,
+        model,
+        input: body.text,
+        voice,
         speed: body.speed ?? 1.0,
       }),
       signal: AbortSignal.timeout(30000),
