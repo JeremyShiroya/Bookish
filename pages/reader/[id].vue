@@ -189,7 +189,7 @@ const decreaseFontSize = () => { if (fontSize.value > 13) fontSize.value -= 1; }
 }
 .progress-fill {
   height: 100%;
-  background: #6C97B1;
+  background: #8A2BE2;
   transition: width 0.15s;
 }
 
@@ -209,9 +209,9 @@ const decreaseFontSize = () => { if (fontSize.value > 13) fontSize.value -= 1; }
   gap: 0.2rem;
   background: none;
   border: none;
-  color: #6C97B1;
+  color: #8A2BE2;
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 400;
   cursor: pointer;
   padding: 0.35rem 0.6rem;
   border-radius: 0.375rem;
@@ -234,7 +234,7 @@ const decreaseFontSize = () => { if (fontSize.value > 13) fontSize.value -= 1; }
   padding: 0.35rem 0.55rem;
   border-radius: 0.375rem;
   font-family: Georgia, serif;
-  font-weight: 700;
+  font-weight: 400;
   font-size: 0.9rem;
   transition: background 0.15s, color 0.15s;
   display: flex;
@@ -260,7 +260,7 @@ const decreaseFontSize = () => { if (fontSize.value > 13) fontSize.value -= 1; }
 .book-heading h1 {
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 2.1rem;
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1.2;
   margin: 0 0 0.5rem;
   color: var(--text);
@@ -273,7 +273,7 @@ const decreaseFontSize = () => { if (fontSize.value > 13) fontSize.value -= 1; }
 .heading-rule {
   width: 48px;
   height: 3px;
-  background: #6C97B1;
+  background: #8A2BE2;
   border-radius: 2px;
   margin: 0 auto;
 }
@@ -334,8 +334,8 @@ const decreaseFontSize = () => { if (fontSize.value > 13) fontSize.value -= 1; }
 .loader-spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid rgba(108, 151, 177, 0.2);
-  border-top-color: #6C97B1;
+  border: 3px solid rgba(138, 43, 226, 0.2);
+  border-top-color: #8A2BE2;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -356,13 +356,13 @@ const decreaseFontSize = () => { if (fontSize.value > 13) fontSize.value -= 1; }
 }
 .reader-error i { font-size: 3rem; color: #ef4444; margin-bottom: 1rem; display: block; }
 .back-link {
-  background: #6C97B1;
+  background: #8A2BE2;
   color: white;
   border: none;
   padding: 0.625rem 1.25rem;
   border-radius: 0.5rem;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 400;
   margin-top: 1rem;
 }
 </style>

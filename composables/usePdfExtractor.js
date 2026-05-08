@@ -11,6 +11,7 @@ export async function extractPdf(file) {
   ).toString()
 
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+  const numPages = pdf.numPages
   let html = ''
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -69,5 +70,5 @@ export async function extractPdf(file) {
     }
   }
 
-  return html || null
+  return { content: html || null, pages: numPages }
 }

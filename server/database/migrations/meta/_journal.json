@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1778139591914,
+      "tag": "0000_add-pages-column",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778224044753,
+      "tag": "0001_naive_stark_industries",
+      "breakpoints": true
+    }
+  ]
+}

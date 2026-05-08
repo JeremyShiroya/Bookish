@@ -39,7 +39,7 @@
           <i class="ri-skip-back-line"></i>
         </button>
         <button class="play-btn" title="Play / Pause" :disabled="isIdle && !ttsBook" @click="handlePlayPause">
-          <i v-if="ttsStatus === 'loading'" class="ri-loader-4-line spinner"></i>
+          <i v-if="ttsStatus === 'loading' || ttsGenerating" class="ri-loader-4-line spinner"></i>
           <i v-else-if="ttsStatus === 'playing'" class="ri-pause-fill"></i>
           <i v-else class="ri-play-fill"></i>
         </button>
@@ -67,6 +67,13 @@
         </div>
         <span class="time">{{ totalTime }}</span>
       </div>
+
+      <div v-if="!kokoroReady" class="kokoro-loading">
+        <span class="kokoro-label">Loading Voices {{ kokoroProgress }}%</span>
+        <div class="kokoro-bar-wrap">
+          <div class="kokoro-bar-fill" :style="{ width: kokoroProgress + '%' }"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Right: Speed, Voice, Volume -->
@@ -78,20 +85,16 @@
         @click="cycleSpeed"
       >{{ speedLabel }}</button>
 
-      <div class="voice-select-wrap" v-if="ttsEngine === 'webspeech' && ttsVoices.length > 0">
+      <div class="voice-select-wrap" v-if="ttsVoices.length > 0">
         <select
           class="voice-select"
-          :value="ttsVoiceName"
+          :value="ttsVoiceId"
           :disabled="isIdle"
           @change="setVoice($event.target.value)"
         >
-          <option v-for="v in ttsVoices" :key="v.name" :value="v.name">{{ v.name }}</option>
+          <option v-for="v in ttsVoices" :key="v.id" :value="v.id">{{ v.name }}</option>
         </select>
       </div>
-
-      <span class="engine-badge" :class="ttsEngine">
-        {{ ttsEngine === 'voxcpm' ? 'VoxCPM' : 'Web Speech' }}
-      </span>
 
       <div class="volume-control">
         <button class="icon-btn volume-btn" title="Mute / Unmute" @click="toggleMute">
@@ -121,10 +124,17 @@ import { useBooks } from '~/composables/useBooks'
 
 const {
   ttsBook, ttsStatus, ttsProgress, ttsSpeed, ttsVolume,
-  ttsVoiceName, ttsVoices, ttsEngine, elapsedTime, totalTime,
+  ttsVoiceId, ttsVoices, kokoroReady, kokoroProgress, ttsGenerating,
+  elapsedTime, totalTime,
   togglePlay, stop, skipChunks, setSpeed, setVolume, setVoice,
-  seekToProgress, initVoices, checkVoxCPM,
+  seekToProgress, loadKokoro,
 } = useTTS()
+
+onMounted(() => {
+  // Kick off model download / shader warmup as soon as the bar mounts so
+  // the first play click doesn't pay the cold-start cost.
+  loadKokoro()
+})
 
 const { toggleFavourite } = useBooks()
 
@@ -170,7 +180,7 @@ const toggleMute = () => {
 }
 
 const generateCoverPlaceholder = (title) => {
-  const colors = ['#6C97B1', '#5a8299', '#4a7a92', '#7fb3cc', '#3d6b80']
+  const colors = ['#8A2BE2', '#6A0DAD', '#9370DB', '#BA55D3', '#DDA0DD']
   const hash = [...title].reduce((acc, c) => acc + c.charCodeAt(0), 0)
   const color = colors[hash % colors.length]
   const initial = title.trim()[0]?.toUpperCase() || '?'
@@ -190,10 +200,6 @@ const coverFallback = (event, title) => {
   event.target.src = generateCoverPlaceholder(title)
 }
 
-onMounted(() => {
-  initVoices()
-  checkVoxCPM()
-})
 </script>
 
 <style scoped>
@@ -202,6 +208,7 @@ onMounted(() => {
   bottom: 0;
   left: 0;
   width: 100%;
+  box-sizing: border-box; /* padding included in 100% width — prevents overflow */
   height: 90px;
   background: #ffffff;
   border-top: 1px solid #e5e7eb;
@@ -211,6 +218,7 @@ onMounted(() => {
   align-items: center;
   z-index: 1000;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
 }
 
 /* ── Shared icon button ── */
@@ -234,8 +242,9 @@ onMounted(() => {
 .track-info {
   display: flex;
   align-items: center;
-  width: 28%;
-  min-width: 180px;
+  flex: 0 0 26%;
+  min-width: 0;
+  overflow: hidden;
   gap: 0.75rem;
 }
 
@@ -252,7 +261,7 @@ onMounted(() => {
 .track-details { overflow: hidden; flex: 1; }
 .track-title {
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 400;
   color: #111827;
   margin: 0 0 2px;
   white-space: nowrap;
@@ -284,7 +293,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 44%;
+  flex: 1 1 auto;
+  min-width: 0;
   max-width: 560px;
   gap: 0.35rem;
 }
@@ -352,22 +362,23 @@ onMounted(() => {
   pointer-events: none;
   transition: width 0.3s linear;
 }
-.progress-bar-wrapper:hover .progress-fill { background: #6C97B1; }
+.progress-bar-wrapper:hover .progress-fill { background: #8A2BE2; }
 
 /* ── Right: Speed / Voice / Volume ── */
 .extra-controls {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  width: 28%;
-  min-width: 180px;
+  flex: 0 0 26%;
+  min-width: 0;
+  overflow: hidden;
   gap: 0.4rem;
 }
 
 .speed-btn {
   border-radius: 4px;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 400;
   min-width: 36px;
   padding: 4px 6px;
   letter-spacing: 0.01em;
@@ -388,19 +399,6 @@ onMounted(() => {
   text-overflow: ellipsis;
 }
 .voice-select:disabled { opacity: 0.4; cursor: default; }
-
-.engine-badge {
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 3px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.engine-badge.webspeech { background: #f3f4f6; color: #9ca3af; }
-.engine-badge.voxcpm    { background: #dbeafe; color: #2563eb; }
 
 .volume-control {
   display: flex;
@@ -433,20 +431,45 @@ onMounted(() => {
   border-radius: 2px;
   pointer-events: none;
 }
-.volume-slider-wrapper:hover .volume-fill { background: #6C97B1; }
+.volume-slider-wrapper:hover .volume-fill { background: #8A2BE2; }
 
 .spinner { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.kokoro-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 2px;
+}
+.kokoro-label {
+  font-size: 0.65rem;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+.kokoro-bar-wrap {
+  flex: 1;
+  height: 2px;
+  background: #e5e7eb;
+  border-radius: 1px;
+  overflow: hidden;
+}
+.kokoro-bar-fill {
+  height: 100%;
+  background: #8A2BE2;
+  border-radius: 1px;
+  transition: width 0.4s ease;
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .extra-controls { display: none; }
-  .track-info { width: 38%; }
-  .player-controls { width: 62%; }
+  .track-info { flex: 0 0 38%; }
+  .player-controls { flex: 1 1 auto; }
 }
 @media (max-width: 500px) {
   .album-art { display: none; }
-  .track-info { width: auto; flex: 1; }
-  .player-controls { width: auto; }
+  .track-info { flex: 0 1 auto; }
+  .player-controls { flex: 1 1 auto; }
 }
 </style>

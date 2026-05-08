@@ -12,7 +12,7 @@ describe('stripHtml', () => {
     expect(stripHtml('<script>alert(1)</script><p>Safe</p>')).toBe('Safe')
   })
   it('decodes common HTML entities', () => {
-    expect(stripHtml('&amp; &lt; &gt; &quot; &#39; &nbsp;')).toBe('& < > " \' ')
+    expect(stripHtml('&amp; &lt; &gt; &quot; &#39; &nbsp;')).toBe('& < > " \'')
   })
   it('returns empty string for null/empty', () => {
     expect(stripHtml(null)).toBe('')

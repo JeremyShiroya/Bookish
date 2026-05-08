@@ -143,6 +143,26 @@ export const useBooks = () => {
     }
   };
 
+  const popularBooks = computed(() => {
+    const getRating = (book) => {
+       if (!book.webReview) return 0;
+       const match = book.webReview.match(/Rating:\s*([\d.]+)/);
+       return match ? parseFloat(match[1]) : 0;
+    };
+    
+    const rated = [...books.value]
+      .filter(b => getRating(b) > 0)
+      .sort((a, b) => getRating(b) - getRating(a));
+      
+    if (rated.length >= 4) return rated.slice(0, 4);
+    
+    const additional = [...books.value]
+      .filter(b => !rated.find(r => r.id === b.id))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      
+    return [...rated, ...additional].slice(0, 4);
+  });
+
   return {
     books,
     authors,
@@ -154,6 +174,7 @@ export const useBooks = () => {
     recentlyAddedBooks,
     recentlyReadBooks,
     favourites,
+    popularBooks,
     seriesList,
     genresList,
     allAuthors,

@@ -1,0 +1,985 @@
+<template>
+  <div class="add-book-page">
+    <div class="page-header">
+      <div>
+        <h1>Add New Book</h1>
+        <p class="subtitle">Upload a document and fill in the details below, or fetch metadata from the web.</p>
+      </div>
+      <button class="btn-cancel" @click="goBack">Back to Library</button>
+    </div>
+
+    <!-- Metadata Selection Modal -->
+    <div v-if="showMetadataModal" class="metadata-modal-overlay" @click="showMetadataModal = false">
+      <div class="metadata-modal-container" @click.stop>
+        <div class="metadata-modal-header">
+          <h2>Select Metadata</h2>
+          <button class="close-button" @click="showMetadataModal = false">
+            <i class="ri-close-line"></i>
+          </button>
+        </div>
+        <div v-if="isFetchingMetadata" class="metadata-loading">
+          <i class="ri-loader-4-line spinner"></i>
+          <p>Searching for books...</p>
+        </div>
+        <div v-else-if="metadataResults.length === 0" class="metadata-empty">
+          <p>No results found for "{{ newBook.title }}" by "{{ newBook.author || 'any' }}".</p>
+        </div>
+        <div v-else class="metadata-results">
+          <div 
+            v-for="result in metadataResults" 
+            :key="result.googleId" 
+            class="metadata-card"
+            @click="selectMetadata(result)"
+          >
+            <img :src="result.cover || '/default-cover.png'" alt="Cover" class="metadata-cover" />
+            <div class="metadata-info">
+              <h4>{{ result.title }}</h4>
+              <p class="metadata-author">{{ result.author }}</p>
+              <p class="metadata-year" v-if="result.publishYear">{{ result.publishYear }}</p>
+              <p class="metadata-series" v-if="result.series">{{ result.series }} <span v-if="result.seriesInstallment">#{{ result.seriesInstallment }}</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <form @submit.prevent="saveBook" class="add-form">
+      <!-- Media Section -->
+      <div class="media-column">
+        <!-- Cover Upload -->
+        <div class="cover-container" @click="triggerCoverInput">
+          <img v-if="coverPreview" :src="coverPreview" alt="Book Cover" class="cover-image" />
+          <div v-else class="cover-placeholder">
+            <i class="ri-image-add-line"></i>
+            <span>Upload Cover</span>
+          </div>
+          <div class="cover-overlay" :class="{ 'active': coverPreview }">
+            <i class="ri-camera-line"></i>
+            <span>Change Cover</span>
+          </div>
+          <input 
+            type="file" 
+            ref="coverInput" 
+            @change="handleCoverChange" 
+            accept="image/*" 
+            style="display: none" 
+          />
+        </div>
+
+        <!-- Document Upload -->
+        <div class="document-section">
+          <div 
+            class="document-dropzone" 
+            :class="{ 'has-file': documentFile, 'is-processing': isProcessing }"
+            @click="triggerDocumentInput"
+          >
+            <div class="dropzone-icon">
+              <i v-if="isProcessing" class="ri-loader-4-line spinner"></i>
+              <i v-else-if="documentFile" class="ri-file-text-fill text-success"></i>
+              <i v-else class="ri-upload-cloud-2-line"></i>
+            </div>
+            <div class="doc-info">
+              <span class="doc-title">{{ isProcessing ? 'Processing File...' : (documentFile ? documentFile.name : 'Select Book Document') }}</span>
+              <span class="doc-subtitle">{{ documentFile && !isProcessing ? formatFileSize(documentFile.size) : 'Supports .epub, .pdf, .txt' }}</span>
+            </div>
+          </div>
+          <input
+            type="file"
+            ref="documentInput"
+            @change="handleDocumentChange"
+            accept=".epub,.pdf,.mobi,.azw3,.txt"
+            style="display: none"
+            required
+          />
+          <p v-if="extractionError" class="error-message">
+            <i class="ri-error-warning-line"></i> {{ extractionError }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Details Section -->
+      <div class="details-column">
+        <!-- Web Fetch CTA -->
+        <div class="fetch-metadata-card">
+          <div class="fetch-info">
+            <i class="ri-global-line"></i>
+            <div>
+              <strong>Auto-fill Details</strong>
+              <p>Search the web to automatically fetch book covers, blurbs, and details.</p>
+            </div>
+          </div>
+          <button type="button" class="btn-fetch" @click="fetchMetadata" :disabled="!newBook.title">
+            Fetch Metadata
+          </button>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="title">Book Title <span class="required">*</span></label>
+            <input 
+              type="text" 
+              id="title" 
+              v-model="newBook.title" 
+              required 
+              class="form-input"
+              placeholder="e.g. The Lord of the Rings"
+            />
+          </div>
+          <div class="form-group">
+            <label for="author">Author <span class="required">*</span></label>
+            <input 
+              type="text" 
+              id="author" 
+              v-model="newBook.author" 
+              required 
+              class="form-input"
+              placeholder="e.g. J.R.R. Tolkien"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="blurb">Blurb / Description</label>
+          <textarea 
+            id="blurb" 
+            v-model="newBook.blurb" 
+            class="form-input textarea"
+            placeholder="Book description..."
+            rows="4"
+          ></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="series">Series</label>
+            <input 
+              type="text" 
+              id="series" 
+              v-model="newBook.series" 
+              placeholder="e.g. Middle-earth Universe"
+              class="form-input"
+            />
+          </div>
+          <div class="form-group">
+            <label for="seriesInstallment">Number / Installment</label>
+            <input 
+              type="text" 
+              id="seriesInstallment" 
+              v-model="newBook.seriesInstallment" 
+              placeholder="e.g. 1"
+              class="form-input"
+            />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="publishYear">Publish Year</label>
+            <input 
+              type="number" 
+              id="publishYear" 
+              v-model="newBook.publishYear" 
+              placeholder="e.g. 1954"
+              class="form-input"
+            />
+          </div>
+          <div class="form-group">
+            <label for="status">Reading Status</label>
+            <div class="select-wrapper">
+              <select id="status" v-model="newBook.status" class="form-input custom-select">
+                <option value="Unread">Unread</option>
+                <option value="Reading">Currently Reading</option>
+                <option value="Read">Finished</option>
+              </select>
+              <i class="ri-arrow-down-s-line select-icon"></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" v-if="newBook.webReview">
+          <label>Web Review</label>
+          <div class="readonly-review">
+            {{ newBook.webReview }}
+          </div>
+        </div>
+
+        <div class="page-actions">
+          <button type="submit" class="btn-primary" :disabled="!documentFile || isProcessing">
+            <i class="ri-add-line" v-if="!isProcessing"></i>
+            <i class="ri-loader-4-line spinner" v-else></i>
+            {{ isProcessing ? 'Adding Book...' : 'Add Book to Library' }}
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useBooks } from '~/composables/useBooks'
+import { useToast } from '~/composables/useToast'
+
+const router = useRouter()
+const { addBook } = useBooks()
+const { addToast } = useToast()
+
+const newBook = ref({
+  title: '',
+  author: '',
+  blurb: '',
+  series: '',
+  seriesInstallment: '',
+  publishYear: null,
+  webReview: '',
+  format: '',
+  pages: 0,
+  rating: 0,
+  progress: 0,
+  status: 'Unread',
+  isFavourite: false,
+  genres: []
+})
+
+const coverPreview = ref(null)
+const documentFile = ref(null)
+const coverInput = ref(null)
+const documentInput = ref(null)
+const isProcessing = ref(false)
+const extractionError = ref(null)
+
+const showMetadataModal = ref(false)
+const isFetchingMetadata = ref(false)
+const metadataResults = ref([])
+
+const triggerCoverInput = () => coverInput.value.click()
+const triggerDocumentInput = () => documentInput.value.click()
+
+const goBack = () => {
+  router.push('/books')
+}
+
+const handleCoverChange = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    const reader = new FileReader()
+    reader.onload = (e) => { coverPreview.value = e.target.result }
+    reader.readAsDataURL(file)
+  }
+}
+
+const generateCoverPlaceholder = (title) => {
+  const colors = ['#8A2BE2', '#7B68EE', '#9370DB', '#BA55D3', '#DDA0DD']
+  const hash = [...title].reduce((acc, c) => acc + c.charCodeAt(0), 0)
+  const color = colors[hash % colors.length]
+  const initial = title.trim()[0]?.toUpperCase() || '?'
+  const displayTitle = title.length > 18 ? title.substring(0, 18) + '…' : title
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="130" font-family="serif" font-size="100" fill="rgba(255,255,255,0.25)" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="rgba(255,255,255,0.65)" text-anchor="middle">${displayTitle}</text></svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
+const handleDocumentChange = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  extractionError.value = null
+  documentFile.value = file
+  const extension = file.name.split('.').pop().toLowerCase()
+  newBook.value.format = extension
+
+  if (!newBook.value.title) {
+    newBook.value.title = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ')
+  }
+
+  if (['txt', 'html', 'htm'].includes(extension)) {
+    isProcessing.value = true
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      newBook.value.content = e.target.result
+      isProcessing.value = false
+    }
+    reader.onerror = () => {
+      extractionError.value = 'Could not read file.'
+      isProcessing.value = false
+    }
+    reader.readAsText(file)
+
+  } else if (extension === 'epub') {
+    isProcessing.value = true
+    try {
+      const { extractEpub } = await import('~/composables/useEpubExtractor.js')
+      const result = await extractEpub(file)
+      newBook.value.content = result.content
+      newBook.value.pages = result.pages || 0
+    } catch (err) {
+      extractionError.value = `Could not extract EPUB content. The book will be added without in-app reading.`
+      newBook.value.content = null
+    } finally {
+      isProcessing.value = false
+    }
+
+  } else if (extension === 'pdf') {
+    isProcessing.value = true
+    try {
+      const { extractPdf } = await import('~/composables/usePdfExtractor.js')
+      const result = await extractPdf(file)
+      newBook.value.content = result.content
+      newBook.value.pages = result.pages || 0
+    } catch (err) {
+      extractionError.value = 'Could not extract PDF text. The book will be added without in-app reading.'
+      newBook.value.content = null
+    } finally {
+      isProcessing.value = false
+    }
+
+  } else {
+    newBook.value.content = null
+  }
+}
+
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+const fetchMetadata = async () => {
+  if (!newBook.value.title) return;
+  
+  isFetchingMetadata.value = true;
+  showMetadataModal.value = true;
+  metadataResults.value = [];
+
+  try {
+    const query = new URLSearchParams();
+    query.append('title', newBook.value.title);
+    if (newBook.value.author) {
+      query.append('author', newBook.value.author);
+    }
+    
+    const response = await fetch(`/api/books/metadata?${query.toString()}`);
+    const data = await response.json();
+    
+    if (data.results) {
+      metadataResults.value = data.results;
+    }
+  } catch (error) {
+    console.error('Failed to fetch metadata:', error);
+    addToast('Failed to fetch metadata from the web.', 'error');
+    showMetadataModal.value = false;
+  } finally {
+    isFetchingMetadata.value = false;
+  }
+}
+
+const selectMetadata = (result) => {
+  newBook.value.title = result.title || newBook.value.title;
+  newBook.value.author = result.author || newBook.value.author;
+  newBook.value.blurb = result.blurb || newBook.value.blurb;
+  newBook.value.publishYear = result.publishYear || newBook.value.publishYear;
+  newBook.value.series = result.series || newBook.value.series;
+  newBook.value.seriesInstallment = result.seriesInstallment || newBook.value.seriesInstallment;
+  newBook.value.webReview = result.webReview || newBook.value.webReview;
+  
+  if (result.cover) {
+    coverPreview.value = result.cover;
+  }
+  
+  showMetadataModal.value = false;
+  addToast('Metadata applied successfully', 'success');
+}
+
+const saveBook = async () => {
+  if (!documentFile.value || isProcessing.value) return
+  
+  isProcessing.value = true;
+
+  const bookToSave = {
+    ...newBook.value,
+    cover: coverPreview.value || generateCoverPlaceholder(newBook.value.title || 'Book')
+  }
+  
+  if (!bookToSave.series || bookToSave.series.trim() === '') {
+    bookToSave.series = null
+  }
+  
+  try {
+    await addBook(bookToSave);
+    
+    addToast('Book added to library successfully', 'success');
+    router.push('/books');
+  } catch (error) {
+    console.error('Save error:', error);
+    addToast('Failed to add book to library', 'error');
+  } finally {
+    isProcessing.value = false;
+  }
+}
+</script>
+
+<style scoped>
+.add-book-page {
+  padding: 0rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2.5rem;
+}
+
+.page-header h1 {
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: #0f172a;
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 1rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.btn-cancel {
+  padding: 0.75rem 1.5rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  color: #0f172a;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+  background: #f8fafc;
+}
+
+.add-form {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 3rem;
+  background: #ffffff;
+  padding: 2.5rem;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+}
+
+.media-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.cover-container {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 2px dashed #e2e8f0;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cover-container:hover {
+  border-color: #8A2BE2;
+  background: #f3e8ff;
+}
+
+.cover-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: #64748b;
+}
+
+.cover-placeholder i {
+  font-size: 2.5rem;
+}
+
+.cover-placeholder span {
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.cover-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cover-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  opacity: 0;
+  transition: opacity 0.2s;
+  gap: 0.5rem;
+}
+
+.cover-container:hover .cover-overlay.active {
+  opacity: 1;
+}
+
+.cover-overlay i {
+  font-size: 2rem;
+}
+
+.document-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.document-dropzone:hover {
+  border-color: #8A2BE2;
+  background: #f3e8ff;
+}
+
+.document-dropzone.has-file {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: #10b981;
+}
+
+.document-dropzone.is-processing {
+  background: #fffbeb;
+  border-color: #fde68a;
+  pointer-events: none;
+}
+
+.dropzone-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  font-size: 1.5rem;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.text-success {
+  color: #10b981;
+}
+
+.doc-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.doc-title {
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-subtitle {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.error-message {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.details-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.fetch-metadata-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem;
+  background: linear-gradient(to right, #f3e8ff, #ffffff);
+  border: 1px solid #8A2BE2;
+  border-radius: 12px;
+  margin-bottom: 0.5rem;
+}
+
+.fetch-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.fetch-info i {
+  font-size: 2rem;
+  color: #8A2BE2;
+}
+
+.fetch-info strong {
+  display: block;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.fetch-info p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.btn-fetch {
+  padding: 0.75rem 1.5rem;
+  background: #8A2BE2;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 6px -1px rgba(138, 43, 226, 0.3);
+}
+
+.btn-fetch:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 10px -1px rgba(138, 43, 226, 0.3);
+}
+
+.btn-fetch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(100%);
+  box-shadow: none;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.required {
+  color: #ef4444;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  color: #0f172a;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.form-input.textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-input::placeholder {
+  color: #64748b;
+}
+
+.form-input:focus {
+  outline: none;
+  background: #ffffff;
+  border-color: #8A2BE2;
+  box-shadow: 0 0 0 3px #f3e8ff;
+}
+
+.select-wrapper {
+  position: relative;
+}
+
+.custom-select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: 2.5rem;
+}
+
+.select-icon {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+}
+
+.readonly-review {
+  padding: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.page-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+  padding-top: 2rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 2rem;
+  background: linear-gradient(135deg, #8A2BE2 0%, #6A0DAD 100%);
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-weight: 400;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 4px 6px -1px rgba(138, 43, 226, 0.3);
+  transition: all 0.2s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 12px -1px rgba(138, 43, 226, 0.3);
+}
+
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  filter: grayscale(100%);
+}
+
+.spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+/* Metadata Modal Styles */
+.metadata-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 1rem;
+}
+
+.metadata-modal-container {
+  background: #ffffff;
+  width: 100%;
+  max-width: 600px;
+  max-height: 80vh;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.metadata-modal-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metadata-modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #0f172a;
+}
+
+.close-button {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 6px;
+}
+
+.close-button:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.metadata-loading, .metadata-empty {
+  padding: 4rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  color: #64748b;
+}
+
+.metadata-loading i {
+  font-size: 2.5rem;
+  color: #8A2BE2;
+}
+
+.metadata-results {
+  padding: 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.metadata-card {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #ffffff;
+}
+
+.metadata-card:hover {
+  border-color: #8A2BE2;
+  background: #f3e8ff;
+  transform: translateY(-2px);
+}
+
+.metadata-cover {
+  width: 70px;
+  height: 105px;
+  object-fit: cover;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.metadata-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.metadata-info h4 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.metadata-author {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #64748b;
+}
+
+.metadata-year, .metadata-series {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .add-form {
+    grid-template-columns: 1fr;
+    padding: 1.5rem;
+  }
+
+  .media-column {
+    flex-direction: row;
+  }
+
+  .cover-container {
+    width: 150px;
+    flex-shrink: 0;
+  }
+
+  .document-section {
+    flex: 1;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .add-book-page {
+    padding: 1rem;
+  }
+
+  .media-column {
+    flex-direction: column;
+  }
+
+  .cover-container {
+    width: 200px;
+    margin: 0 auto;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
+</style>

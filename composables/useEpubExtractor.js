@@ -42,7 +42,13 @@ export async function extractEpub(file) {
       })
     )
 
-    return chapters.join('\n<hr class="chapter-break"/>\n')
+    const content = chapters.join('\n<hr class="chapter-break"/>\n')
+
+    // Estimate pages: count total characters and divide by ~1500 chars per page (average)
+    const textOnly = content.replace(/<[^>]+>/g, '')
+    const estimatedPages = Math.max(1, Math.round(textOnly.length / 1500))
+
+    return { content, pages: estimatedPages }
   } catch (err) {
     throw new Error(`Failed to parse EPUB: ${err.message}`)
   }

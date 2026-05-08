@@ -1,38 +1,73 @@
 import { computed } from 'vue'
 import { useState } from '#app'
 
-// ── Module-level singleton playback state ──────────────────────────────────
+// ── Module-level singleton ─────────────────────────────────────────────────
+let _worker = null          // Web Worker running Kokoro WASM
+let _workerReady = false    // true once the model is loaded in the worker
+let _workerLoading = false  // true while the model is downloading
+let _workerFailed = false   // true if the model failed to load → Web Speech fallback
+
+let _pendingGen = new Map() // id → { resolve, reject }
+let _genId = 0
+
 let _chunks = []
 let _chunkIdx = 0
+let _audioContext = null
+let _gainNode = null
+let _currentSource = null
 let _synth = null
-let _currentAudio = null
+let _prefetchBuffer = null  // { idx, audioBuffer } — next chunk pre-decoded
+let _generating = false     // true while a generate message is awaited
+let _consecutiveFails = 0   // count of in-a-row Kokoro chunk failures
 
 const WORDS_PER_CHUNK = 28
+const CHUNK_TIMEOUT_MS = 60_000   // per-chunk fallback so a hung worker can't lock us up forever
+const MAX_CONSECUTIVE_FAILS = 3   // give up on Kokoro after this many in-a-row timeouts/errors
+const MAX_CHUNK_CHARS = 100       // smaller chunks → faster time-to-first-audio on slow GPUs
+
+// Vite/HMR: when this module is replaced in dev, terminate the old worker so
+// we don't end up with multiple workers all running inference in parallel
+// and competing for the GPU. (The user saw this as "4 warmups" in console.)
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    if (_worker) {
+      try { _worker.terminate() } catch {}
+    }
+    _worker = null
+    _workerReady = false
+    _workerLoading = false
+    _workerFailed = false
+    _pendingGen.clear()
+  })
+}
 const WORDS_PER_MIN = 145
+
+export const KOKORO_VOICES = [
+  { id: 'af_bella',   name: 'Bella'   },  // American Female
+  { id: 'af_nicole',  name: 'Nicole'  },  // American Female
+  { id: 'am_michael', name: 'Michael' },  // American Male
+  { id: 'bm_george',  name: 'George'  },  // British Male
+  { id: 'bm_lewis',   name: 'Lewis'   },  // British Male
+]
 
 // ── Pure helpers (exported for tests) ─────────────────────────────────────
 
 export function stripHtml(html) {
   if (!html) return ''
-  // Strip tags first, collapse whitespace and trim HTML-induced spaces
-  const stripped = html
+  return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<hr[^>]*>/gi, ' . ')
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<\/p>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  // Decode entities after trim so &nbsp; at end produces a trailing space
-  return stripped
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
-    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
 }
 
@@ -70,10 +105,11 @@ export const useTTS = () => {
   const ttsTotalChunks = useState('tts:totalChunks', () => 0)
   const ttsSpeed       = useState('tts:speed',       () => 1.0)
   const ttsVolume      = useState('tts:volume',      () => 1.0)
-  const ttsVoiceName   = useState('tts:voice',       () => '')
-  const ttsVoices      = useState('tts:voices',      () => [])
-  const ttsEngine      = useState('tts:engine',      () => 'webspeech')
-  const voxcpmOnline   = useState('tts:voxcpm',      () => false)
+  const ttsVoiceId     = useState('tts:voice',       () => 'af_bella')
+  const ttsVoices      = useState('tts:voices',      () => KOKORO_VOICES)
+  const kokoroReady    = useState('tts:kokoroReady', () => false)
+  const kokoroProgress = useState('tts:kokoroProg',  () => 0)
+  const ttsGenerating  = useState('tts:generating',  () => false)
 
   const elapsedTime = computed(() => {
     const secsPerChunk = (WORDS_PER_CHUNK / WORDS_PER_MIN) * 60 / ttsSpeed.value
@@ -85,38 +121,139 @@ export const useTTS = () => {
     return formatDuration(ttsTotalChunks.value * secsPerChunk)
   })
 
-  const getSynth = () => {
-    if (import.meta.client && !_synth) _synth = window.speechSynthesis
-    return _synth
+  const _getAudioContext = () => {
+    if (!import.meta.client) return null
+    if (!_audioContext) {
+      _audioContext = new AudioContext()
+      _gainNode = _audioContext.createGain()
+      _gainNode.connect(_audioContext.destination)
+      _gainNode.gain.value = ttsVolume.value
+    }
+    return _audioContext
   }
 
-  const initVoices = () => {
-    if (!import.meta.client) return
-    const synth = getSynth()
-    if (!synth) return
-    const update = () => {
-      ttsVoices.value = synth.getVoices()
-        .filter(v => v.lang.startsWith('en'))
-        .map(v => ({ name: v.name, lang: v.lang }))
-      if (!ttsVoiceName.value && ttsVoices.value.length) {
-        ttsVoiceName.value = ttsVoices.value[0].name
+  // ── Worker management ────────────────────────────────────────────────────
+
+  const _initWorker = () => {
+    if (!import.meta.client || _worker) return
+    _workerLoading = true
+    kokoroProgress.value = 0
+
+    _worker = new Worker(
+      new URL('../workers/tts.worker.js', import.meta.url),
+      { type: 'module' }
+    )
+
+    _worker.onmessage = ({ data: msg }) => {
+      switch (msg.type) {
+        case 'progress':
+          kokoroProgress.value = msg.pct
+          break
+
+        case 'ready':
+          _workerReady = true
+          _workerLoading = false
+          kokoroReady.value = true
+          kokoroProgress.value = 100
+          // If we were waiting to play, kick off playback now
+          if (ttsStatus.value === 'loading') {
+            ttsStatus.value = 'playing'
+            _playNextKokoro()
+          }
+          break
+
+        case 'load_error':
+          console.error('[TTS] Worker failed to load Kokoro:', msg.message)
+          _workerFailed = true
+          _workerLoading = false
+          // If we were waiting to play, fall back to Web Speech
+          if (ttsStatus.value === 'loading') {
+            ttsStatus.value = 'playing'
+            _speakNextWebSpeech()
+          }
+          break
+
+        case 'audio': {
+          const pending = _pendingGen.get(msg.id)
+          if (pending) {
+            _pendingGen.delete(msg.id)
+            pending.resolve(msg.wav)  // WAV ArrayBuffer — decoded in _generateChunk
+          }
+          break
+        }
+
+        case 'gen_error': {
+          const pending = _pendingGen.get(msg.id)
+          if (pending) {
+            _pendingGen.delete(msg.id)
+            pending.reject(new Error(msg.message))
+          }
+          break
+        }
       }
     }
-    update()
-    synth.onvoiceschanged = update
+
+    _worker.onerror = (e) => {
+      console.error('[TTS] Worker crashed:', e.message)
+      _workerFailed = true
+      _workerLoading = false
+    }
+
+    _worker.postMessage({ type: 'init' })
   }
 
-  const checkVoxCPM = async () => {
+  const loadKokoro = () => {
     if (!import.meta.client) return
+    if (!_worker && !_workerFailed) _initWorker()
+  }
+
+  // Ask the worker to generate one chunk; returns a decoded AudioBuffer.
+  // Times out after CHUNK_TIMEOUT_MS so a hung worker can't lock us up
+  // forever, but does NOT permanently disable Kokoro — only this chunk
+  // falls back to Web Speech, the next chunk tries Kokoro again.
+  const _generateChunk = (idx, ctx) => {
+    return new Promise((resolve, reject) => {
+      const id = ++_genId
+
+      const timer = setTimeout(() => {
+        if (!_pendingGen.has(id)) return
+        _pendingGen.delete(id)
+        reject(new Error(`Chunk ${idx} timed out after ${CHUNK_TIMEOUT_MS}ms`))
+      }, CHUNK_TIMEOUT_MS)
+
+      _pendingGen.set(id, {
+        // wav is an ArrayBuffer containing a WAV file produced by RawAudio.toWav().
+        // decodeAudioData reads sampling_rate, channels, and PCM data from the
+        // WAV header automatically — no manual reconstruction, no static.
+        resolve: async (wav) => {
+          clearTimeout(timer)
+          try {
+            const audioBuffer = await ctx.decodeAudioData(wav)
+            resolve(audioBuffer)
+          } catch (e) { reject(e) }
+        },
+        reject: (err) => { clearTimeout(timer); reject(err) },
+      })
+      _worker.postMessage({ type: 'generate', id, text: _chunks[idx], voice: ttsVoiceId.value || 'af_bella' })
+    })
+  }
+
+  // Pre-generate the next chunk while the current one plays
+  const _prefetchNext = async (ctx) => {
+    const idx = _chunkIdx + 1
+    if (idx >= _chunks.length || _generating || _prefetchBuffer?.idx === idx) return
     try {
-      const res = await $fetch('/api/tts/status', { timeout: 3000 })
-      voxcpmOnline.value = res.available
-      if (res.available) ttsEngine.value = 'voxcpm'
+      _generating = true
+      const audioBuffer = await _generateChunk(idx, ctx)
+      _prefetchBuffer = { idx, audioBuffer }
     } catch {
-      voxcpmOnline.value = false
-      ttsEngine.value = 'webspeech'
+      // silent — will generate on demand
+    } finally {
+      _generating = false
     }
   }
+
+  // ── Kokoro playback ──────────────────────────────────────────────────────
 
   const _updateProgress = () => {
     ttsChunkIdx.value = _chunkIdx
@@ -125,8 +262,111 @@ export const useTTS = () => {
       : 0
   }
 
+  const _stopCurrentSource = () => {
+    if (_currentSource) {
+      _currentSource.onended = null
+      try { _currentSource.stop() } catch {}
+      _currentSource = null
+    }
+  }
+
+  const _playNextKokoro = async () => {
+    if (_chunkIdx >= _chunks.length) {
+      ttsStatus.value = 'idle'
+      ttsProgress.value = 100
+      return
+    }
+    _updateProgress()
+
+    try {
+      const ctx = _getAudioContext()
+      if (!ctx) return
+      if (ctx.state === 'suspended') await ctx.resume()
+
+      let audioBuffer
+      if (_prefetchBuffer?.idx === _chunkIdx) {
+        audioBuffer = _prefetchBuffer.audioBuffer
+        _prefetchBuffer = null
+        ttsGenerating.value = false
+      } else {
+        _generating = true
+        ttsGenerating.value = true
+        audioBuffer = await _generateChunk(_chunkIdx, ctx)
+        _generating = false
+        ttsGenerating.value = false
+      }
+
+      _consecutiveFails = 0  // a successful generate resets the failure streak
+
+      if (ttsStatus.value !== 'playing') return
+
+      _stopCurrentSource()
+
+      _currentSource = ctx.createBufferSource()
+      _currentSource.buffer = audioBuffer
+      _currentSource.playbackRate.value = ttsSpeed.value
+      _currentSource.connect(_gainNode)
+      _currentSource.onended = () => {
+        _currentSource = null
+        if (ttsStatus.value === 'playing') {
+          _chunkIdx++
+          _playNextKokoro()
+        }
+      }
+      _currentSource.start()
+
+      _prefetchNext(ctx)
+    } catch (err) {
+      _generating = false
+      ttsGenerating.value = false
+      _consecutiveFails++
+      console.warn(`[TTS] Kokoro chunk failed (${_consecutiveFails}/${MAX_CONSECUTIVE_FAILS}):`, err.message)
+
+      if (_workerFailed || _consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
+        // Kokoro is too slow / broken on this device — give up for the rest
+        // of the session and use Web Speech end-to-end. Better than making the
+        // user wait 60s every chunk.
+        _workerFailed = true
+        console.warn('[TTS] Switching to Web Speech permanently for this session — Kokoro inference is too slow on this device.')
+        _speakNextWebSpeech()
+      } else {
+        // Try Kokoro again on the next chunk — sometimes the model warms up
+        // after one inference and subsequent chunks are fast.
+        _speakOneWebSpeech(() => {
+          if (ttsStatus.value !== 'playing') return
+          _chunkIdx++
+          _playNextKokoro()
+        })
+      }
+    }
+  }
+
+  // ── Web Speech (fallback) ─────────────────────────────────────────────────
+
+  const _getSynth = () => {
+    if (import.meta.client && !_synth) _synth = window.speechSynthesis
+    return _synth
+  }
+
+  // Speak exactly one chunk via Web Speech, then call onDone. Used as a
+  // per-chunk recovery path when a Kokoro generate times out or errors.
+  const _speakOneWebSpeech = (onDone) => {
+    const synth = _getSynth()
+    if (!synth || _chunkIdx >= _chunks.length) { onDone(); return }
+    _updateProgress()
+    const utt = new SpeechSynthesisUtterance(_chunks[_chunkIdx])
+    utt.rate = ttsSpeed.value
+    utt.volume = ttsVolume.value
+    utt.onend = () => onDone()
+    utt.onerror = (e) => {
+      if (e.error !== 'interrupted') console.error('[TTS]', e.error)
+      onDone()
+    }
+    synth.speak(utt)
+  }
+
   const _speakNextWebSpeech = () => {
-    const synth = getSynth()
+    const synth = _getSynth()
     if (!synth || _chunkIdx >= _chunks.length) {
       ttsStatus.value = 'idle'
       ttsProgress.value = 100
@@ -136,15 +376,8 @@ export const useTTS = () => {
     const utt = new SpeechSynthesisUtterance(_chunks[_chunkIdx])
     utt.rate = ttsSpeed.value
     utt.volume = ttsVolume.value
-    if (ttsVoiceName.value) {
-      const v = synth.getVoices().find(v => v.name === ttsVoiceName.value)
-      if (v) utt.voice = v
-    }
     utt.onend = () => {
-      if (ttsStatus.value === 'playing') {
-        _chunkIdx++
-        _speakNextWebSpeech()
-      }
+      if (ttsStatus.value === 'playing') { _chunkIdx++; _speakNextWebSpeech() }
     }
     utt.onerror = (e) => {
       if (e.error !== 'interrupted') console.error('[TTS]', e.error)
@@ -152,49 +385,21 @@ export const useTTS = () => {
     synth.speak(utt)
   }
 
-  const _playNextVoxCPM = async () => {
-    if (_chunkIdx >= _chunks.length) {
-      ttsStatus.value = 'idle'
-      ttsProgress.value = 100
-      return
-    }
-    _updateProgress()
-    try {
-      const res = await $fetch('/api/tts', {
-        method: 'POST',
-        body: { text: _chunks[_chunkIdx], speed: ttsSpeed.value, voice: ttsVoiceName.value || undefined },
-      })
-      if (res.engine === 'webspeech') {
-        ttsEngine.value = 'webspeech'
-        _speakNextWebSpeech()
-        return
-      }
-      _currentAudio = new Audio(res.audio)
-      _currentAudio.volume = ttsVolume.value
-      _currentAudio.onended = () => {
-        if (ttsStatus.value === 'playing') { _chunkIdx++; _playNextVoxCPM() }
-      }
-      _currentAudio.onerror = () => {
-        console.error('[TTS] VoxCPM audio error, falling back to Web Speech')
-        ttsEngine.value = 'webspeech'
-        voxcpmOnline.value = false
-        _speakNextWebSpeech()
-      }
-      await _currentAudio.play()
-    } catch (err) {
-      console.error('[TTS] VoxCPM request error:', err)
-      ttsEngine.value = 'webspeech'
-      voxcpmOnline.value = false
-      _speakNextWebSpeech()
-    }
-  }
+  // ── Playback control ──────────────────────────────────────────────────────
 
   const _stopInternal = () => {
-    const synth = getSynth()
+    _stopCurrentSource()
+    const synth = _getSynth()
     if (synth) synth.cancel()
-    if (_currentAudio) { _currentAudio.pause(); _currentAudio = null }
+    if (_audioContext?.state === 'suspended') _audioContext.resume()
     _chunks = []
     _chunkIdx = 0
+    _prefetchBuffer = null
+    _generating = false
+    ttsGenerating.value = false
+    _consecutiveFails = 0
+    _pendingGen.forEach(p => p.reject(new Error('stopped')))
+    _pendingGen.clear()
   }
 
   const play = async (book) => {
@@ -215,55 +420,55 @@ export const useTTS = () => {
 
     const text = stripHtml(content || '')
     if (!text.trim()) {
+      const { addToast } = useToast()
+      addToast('This book has no readable text content for audio playback.', 'error')
       ttsStatus.value = 'idle'
       ttsBook.value = null
-      alert('This book has no readable text content for audio playback.')
       return
     }
 
-    if (import.meta.client && !window.speechSynthesis && ttsEngine.value === 'webspeech') {
-      ttsStatus.value = 'idle'
-      ttsBook.value = null
-      alert('Audio playback is not supported in this browser.')
-      return
-    }
-
-    _chunks = splitToChunks(text)
+    _chunks = splitToChunks(text, MAX_CHUNK_CHARS)
     _chunkIdx = 0
     ttsTotalChunks.value = _chunks.length
-    ttsStatus.value = 'playing'
     _updateProgress()
 
-    if (ttsEngine.value === 'voxcpm' && voxcpmOnline.value) {
-      _playNextVoxCPM()
-    } else {
+    // Start worker if not already running
+    if (!_workerFailed && !_worker) _initWorker()
+
+    if (_workerFailed) {
+      // Worker failed to load — go straight to Web Speech
+      ttsStatus.value = 'playing'
       _speakNextWebSpeech()
+    } else if (_workerReady) {
+      ttsStatus.value = 'playing'
+      _playNextKokoro()
     }
+    // else: status stays 'loading'; the 'ready' message handler will start playback
   }
 
   const pause = () => {
     if (ttsStatus.value !== 'playing') return
     ttsStatus.value = 'paused'
-    const synth = getSynth()
-    if (ttsEngine.value === 'webspeech' && synth) {
-      synth.pause()
-    } else if (_currentAudio) {
-      _currentAudio.pause()
-    }
+    if (_audioContext?.state === 'running') _audioContext.suspend()
+    const synth = _getSynth()
+    if (synth) synth.pause()
   }
 
   const resume = () => {
     if (ttsStatus.value !== 'paused') return
     ttsStatus.value = 'playing'
-    const synth = getSynth()
-    if (ttsEngine.value === 'webspeech' && synth) {
-      synth.resume()
-    } else if (_currentAudio) {
-      _currentAudio.play()
-    } else if (ttsEngine.value === 'voxcpm') {
-      _playNextVoxCPM()
+    if (_audioContext?.state === 'suspended') {
+      _audioContext.resume().then(() => {
+        if (ttsStatus.value === 'playing' && !_currentSource && !_generating) {
+          if (!_workerFailed && _workerReady) _playNextKokoro()
+          else _speakNextWebSpeech()
+        }
+      })
+    } else if (!_workerFailed && _workerReady) {
+      if (!_currentSource) _playNextKokoro()
     } else {
-      _speakNextWebSpeech()
+      const synth = _getSynth()
+      if (synth) synth.resume()
     }
   }
 
@@ -283,57 +488,62 @@ export const useTTS = () => {
 
   const setSpeed = (rate) => {
     ttsSpeed.value = rate
-    if (ttsStatus.value === 'playing' && ttsEngine.value === 'webspeech') {
-      const synth = getSynth()
+    if (_currentSource) _currentSource.playbackRate.value = rate
+    if (ttsStatus.value === 'playing' && _workerFailed) {
+      const synth = _getSynth()
       if (synth) { synth.cancel(); _speakNextWebSpeech() }
     }
   }
 
   const setVolume = (vol) => {
     ttsVolume.value = vol
-    if (_currentAudio) _currentAudio.volume = vol
+    if (_gainNode) _gainNode.gain.value = vol
   }
 
-  const setVoice = (name) => {
-    ttsVoiceName.value = name
-    if (ttsStatus.value === 'playing' && ttsEngine.value === 'webspeech') {
-      const synth = getSynth()
-      if (synth) { synth.cancel(); _speakNextWebSpeech() }
+  const setVoice = (voiceId) => {
+    ttsVoiceId.value = voiceId
+    _prefetchBuffer = null
+    if (ttsStatus.value === 'playing' && !_workerFailed && _workerReady) {
+      _stopCurrentSource()
+      _playNextKokoro()
     }
   }
 
   const seekToProgress = (pct) => {
     if (!_chunks.length) return
-    const synth = getSynth()
+    _stopCurrentSource()
+    const synth = _getSynth()
     if (synth) synth.cancel()
-    if (_currentAudio) { _currentAudio.pause(); _currentAudio = null }
+    _prefetchBuffer = null
     _chunkIdx = Math.max(0, Math.min(_chunks.length - 1, Math.floor((pct / 100) * _chunks.length)))
     _updateProgress()
     if (ttsStatus.value === 'playing') {
-      if (ttsEngine.value === 'voxcpm' && voxcpmOnline.value) _playNextVoxCPM()
+      if (!_workerFailed && _workerReady) _playNextKokoro()
       else _speakNextWebSpeech()
     }
   }
 
   const skipChunks = (delta) => {
     if (!_chunks.length) return
-    const synth = getSynth()
+    _stopCurrentSource()
+    const synth = _getSynth()
     if (synth) synth.cancel()
-    if (_currentAudio) { _currentAudio.pause(); _currentAudio = null }
+    _prefetchBuffer = null
     _chunkIdx = Math.max(0, Math.min(_chunks.length - 1, _chunkIdx + delta))
     _updateProgress()
     if (ttsStatus.value === 'playing') {
-      if (ttsEngine.value === 'voxcpm' && voxcpmOnline.value) _playNextVoxCPM()
+      if (!_workerFailed && _workerReady) _playNextKokoro()
       else _speakNextWebSpeech()
     }
   }
 
   return {
     ttsBook, ttsStatus, ttsProgress, ttsChunkIdx, ttsTotalChunks,
-    ttsSpeed, ttsVolume, ttsVoiceName, ttsVoices, ttsEngine, voxcpmOnline,
+    ttsSpeed, ttsVolume, ttsVoiceId, ttsVoices,
+    kokoroReady, kokoroProgress, ttsGenerating,
     elapsedTime, totalTime,
     play, pause, resume, togglePlay, stop,
     setSpeed, setVolume, setVoice, seekToProgress, skipChunks,
-    initVoices, checkVoxCPM,
+    loadKokoro,
   }
 }

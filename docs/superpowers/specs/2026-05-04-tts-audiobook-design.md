@@ -183,7 +183,7 @@ All are optional. Without `VOXCPM_URL` the feature works via Web Speech immediat
 - Speed button: cycles `0.75→1→1.25→1.5→2→0.75`, displays current as `1x`, `1.25x` etc.
 - Voice dropdown: shows available English Web Speech voices; hidden when engine = `'voxcpm'`
 - Volume slider (functional, live)
-- Engine badge: `WEB SPEECH` (gray) or `VoxCPM` (blue) — updates automatically
+- Engine badge: `WEB SPEECH` (gray) or `VoxCPM` (purple) — updates automatically
 
 ### States
 
@@ -201,7 +201,7 @@ All are optional. Without `VOXCPM_URL` the feature works via Web Speech immediat
 - Import `useTTS` 
 - Grid card play button: `@click.stop="useTTS().play(book)"`
 - Table row: no change needed (table doesn't have a play button currently)
-- If `ttsBook.id === book.id && ttsStatus !== 'idle'`: play button shows pause icon and blue tint
+- If `ttsBook.id === book.id && ttsStatus !== 'idle'`: play button shows pause icon and purple tint
 
 ---
 
