@@ -201,6 +201,10 @@
             class="book-card horizontal"
             @click="router.push(`/reader/${book.id}`)"
           >
+            <div class="book-card-bg-container">
+              <div class="book-bg" :style="{ backgroundImage: `url(${resolveBookCover(book)})` }"></div>
+              <div class="book-bg-overlay"></div>
+            </div>
             <div class="book-cover">
               <img :src="resolveBookCover(book)" :alt="book.title" @error="(e) => coverFallback(e, book.title)" />
               <div class="cover-overlay">
@@ -698,20 +702,56 @@ onUnmounted(() => {
   display: flex;
   flex-direction: row;
   gap: 1.25rem;
-  background: white;
+  background: transparent;
   border-radius: 16px;
   padding: 1.25rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   cursor: pointer;
   width: 100%;
   transition: all 0.3s ease;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+  color: white;
+  z-index: 1;
 }
 
 .book-card.horizontal:hover {
   transform: translateY(-4px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  border-color: #d1d5db;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.book-card-bg-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  z-index: -1;
+}
+
+.book-bg {
+  position: absolute;
+  top: -20px;
+  left: -20px;
+  right: -20px;
+  bottom: -20px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(25px) saturate(150%);
+  transform: scale(1.2);
+}
+
+.book-bg-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(15, 23, 42, 0.5) 100%);
 }
 
 .book-cover {
@@ -806,18 +846,19 @@ onUnmounted(() => {
 .book-title {
   font-size: 1.15rem;
   font-weight: 500;
-  color: #0f172a;
+  color: #ffffff;
   margin: 0 0 0.25rem 0;
   line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .book-author {
   font-size: 0.85rem;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.85);
   margin: 0 0 0.25rem 0;
   white-space: nowrap;
   overflow: hidden;
@@ -826,7 +867,7 @@ onUnmounted(() => {
 
 .book-series {
   font-size: 0.8rem;
-  color: #8A2BE2;
+  color: #E6E6FA;
   margin: 0 0 0.75rem 0;
   white-space: nowrap;
   overflow: hidden;
@@ -839,7 +880,7 @@ onUnmounted(() => {
   margin-top: auto;
   margin-bottom: 1rem;
   font-size: 0.85rem;
-  color: #475569;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .meta-item {
@@ -849,7 +890,7 @@ onUnmounted(() => {
 }
 
 .meta-item i {
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .meta-item .star-icon {
@@ -857,19 +898,19 @@ onUnmounted(() => {
 }
 
 .progress-meta i {
-  color: #8A2BE2;
+  color: #E6E6FA;
 }
 
 .book-actions {
   display: flex;
   gap: 0.5rem;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: 0.75rem;
 }
 
 .action-btn {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   width: 34px;
   height: 34px;
@@ -877,13 +918,14 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.8);
   transition: all 0.2s ease;
 }
 
 .action-btn:hover {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .action-btn i.active,
