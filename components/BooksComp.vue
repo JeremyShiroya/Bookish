@@ -228,7 +228,7 @@
               
               <div class="book-meta">
                 <div class="meta-item" title="Goodreads Rating">
-                  <i class="ri-global-line"></i>
+                  <svg class="goodreads-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#f4f1ea"/><path fill="#382110" d="M13.203 14.341c-2.404 0-3.329-1.22-3.329-3.272c0-2.324 1.21-3.313 3.329-3.313c2.424 0 3.329 1.23 3.329 3.313c0 2.052-.925 3.272-3.329 3.272M13.203 5c-3.134 0-5.46 1.251-5.46 5.424c0 3.518 1.879 5.86 5.46 5.86c1.192 0 2.454-.369 3.329-1.313v1.313c0 2.502-1.128 3.579-3.329 3.579c-2.051 0-3.18-.892-3.344-2.267H7.728c.164 2.462 2.379 4.144 5.475 4.144c4.154 0 5.459-2.195 5.459-5.456V5.215h-2.133v1.1c-.875-.953-2.138-1.315-3.326-1.315z"/></svg>
                   <span>{{ formatWebRating(book.webReview) }}</span>
                 </div>
                 <div class="meta-item" title="Personal Rating">
@@ -891,6 +891,12 @@ onUnmounted(() => {
 
 .meta-item i {
   color: rgba(255, 255, 255, 0.6);
+}
+
+.goodreads-svg {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
 }
 
 .meta-item .star-icon {
