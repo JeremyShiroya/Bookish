@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
       status: body.status,
       isFavourite: body.isFavourite,
       blurb: body.blurb,
-      publishYear: body.publishYear,
+      publishYear: body.publishYear ? parseInt(body.publishYear.toString(), 10) : null,
       seriesInstallment: body.seriesInstallment,
       webReview: body.webReview,
       updatedAt: new Date(),
@@ -61,7 +61,18 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    return updatedBook[0];
+    const updatedBookWithAuthor = await db.query.books.findFirst({
+      where: eq(books.id, updatedBook[0].id),
+      with: {
+        author: true
+      }
+    });
+
+    return {
+      ...updatedBookWithAuthor,
+      author: updatedBookWithAuthor?.author?.name || body.author || 'Unknown Author',
+      authorImage: updatedBookWithAuthor?.author?.image || null
+    };
   } catch (error: any) {
     console.error('Update book error:', error);
     throw createError({

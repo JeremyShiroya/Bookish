@@ -198,20 +198,12 @@
           <div
             v-for="book in filteredBooks"
             :key="book.id"
-            class="book-card"
+            class="book-card horizontal"
             @click="router.push(`/reader/${book.id}`)"
           >
             <div class="book-cover">
               <img :src="resolveBookCover(book)" :alt="book.title" @error="(e) => coverFallback(e, book.title)" />
               <div class="cover-overlay">
-                <div class="top-actions">
-                  <button class="delete-btn" title="Delete book" @click.stop="openDeleteModal(book)">
-                    <i class="ri-delete-bin-line"></i>
-                  </button>
-                  <button class="heart-btn" title="Add to favorites" @click.stop="toggleFavourite(book.id)">
-                    <i :class="[book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line', { active: book.isFavourite }]"></i>
-                  </button>
-                </div>
                 <button
                   class="play-btn"
                   :class="{ active: isBookActive(book) }"
@@ -224,7 +216,38 @@
             </div>
             <div class="book-info">
               <h3 class="book-title">{{ book.title }}</h3>
-              <p class="book-author">{{ book.author }}</p>
+              <p class="book-author">
+                {{ book.author }} 
+                <span v-if="book.publishYear">• {{ book.publishYear }}</span>
+              </p>
+              <p v-if="book.series" class="book-series">{{ book.series }}</p>
+              
+              <div class="book-meta">
+                <div class="meta-item" title="Goodreads Rating">
+                  <i class="ri-global-line"></i>
+                  <span>{{ formatWebRating(book.webReview) }}</span>
+                </div>
+                <div class="meta-item" title="Personal Rating">
+                  <i class="ri-star-fill star-icon"></i>
+                  <span>{{ book.rating || '—' }}</span>
+                </div>
+                <div class="meta-item progress-meta" title="Reading Progress">
+                  <i class="ri-book-read-line"></i>
+                  <span>{{ book.progress }}%</span>
+                </div>
+              </div>
+              
+              <div class="book-actions">
+                <button class="action-btn" :class="{ active: book.isFavourite }" title="Add to favorites" @click.stop="toggleFavourite(book.id)">
+                  <i :class="[book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line']"></i>
+                </button>
+                <button class="action-btn" title="Edit book" @click.stop="router.push(`/edit/${book.id}`)">
+                  <i class="ri-edit-line"></i>
+                </button>
+                <button class="action-btn delete" title="Delete book" @click.stop="openDeleteModal(book)">
+                  <i class="ri-delete-bin-line"></i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -266,7 +289,7 @@
               <button class="list-action-btn" :class="{ active: book.isFavourite }" title="Favourite" @click="toggleFavourite(book.id)">
                 <i :class="book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line'"></i>
               </button>
-              <button class="list-action-btn" title="Edit" @click="openEditModal(book)">
+              <button class="list-action-btn" title="Edit" @click="router.push(`/edit/${book.id}`)">
                 <i class="ri-edit-line"></i>
               </button>
               <button class="list-action-btn delete" title="Delete" @click="openDeleteModal(book)">
@@ -293,13 +316,7 @@
       </EmptyState>
     </div>
 
-    <!-- Edit Modal -->
-    <EditBookModal
-      v-if="showEditModal"
-      :book="selectedBook"
-      @close="closeEditModal"
-      @save="saveBook"
-    />
+
 
 
     <!-- Delete Confirmation Modal -->
@@ -314,7 +331,6 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
-import EditBookModal from "./EditBookModal.vue";
 import DeleteConfirmModal from "./DeleteConfirmModal.vue";
 
 import { useBooks } from "~/composables/useBooks";
@@ -350,7 +366,6 @@ const activeDropdown = ref(null);
 const activeActionsMenu = ref(null);
 
 // Modal states
-const showEditModal = ref(false);
 const showDeleteModal = ref(false);
 const selectedBook = ref(null);
 
@@ -426,23 +441,15 @@ const setViewMode = (mode) => {
   viewMode.value = mode;
 };
 
-const openEditModal = (book) => {
-  selectedBook.value = { ...book };
-  showEditModal.value = true;
-  activeActionsMenu.value = null;
+
+
+
+
+const formatWebRating = (webReview) => {
+  if (!webReview) return '—';
+  const match = webReview.match(/Rating:\s*([\d.]+)/);
+  return match ? match[1] : '—';
 };
-
-const closeEditModal = () => {
-  showEditModal.value = false;
-  selectedBook.value = null;
-};
-
-const saveBook = (updatedBook) => {
-  updateBook(updatedBook);
-  closeEditModal();
-};
-
-
 
 const STALE_COVERS = ['/Images/The Boyfriend.jpg']
 
@@ -682,53 +689,61 @@ onUnmounted(() => {
 
 .books-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 2.5rem 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 2rem;
   justify-content: start;
 }
 
-.book-card {
+.book-card.horizontal {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  gap: 1.25rem;
+  background: white;
+  border-radius: 16px;
+  padding: 1.25rem;
+  border: 1px solid #e5e7eb;
   cursor: pointer;
   width: 100%;
   transition: all 0.3s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
-.book-card:hover {
+.book-card.horizontal:hover {
   transform: translateY(-4px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border-color: #d1d5db;
 }
 
 .book-cover {
-  width: 100%;
+  width: 110px;
   aspect-ratio: 2/3;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
-  margin-bottom: 1rem;
+  box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
   transition: all 0.3s ease;
   position: relative;
 }
 
-.book-card:hover .book-cover {
-  box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.2);
+.book-card.horizontal:hover .book-cover {
+  box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.2);
 }
 
 /* Overlay & Icons Styles */
 .cover-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(15, 23, 42, 0.7) 0%, rgba(15, 23, 42, 0.1) 50%, rgba(15, 23, 42, 0.8) 100%);
+  background: linear-gradient(to bottom, rgba(15, 23, 42, 0.4) 0%, rgba(15, 23, 42, 0.1) 50%, rgba(15, 23, 42, 0.8) 100%);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 0.75rem;
+  justify-content: center;
+  align-items: center;
   opacity: 0;
   transition: opacity 0.3s ease;
   z-index: 10;
 }
 
-.book-card:hover .cover-overlay {
+.book-card.horizontal:hover .cover-overlay {
   opacity: 1;
 }
 
@@ -736,44 +751,7 @@ onUnmounted(() => {
   opacity: 1;
 }
 
-.top-actions {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.heart-btn, .delete-btn {
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(4px);
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: white;
-}
-
-.delete-btn:hover {
-  background: rgba(239, 68, 68, 0.9);
-  border-color: rgba(239, 68, 68, 0.9);
-  transform: scale(1.1);
-}
-
-.heart-btn i.active {
-  color: #ef4444;
-}
-
-.heart-btn:hover {
-  background: rgba(255, 255, 255, 0.4);
-  transform: scale(1.1);
-}
-
 .play-btn {
-  align-self: flex-end;
   background: rgba(255, 255, 255, 0.25);
   backdrop-filter: blur(4px);
   border: 1px solid rgba(255, 255, 255, 0.3);
@@ -812,18 +790,22 @@ onUnmounted(() => {
   transition: transform 0.5s ease;
 }
 
-.book-card:hover .book-cover img {
+.book-card.horizontal:hover .book-cover img {
   transform: scale(1.05);
 }
 
 .book-info {
   text-align: left;
-  padding: 0 0.25rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0;
 }
 
 .book-title {
-  font-size: 0.9rem;
-  font-weight: 400;
+  font-size: 1.15rem;
+  font-weight: 500;
   color: #0f172a;
   margin: 0 0 0.25rem 0;
   line-height: 1.3;
@@ -834,12 +816,89 @@ onUnmounted(() => {
 }
 
 .book-author {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: #64748b;
-  margin: 0;
+  margin: 0 0 0.25rem 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.book-series {
+  font-size: 0.8rem;
+  color: #8A2BE2;
+  margin: 0 0 0.75rem 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.book-meta {
+  display: flex;
+  gap: 1rem;
+  margin-top: auto;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.meta-item i {
+  color: #94a3b8;
+}
+
+.meta-item .star-icon {
+  color: #fbbf24;
+}
+
+.progress-meta i {
+  color: #8A2BE2;
+}
+
+.book-actions {
+  display: flex;
+  gap: 0.5rem;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 0.75rem;
+}
+
+.action-btn {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.action-btn i.active,
+.action-btn i.ri-heart-fill {
+  color: #ef4444;
+}
+
+.action-btn:hover i.active {
+  color: #dc2626;
+}
+
+.action-btn.delete:hover {
+  background: #fef2f2;
+  color: #ef4444;
+  border-color: #fecaca;
 }
 
 .books-list {

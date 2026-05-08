@@ -118,17 +118,30 @@ export const useBooks = () => {
   };
 
   const updateBook = async (updatedBook) => {
+    const index = books.value.findIndex((b) => b.id === updatedBook.id);
+    let previousBook = null;
+    
+    // Optimistic UI update
+    if (index !== -1) {
+      previousBook = { ...books.value[index] };
+      books.value[index] = { ...books.value[index], ...updatedBook };
+    }
+
     try {
       const result = await $fetch(`/api/books/${updatedBook.id}`, {
         method: "PATCH",
         body: updatedBook,
       });
-      const index = books.value.findIndex((b) => b.id === result.id);
+      // Replace with truth from server
       if (index !== -1) {
         books.value[index] = result;
       }
     } catch (error) {
       console.error("Failed to update book:", error);
+      // Revert optimistic update on failure
+      if (index !== -1 && previousBook) {
+        books.value[index] = previousBook;
+      }
     }
   };
 

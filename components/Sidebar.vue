@@ -84,7 +84,9 @@ const updateHighlight = async () => {
   const getActiveRouteIndex = () => {
     if (route.path.startsWith('/settings')) return menuItems.length;
     if (route.path === '/') return 0;
-    if (route.path === '/add') return menuItems.findIndex(item => item.path === '/books');
+    if (route.path === '/add' || route.path.startsWith('/edit') || route.path.startsWith('/reader')) {
+      return menuItems.findIndex(item => item.path === '/books');
+    }
     const idx = menuItems.findIndex(item => item.path !== '/' && route.path.startsWith(item.path));
     return idx !== -1 ? idx : 0;
   };
