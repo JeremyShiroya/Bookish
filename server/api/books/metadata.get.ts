@@ -33,7 +33,8 @@ export default defineEventHandler(async (event) => {
                cover: details.cover || book.cover, // Use high res if available
                series: details.series,
                seriesInstallment: details.seriesInstallment,
-               webReview: details.webReview
+               webReview: details.webReview,
+               genre: details.genre
              };
           }
           return {
@@ -114,7 +115,8 @@ export default defineEventHandler(async (event) => {
         cover: coverUrl,
         series: series,
         seriesInstallment: seriesInstallment,
-        webReview: webReview
+        webReview: webReview,
+        genre: doc.subject ? doc.subject.slice(0, 3).join(', ') : null
       };
     }));
 

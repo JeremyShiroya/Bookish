@@ -6,6 +6,7 @@ export const authors = pgTable('authors', {
   id: serial('id').primaryKey(),
   name: text('name').notNull(),
   image: text('image'),
+  bio: text('bio'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -49,6 +50,7 @@ export const books = pgTable('books', {
   seriesInstallment: text('series_installment'),
   blurb: text('blurb'),
   publishYear: integer('publish_year'),
+  genre: text('genre'),
   webReview: text('web_review'),
   progress: integer('progress').default(0),
   rating: integer('rating').default(0),

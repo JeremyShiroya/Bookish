@@ -17,11 +17,19 @@ export default defineEventHandler(async (event) => {
       .where(eq(books.id, parseInt(id)))
       .returning();
 
-    if (deletedBook.length === 0) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Book not found',
+    const book = deletedBook[0];
+    
+    // Cleanup: If this was the last book for the author, delete the author too
+    if (book.authorId) {
+      const otherBooks = await db.query.books.findFirst({
+        where: eq(books.authorId, book.authorId)
       });
+      
+      if (!otherBooks) {
+        // No other books left for this author, clean them up
+        const { authors } = await import('../../database/schema');
+        await db.delete(authors).where(eq(authors.id, book.authorId));
+      }
     }
 
     return { message: 'Book deleted successfully' };

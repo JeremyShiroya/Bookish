@@ -24,9 +24,9 @@
                 <h4 class="recent-title">{{ book.title }}</h4>
                 <p class="recent-meta">{{ book.pages || '—' }} Pages • {{ book.format || 'EPUB' }}</p>
               </div>
-              <div class="recent-go-btn">
+              <button class="recent-go-btn" title="Listen" @click.stop="handlePlay(book)">
                 <i class="ri-play-line"></i>
-              </div>
+              </button>
             </div>
           </div>
           <EmptyState
@@ -44,7 +44,7 @@
           </EmptyState>
         </section>
 
-        <!-- Main Content Row: Popular Books and Famous Authors -->
+        <!-- Main Content Row: Popular Books and Your Authors -->
         <div class="main-content-row">
           
           <!-- Popular Books Column -->
@@ -65,7 +65,7 @@
                   <p class="popular-author">{{ book.author }}</p>
                   <p class="popular-blurb">{{ truncate(book.blurb, 90) }}</p>
                 </div>
-                <button class="popular-play-btn" @click.stop="router.push(`/reader/${book.id}`)">
+                <button class="popular-play-btn" title="Listen" @click.stop="handlePlay(book)">
                   <i class="ri-play-fill"></i>
                 </button>
               </div>
@@ -78,16 +78,17 @@
             />
           </section>
 
-          <!-- Famous Authors Column -->
-          <section class="famous-authors-column">
+          <!-- Your Authors Column -->
+          <section class="your-authors-column">
             <div class="section-header">
-              <h2 class="section-title">Famous Authors</h2>
+              <h2 class="section-title">Your Authors</h2>
             </div>
             <div v-if="recentAuthors.length > 0" class="authors-list-card">
               <div
                 v-for="author in recentAuthors"
                 :key="author.id"
                 class="author-list-item"
+                @click="router.push(`/author/${author.id}`)"
               >
                 <div class="author-list-avatar">
                   <img v-if="author.image" :src="author.image" :alt="author.name" />
@@ -115,10 +116,16 @@
 <script setup>
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
+import { useTTS } from "~/composables/useTTS";
 import EmptyState from "./EmptyState.vue";
 
 const { books, recentlyReadBooks, recentlyAddedBooks, recentAuthors, popularBooks, loading, initialized } = useBooks();
+const { play: playTTS } = useTTS();
 const router = useRouter();
+
+const handlePlay = (book) => {
+  playTTS(book);
+};
 
 const getAuthorBookCount = (authorName) => {
   return books.value.filter(b => b.author === authorName).length;
@@ -297,6 +304,7 @@ const truncate = (text, length) => {
   transform: translateY(-50%);
   width: 36px;
   height: 36px;
+  padding: 0;
   border-radius: 50%;
   border: 1px solid rgba(255,255,255,0.3);
   background: rgba(255,255,255,0.05);
@@ -304,6 +312,7 @@ const truncate = (text, length) => {
   align-items: center;
   justify-content: center;
   color: white;
+  cursor: pointer;
   transition: all 0.3s ease;
 }
 
@@ -345,7 +354,7 @@ const truncate = (text, length) => {
   grid-column: span 2;
 }
 
-.famous-authors-column {
+.your-authors-column {
   grid-column: span 1;
 }
 
@@ -437,7 +446,7 @@ const truncate = (text, length) => {
   background: var(--primary-dark);
 }
 
-/* Famous Authors */
+/* Your Authors */
 .authors-list-card {
   background: var(--surface-color);
   border-radius: 20px;

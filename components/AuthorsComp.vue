@@ -17,6 +17,7 @@
             v-for="author in allAuthors" 
             :key="author.id" 
             class="author-card"
+            @click="router.push(`/author/${author.id}`)"
           >
             <div class="author-avatar">
               <img v-if="author.image" :src="author.image" :alt="author.name" />
@@ -48,10 +49,12 @@
 </template>
 
 <script setup>
+import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import EmptyState from "./EmptyState.vue";
 
 const { allAuthors, loading, initialized } = useBooks();
+const router = useRouter();
 </script>
 
 <style scoped>

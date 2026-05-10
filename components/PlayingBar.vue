@@ -189,10 +189,10 @@ const generateCoverPlaceholder = (title) => {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
-const STALE_COVERS = ['/Images/The Boyfriend.jpg']
+
 
 const resolveBookCover = (book) => {
-  if (!book.cover || STALE_COVERS.includes(book.cover)) return generateCoverPlaceholder(book.title)
+  if (!book.cover) return generateCoverPlaceholder(book.title)
   return book.cover
 }
 

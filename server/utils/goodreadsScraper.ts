@@ -114,6 +114,20 @@ export async function scrapeGoodreadsBook(bookUrl: string) {
        const yearMatch = pubDetails.match(/\b(19|20)\d{2}\b/);
        if (yearMatch) publishYear = parseInt(yearMatch[0], 10);
     }
+
+    // Extract Genres
+    const genresList: string[] = [];
+    $('div[data-testid="genresList"] a.Button--tag').each((i, el) => {
+       const g = $(el).find('span.Button__label').text().trim() || $(el).text().trim();
+       if (g && !genresList.includes(g)) genresList.push(g);
+    });
+    if (genresList.length === 0) {
+       $('.bookPageGenreLink').slice(0, 3).each((i, el) => {
+          const g = $(el).text().trim();
+          if (g && !genresList.includes(g)) genresList.push(g);
+       });
+    }
+    const genre = genresList.slice(0, 3).join(', ');
     
     return {
        blurb,
@@ -121,7 +135,8 @@ export async function scrapeGoodreadsBook(bookUrl: string) {
        series,
        seriesInstallment,
        webReview,
-       publishYear
+       publishYear,
+       genre
     };
   } catch (err) {
     console.error('Error scraping book detail:', err);

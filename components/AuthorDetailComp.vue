@@ -1,0 +1,1083 @@
+<template>
+  <div class="author-split-wrapper" v-if="author">
+    <!-- Sophisticated Background -->
+    <div class="page-background"></div>
+
+    <div class="split-container">
+      <!-- Left Column: Author Info & Sidebar -->
+      <aside class="author-sidebar">
+        <button class="minimal-back-btn" @click="router.back()">
+          <i class="ri-arrow-left-s-line"></i> Back
+        </button>
+
+        <div class="author-profile-card">
+          <div class="image-frame" @click="handleImageClick">
+            <img v-if="author.image" :src="author.image" :alt="author.name" class="sidebar-avatar" />
+            <div v-else class="sidebar-initial">{{ author.name.charAt(0) }}</div>
+            <div class="image-edit-overlay">
+              <i class="ri-camera-line"></i>
+              <span>Change Image</span>
+            </div>
+            <div v-if="isScraping" class="image-loading-overlay">
+              <div class="loader-spinner mini"></div>
+            </div>
+          </div>
+          
+          <h1 class="sidebar-name">{{ author.name }}</h1>
+
+          <div class="sidebar-stats">
+            <div class="stat-item">
+              <span class="stat-value">{{ author.books?.length || 0 }}</span>
+              <span class="stat-label">Works</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+              <span class="stat-value">{{ totalPages }}</span>
+              <span class="stat-label">Pages</span>
+            </div>
+          </div>
+          <div class="about-section">
+            <h3 class="section-subtitle">About the Author</h3>
+            <div class="bio-content">
+              <p v-if="author.bio" class="bio-text">{{ author.bio }}</p>
+              <div v-else class="bio-loading">
+                <div class="loader-spinner mini"></div>
+                <span>Retrieving biography...</span>
+              </div>
+              <a v-if="author.bio" :href="`https://en.wikipedia.org/wiki/${author.name.replace(/\s+/g, '_')}`" target="_blank" class="wiki-link">
+                Source: Wikipedia <i class="ri-external-link-line"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right Column: Books & Gallery -->
+      <main class="books-main-content">
+        <header class="gallery-heading">
+          <h2>Collection</h2>
+          <div class="accent-line"></div>
+        </header>
+
+        <div class="books-grid-modern">
+          <div 
+            v-for="book in author.books" 
+            :key="book.id" 
+            class="book-card-horizontal"
+            @click="router.push(`/reader/${book.id}`)"
+          >
+            <div class="book-card-bg-container">
+              <div class="book-bg" :style="{ backgroundImage: `url(${resolveBookCover(book)})` }"></div>
+              <div class="book-bg-overlay"></div>
+            </div>
+            <div class="book-cover">
+              <img :src="resolveBookCover(book)" :alt="book.title" />
+              <div class="cover-overlay">
+                <button class="play-btn" @click.stop="handlePlay(book)">
+                  <i class="ri-play-fill"></i>
+                </button>
+              </div>
+            </div>
+            <div class="book-info-minimal">
+              <h3 class="book-title">{{ book.title }}</h3>
+              <p v-if="book.series" class="book-series-text">{{ book.series }}</p>
+              <div v-if="book.genre" class="book-genre-tag-minimal">
+                <i class="ri-price-tag-3-line"></i>
+                <span>{{ book.genre }}</span>
+              </div>
+              
+              <div class="book-meta-footer-horizontal">
+                <div class="meta-item-simple">
+                  <i class="ri-star-fill star-icon"></i>
+                  <span>{{ book.rating || '—' }}</span>
+                </div>
+                <div class="meta-item-simple">
+                  <i class="ri-book-read-line"></i>
+                  <span>{{ book.progress }}%</span>
+                </div>
+                <div class="meta-item-simple">
+                  <i class="ri-pages-line"></i>
+                  <span>{{ book.pages || 0 }}p</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="!author.books?.length" class="no-books-state">
+          <i class="ri-book-open-line"></i>
+          <p>No books available in this collection yet.</p>
+        </div>
+      </main>
+    </div>
+
+    <!-- Edit Choice Modal -->
+    <div v-if="showEditChoice" class="modal-overlay" @click="showEditChoice = false">
+      <div class="choice-modal" @click.stop>
+        <h3>Change Author Image</h3>
+        <p>Choose how you'd like to update the photo</p>
+        <div class="choice-grid">
+          <button class="choice-btn" @click="triggerFileUpload">
+            <i class="ri-upload-2-line"></i>
+            <div class="choice-text">
+              <strong>Upload</strong>
+              <span>From your computer</span>
+            </div>
+          </button>
+          <button class="choice-btn" @click="scrapeAuthorImage">
+            <i class="ri-global-line"></i>
+            <div class="choice-text">
+              <strong>Scrape Web</strong>
+              <span>Auto-fetch from Wikipedia</span>
+            </div>
+          </button>
+        </div>
+        <button class="modal-close-btn" @click="showEditChoice = false">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Image Picker Modal -->
+    <div v-if="showImagePicker" class="modal-overlay" @click="showImagePicker = false">
+      <div class="picker-modal" @click.stop>
+        <div class="picker-header">
+          <h3>Select Author Image</h3>
+          <p v-if="!isScraping">Found {{ imageOptions.length }} results for {{ author.name }}</p>
+          <p v-else>Searching for author images...</p>
+        </div>
+
+        <!-- Loader inside modal -->
+        <div v-if="isScraping" class="picker-loader">
+          <div class="loader-spinner"></div>
+          <span>Scraping the web...</span>
+        </div>
+
+        <div v-else class="picker-grid">
+          <div 
+            v-for="(img, idx) in imageOptions" 
+            :key="idx" 
+            class="picker-item"
+            @click="selectImage(img)"
+          >
+            <img :src="img" alt="Author option" loading="lazy" />
+            <div class="picker-item-overlay">
+              <i class="ri-check-line"></i>
+            </div>
+          </div>
+        </div>
+        <div class="picker-footer">
+          <button class="modal-close-btn" @click="showImagePicker = false">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div v-else-if="loading" class="loading-overlay">
+    <div class="loader-spinner"></div>
+    <p>Processing...</p>
+  </div>
+
+  <div v-else-if="error" class="error-overlay">
+    <div class="error-card">
+      <i class="ri-error-warning-line"></i>
+      <h3>Unable to Load Profile</h3>
+      <p>{{ error }}</p>
+      <button @click="fetchAuthor" class="retry-btn">Try Again</button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useTTS } from '~/composables/useTTS';
+
+import { useToast } from '~/composables/useToast';
+
+import { useBooks } from '~/composables/useBooks';
+
+const route = useRoute();
+const router = useRouter();
+const { play: playTTS } = useTTS();
+const { addToast } = useToast();
+const { fetchAllData, authors: globalAuthors, books: globalBooks } = useBooks();
+
+const author = ref(null);
+const loading = ref(true);
+const error = ref(null);
+const isScraping = ref(false);
+const showEditChoice = ref(false);
+const showImagePicker = ref(false);
+const imageOptions = ref([]);
+
+const fetchAuthor = async () => {
+  const authorId = parseInt(route.params.id);
+  
+  // 1. Try to load from global store first for INSTANT results
+  const cachedAuthor = globalAuthors.value.find(a => a.id === authorId);
+  if (cachedAuthor) {
+    // Filter books for this author from the global books store
+    const authorBooks = globalBooks.value.filter(b => b.authorId === authorId);
+    
+    author.value = {
+      ...cachedAuthor,
+      books: authorBooks
+    };
+    loading.value = false; // Page shows up immediately!
+  } else {
+    // Only show full loading overlay if we don't even have cached info
+    loading.value = true;
+  }
+
+  try {
+    error.value = null;
+    const data = await $fetch(`/api/authors/${route.params.id}`);
+    
+    // Update with latest data from server
+    author.value = data;
+  } catch (err) {
+    console.error('Failed to fetch author:', err);
+    if (!author.value) {
+      error.value = 'We encountered an issue loading the author profile. Please try again later.';
+    }
+  } finally {
+    loading.value = false;
+  }
+};
+
+const handleImageClick = () => {
+  showEditChoice.value = true;
+};
+
+const triggerFileUpload = () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      await updateAuthorImage(reader.result);
+      addToast('Image uploaded successfully', 'success');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+  showEditChoice.value = false;
+};
+
+const scrapeAuthorImage = async () => {
+  if (!author.value) return;
+  
+  try {
+    isScraping.value = true;
+    showEditChoice.value = false;
+    showImagePicker.value = true; // Open modal immediately
+    imageOptions.value = [];
+    
+    const response = await $fetch(`/api/authors/search-images`, {
+      params: { name: author.value.name }
+    });
+    
+    if (response.images && response.images.length > 0) {
+      imageOptions.value = response.images;
+    } else {
+      showImagePicker.value = false;
+      addToast('Could not find any suitable images on the web.', 'error');
+    }
+  } catch (err) {
+    console.error('Scrape failed:', err);
+    showImagePicker.value = false;
+    addToast('Failed to search for images.', 'error');
+  } finally {
+    isScraping.value = false;
+  }
+};
+
+const selectImage = async (imgUrl) => {
+  showImagePicker.value = false;
+  await updateAuthorImage(imgUrl);
+  addToast('Author image updated', 'success');
+};
+
+const updateAuthorImage = async (newImageUrl) => {
+  try {
+    // Show a subtle loading state instead of full overlay
+    isScraping.value = true; 
+    await $fetch(`/api/authors/${author.value.id}`, {
+      method: 'PATCH',
+      body: { image: newImageUrl }
+    });
+    
+    // 1. Update local state
+    author.value.image = newImageUrl;
+    
+    // 2. Sync global state (Home, Sidebar, etc.)
+    await fetchAllData(true);
+    
+    // 3. Refresh author detail
+    await fetchAuthor();
+  } catch (err) {
+    console.error('Update failed:', err);
+    addToast('Failed to update image.', 'error');
+  } finally {
+    isScraping.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchAuthor();
+});
+
+const totalPages = computed(() => {
+  if (!author.value?.books) return 0;
+  return author.value.books.reduce((acc, b) => acc + (b.pages || 0), 0);
+});
+
+const handlePlay = (book) => {
+  playTTS(book);
+};
+
+const resolveBookCover = (book) => {
+  if (book.cover && !book.cover.startsWith('blob:')) return book.cover;
+  return '/placeholder-book.png';
+};
+
+const formatWebRating = (rating) => {
+  if (!rating) return '0.0';
+  return parseFloat(rating).toFixed(1);
+};
+
+</script>
+
+<style scoped>
+.author-split-wrapper {
+  position: relative;
+  min-height: 100vh;
+  background-color: var(--app);
+  padding: 0;
+  margin: -2.5rem;
+  width: calc(100% + 5rem);
+  overflow-x: hidden;
+  z-index: 1;
+}
+
+.page-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.05) 0%, transparent 100%);
+  z-index: -1;
+}
+
+.split-container {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  min-height: 100vh;
+}
+
+/* Left Column / Sidebar */
+.author-sidebar {
+  background: white;
+  padding: 3rem 2rem;
+  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.02);
+  border-right: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.minimal-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-bottom: 2rem;
+  transition: color 0.2s;
+}
+
+.minimal-back-btn:hover {
+  color: var(--primary-color);
+}
+
+.author-profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.image-frame {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  padding: 6px;
+  background: var(--primary-color);
+  margin-bottom: 1.5rem;
+  box-shadow: 0 15px 30px rgba(138, 43, 226, 0.2);
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.sidebar-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 4px solid white;
+}
+
+.sidebar-initial {
+  width: 100%;
+  height: 100%;
+  background: #f8fafc;
+  color: var(--primary-color);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 4rem;
+  border: 4px solid white;
+}
+
+.image-edit-overlay {
+  position: absolute;
+  inset: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  opacity: 0;
+  transition: opacity 0.3s;
+  font-size: 0.8rem;
+  gap: 0.25rem;
+}
+
+.image-frame:hover .image-edit-overlay {
+  opacity: 1;
+}
+
+.image-loading-overlay {
+  position: absolute;
+  inset: 6px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.sidebar-name {
+  font-size: 1.75rem;
+  font-weight: 500;
+  margin: 0 0 0.5rem 0;
+  color: var(--text-color);
+}
+
+.sidebar-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-bottom: 0.5rem;
+  width: 100%;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-value {
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: var(--text-color);
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.stat-divider {
+  width: 1px;
+  height: 25px;
+  background: var(--border-color);
+}
+
+.about-section {
+  text-align: left;
+  width: 100%;
+  margin-bottom: 1.5rem;
+}
+
+.section-subtitle {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--text-color);
+  margin-bottom: 10px;
+}
+
+.bio-content {
+  background: #f8fafc;
+  padding: 10px 0;
+  border-radius: 16px;
+  border: 1px solid #edf2f7;
+}
+
+.bio-text {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: #4a5568;
+  margin: 0 0 1rem 0;
+}
+
+.bio-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 1rem 0;
+}
+
+.wiki-link {
+  font-size: 0.75rem;
+  color: var(--primary-color);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 400;
+}
+
+.wiki-link:hover {
+  text-decoration: underline;
+}
+
+/* Right Column: Main Content */
+.books-main-content {
+  padding: 1rem 3rem;
+}
+
+.gallery-heading {
+  margin-bottom: 30px;
+}
+
+.gallery-heading h2 {
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: var(--text-color);
+  margin-bottom: 0.75rem;
+}
+
+.accent-line {
+  width: 60px;
+  height: 4px;
+  background: var(--primary-color);
+  border-radius: 2px;
+}
+
+.books-grid-modern {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 2rem;
+}
+
+/* Horizontal Card Style (Matching BooksComp exactly) */
+.book-card-horizontal {
+  display: flex;
+  flex-direction: row;
+  gap: 1.25rem;
+  background: transparent;
+  border-radius: 16px;
+  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  color: white;
+  z-index: 1;
+}
+
+.book-card-horizontal:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.book-card-bg-container {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.book-bg {
+  position: absolute;
+  inset: -20px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(25px) saturate(150%);
+  transform: scale(1.2);
+}
+
+.book-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(15, 23, 42, 0.5) 100%);
+}
+
+.book-cover {
+  width: 110px;
+  aspect-ratio: 2/3;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.book-card-horizontal:hover .book-cover {
+  box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.2);
+}
+
+.book-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.book-card-horizontal:hover .book-cover img {
+  transform: scale(1.05);
+}
+
+.cover-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(15, 23, 42, 0.4) 0%, rgba(15, 23, 42, 0.1) 50%, rgba(15, 23, 42, 0.8) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 10;
+}
+
+.book-card-horizontal:hover .cover-overlay {
+  opacity: 1;
+}
+
+.play-btn {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.play-btn:hover {
+  transform: scale(1.1);
+  background: #8A2BE2;
+  border-color: #8A2BE2;
+}
+
+.book-info-minimal {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0;
+  text-align: left;
+}
+
+.book-title {
+  font-size: 1.15rem;
+  font-weight: 500;
+  color: #ffffff;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.book-series-text {
+  font-size: 0.8rem;
+  color: #E6E6FA;
+  margin: 0 0 0.25rem 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.book-genre-tag-minimal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+  width: fit-content;
+}
+
+.book-meta-footer-horizontal {
+  display: flex;
+  gap: 1rem;
+  margin-top: auto;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.meta-item-simple {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.meta-item-simple i {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.star-icon {
+  color: #fbbf24 !important;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.choice-modal {
+  background: white;
+  padding: 2.5rem;
+  border-radius: 24px;
+  width: 90%;
+  max-width: 450px;
+  text-align: center;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.choice-modal h3 {
+  margin-bottom: 0.5rem;
+  font-weight: 400;
+}
+
+.choice-modal p {
+  color: var(--text-muted);
+  margin-bottom: 2rem;
+  font-size: 0.95rem;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.choice-btn:hover {
+  border-color: var(--primary-color);
+  background: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(138, 43, 226, 0.1);
+}
+
+.choice-btn i {
+  font-size: 1.75rem;
+  color: var(--primary-color);
+}
+
+.choice-text strong {
+  display: block;
+  font-size: 0.95rem;
+  margin-bottom: 0.15rem;
+}
+
+.choice-text span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.no-books-state {
+  text-align: center;
+  padding: 6rem 0;
+  color: var(--text-muted);
+}
+
+.no-books-state i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+/* Loading State */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  z-index: 2000;
+}
+
+.loader-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(138, 43, 226, 0.1);
+  border-top-color: #8A2BE2;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.loader-spinner.mini {
+  width: 24px;
+  height: 24px;
+  border-width: 2px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1024px) {
+  .split-container {
+    grid-template-columns: 1fr;
+  }
+  .author-sidebar {
+    position: relative;
+    height: auto;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .books-main-content {
+    padding: 3rem 1.5rem;
+  }
+}
+/* Picker Modal Styles */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999; /* Higher than playbar */
+}
+
+.picker-modal {
+  background: white;
+  padding: 2.5rem;
+  border-radius: 24px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  animation: modalSlideUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+  color: #111827;
+}
+
+@keyframes modalSlideUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.picker-header {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.picker-header h3 {
+  font-size: 1.75rem;
+  font-weight: 400;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.picker-header p {
+  color: #6b7280;
+}
+
+.picker-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 4rem 0;
+  flex: 1;
+}
+
+.picker-loader span {
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+  overflow-y: auto;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  flex: 1;
+}
+
+/* Custom scrollbar for picker grid */
+.picker-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.picker-grid::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.picker-grid::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.picker-grid::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.picker-item {
+  position: relative;
+  width: 100%;
+  padding-bottom: 125%; /* 4:5 aspect ratio */
+  height: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #f8fafc;
+}
+
+.picker-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 20px rgba(138, 43, 226, 0.25);
+}
+
+.picker-item img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.picker-item-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(138, 43, 226, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 2.5rem;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.picker-item:hover .picker-item-overlay {
+  opacity: 1;
+}
+
+.picker-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 1.5rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.5rem 2rem;
+  transition: all 0.2s;
+}
+
+.modal-close-btn:hover {
+  color: var(--primary-color);
+  transform: scale(1.05);
+}
+</style>
+
+

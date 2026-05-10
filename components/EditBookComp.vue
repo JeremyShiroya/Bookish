@@ -41,7 +41,7 @@
               <div class="metadata-info">
                 <h4>{{ result.title }}</h4>
                 <p class="metadata-author">{{ result.author }}</p>
-                <p class="metadata-year" v-if="result.publishYear">{{ result.publishYear }}</p>
+                <p class="metadata-year" v-if="result.publishYear">{{ result.publishYear }} <span v-if="result.genre">• {{ result.genre }}</span></p>
                 <p class="metadata-series" v-if="result.series">{{ result.series }} <span v-if="result.seriesInstallment">#{{ result.seriesInstallment }}</span></p>
               </div>
             </div>
@@ -89,7 +89,7 @@
           <!-- Web Fetch CTA -->
           <div class="fetch-metadata-card">
             <div class="fetch-info">
-              <svg class="goodreads-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#f4f1ea"/><path fill="#382110" d="M13.203 14.341c-2.404 0-3.329-1.22-3.329-3.272c0-2.324 1.21-3.313 3.329-3.313c2.424 0 3.329 1.23 3.329 3.313c0 2.052-.925 3.272-3.329 3.272M13.203 5c-3.134 0-5.46 1.251-5.46 5.424c0 3.518 1.879 5.86 5.46 5.86c1.192 0 2.454-.369 3.329-1.313v1.313c0 2.502-1.128 3.579-3.329 3.579c-2.051 0-3.18-.892-3.344-2.267H7.728c.164 2.462 2.379 4.144 5.475 4.144c4.154 0 5.459-2.195 5.459-5.456V5.215h-2.133v1.1c-.875-.953-2.138-1.315-3.326-1.315z"/></svg>
+              <i class="ri-file-search-line"></i>
               <div>
                 <strong>Update with Web Metadata</strong>
                 <p>Refresh the cover, blurb, and details using search data from the web.</p>
@@ -171,6 +171,19 @@
               />
             </div>
             <div class="form-group">
+              <label for="genre">Genre</label>
+              <input 
+                type="text" 
+                id="genre" 
+                v-model="editBook.genre" 
+                placeholder="e.g. Fantasy, Adventure"
+                class="form-input"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
               <label for="status">Reading Status</label>
               <div class="select-wrapper">
                 <select id="status" v-model="editBook.status" class="form-input custom-select">
@@ -181,30 +194,32 @@
                 <i class="ri-arrow-down-s-line select-icon"></i>
               </div>
             </div>
-          </div>
-
-          <div class="form-group">
-            <label>Personal Rating</label>
-            <div class="rating-input-container">
-              <div class="star-rating">
-                <i 
-                  v-for="n in 10" 
-                  :key="n"
-                  class="rating-star"
-                  :class="{ 
-                    'ri-star-fill': n <= editBook.rating,
-                    'ri-star-line': n > editBook.rating,
-                    'active': n <= editBook.rating 
-                  }"
-                  @click="editBook.rating = n"
-                ></i>
+            <div class="form-group">
+              <label>Personal Rating</label>
+              <div class="rating-input-container">
+                <div class="star-rating">
+                  <i 
+                    v-for="n in 10" 
+                    :key="n"
+                    class="rating-star"
+                    :class="{ 
+                      'ri-star-fill': n <= editBook.rating,
+                      'ri-star-line': n > editBook.rating,
+                      'active': n <= editBook.rating 
+                    }"
+                    @click="editBook.rating = n"
+                  ></i>
+                </div>
+                <span class="rating-display">{{ editBook.rating || 0 }}/10</span>
               </div>
-              <span class="rating-display">{{ editBook.rating || 0 }}/10</span>
             </div>
           </div>
 
           <div class="form-group" v-if="editBook.webReview">
-            <label>Web Review</label>
+            <label class="web-review-label">
+              <svg class="goodreads-svg-inline" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#f4f1ea"/><path fill="#382110" d="M13.203 14.341c-2.404 0-3.329-1.22-3.329-3.272c0-2.324 1.21-3.313 3.329-3.313c2.424 0 3.329 1.23 3.329 3.313c0 2.052-.925 3.272-3.329 3.272M13.203 5c-3.134 0-5.46 1.251-5.46 5.424c0 3.518 1.879 5.86 5.46 5.86c1.192 0 2.454-.369 3.329-1.313v1.313c0 2.502-1.128 3.579-3.329 3.579c-2.051 0-3.18-.892-3.344-2.267H7.728c.164 2.462 2.379 4.144 5.475 4.144c4.154 0 5.459-2.195 5.459-5.456V5.215h-2.133v1.1c-.875-.953-2.138-1.315-3.326-1.315z"/></svg>
+              Web Review
+            </label>
             <div class="readonly-review">
               {{ editBook.webReview }}
             </div>
@@ -254,7 +269,7 @@ const editBook = ref({
   progress: 0,
   status: 'Unread',
   isFavourite: false,
-  genres: []
+  genre: ''
 })
 
 const isLoading = ref(true)
@@ -345,6 +360,7 @@ const selectMetadata = (result) => {
   editBook.value.series = result.series || editBook.value.series;
   editBook.value.seriesInstallment = result.seriesInstallment || editBook.value.seriesInstallment;
   editBook.value.webReview = result.webReview || editBook.value.webReview;
+  editBook.value.genre = result.genre || editBook.value.genre;
   
   if (result.cover) {
     editBook.value.cover = result.cover;
@@ -581,6 +597,17 @@ const handleUpdateBook = async () => {
 .fetch-info i {
   font-size: 2rem;
   color: #8A2BE2;
+}
+
+.web-review-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.goodreads-svg-inline {
+  width: 18px;
+  height: 18px;
 }
 
 .fetch-info .goodreads-svg {

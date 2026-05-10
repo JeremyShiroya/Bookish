@@ -1,5 +1,5 @@
 import { db } from '../../utils/db';
-import { books, authors } from '../../database/schema';
+import { books, authors, genres, booksToGenres } from '../../database/schema';
 import { eq } from 'drizzle-orm';
 
 export default defineEventHandler(async (event) => {
@@ -27,6 +27,7 @@ export default defineEventHandler(async (event) => {
       publishYear: body.publishYear ? parseInt(body.publishYear.toString(), 10) : null,
       seriesInstallment: body.seriesInstallment,
       webReview: body.webReview,
+      genre: body.genre,
       updatedAt: new Date(),
     };
 
@@ -59,6 +60,39 @@ export default defineEventHandler(async (event) => {
         statusCode: 404,
         statusMessage: 'Book not found',
       });
+    }
+
+    // Handle many-to-many Genres synchronization
+    if (body.genre !== undefined) {
+      const genreNames = body.genre 
+        ? body.genre.split(',').map((g: string) => g.trim()).filter((g: string) => g !== '')
+        : [];
+      
+      // Clear existing links
+      await db.delete(booksToGenres).where(eq(booksToGenres.bookId, parseInt(id)));
+      
+      if (genreNames.length > 0) {
+        for (const genreName of genreNames) {
+          // Find or create genre
+          let genreId: number;
+          const existingGenre = await db.query.genres.findFirst({
+            where: eq(genres.name, genreName)
+          });
+
+          if (existingGenre) {
+            genreId = existingGenre.id;
+          } else {
+            const insertedGenre = await db.insert(genres).values({ name: genreName }).returning();
+            genreId = insertedGenre[0].id;
+          }
+
+          // Link book and genre
+          await db.insert(booksToGenres).values({
+            bookId: parseInt(id),
+            genreId: genreId
+          });
+        }
+      }
     }
 
     const updatedBookWithAuthor = await db.query.books.findFirst({

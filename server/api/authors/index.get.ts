@@ -9,10 +9,11 @@ export default defineEventHandler(async (event) => {
       id: authors.id,
       name: authors.name,
       image: authors.image,
+      bio: authors.bio,
       bookCount: sql<number>`count(${books.id})::int`,
     })
     .from(authors)
-    .leftJoin(books, eq(authors.id, books.authorId))
+    .innerJoin(books, eq(authors.id, books.authorId))
     .groupBy(authors.id)
     .orderBy(authors.name);
 

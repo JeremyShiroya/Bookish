@@ -225,6 +225,10 @@
                 <span v-if="book.publishYear">• {{ book.publishYear }}</span>
               </p>
               <p v-if="book.series" class="book-series">{{ book.series }}</p>
+              <div v-if="book.genre" class="book-genre-tag" :title="'Genre: ' + book.genre">
+                <i class="ri-price-tag-3-line"></i>
+                <span>{{ book.genre }}</span>
+              </div>
               
               <div class="book-meta">
                 <div class="meta-item" title="Goodreads Rating">
@@ -455,10 +459,10 @@ const formatWebRating = (webReview) => {
   return match ? match[1] : '—';
 };
 
-const STALE_COVERS = ['/Images/The Boyfriend.jpg']
+
 
 const resolveBookCover = (book) => {
-  if (!book.cover || STALE_COVERS.includes(book.cover)) {
+  if (!book.cover) {
     return generateCoverPlaceholder(book.title)
   }
   return book.cover
@@ -868,17 +872,29 @@ onUnmounted(() => {
 .book-series {
   font-size: 0.8rem;
   color: #E6E6FA;
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.25rem 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.book-genre-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+  width: fit-content;
 }
 
 .book-meta {
   display: flex;
   gap: 1rem;
   margin-top: auto;
-  margin-bottom: 1rem;
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.9);
 }
@@ -897,6 +913,13 @@ onUnmounted(() => {
   width: 16px;
   height: 16px;
   border-radius: 4px;
+}
+
+.genre-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
 }
 
 .meta-item .star-icon {

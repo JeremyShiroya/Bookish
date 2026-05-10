@@ -87,6 +87,9 @@ const updateHighlight = async () => {
     if (route.path === '/add' || route.path.startsWith('/edit') || route.path.startsWith('/reader')) {
       return menuItems.findIndex(item => item.path === '/books');
     }
+    if (route.path.startsWith('/author/')) {
+      return menuItems.findIndex(item => item.path === '/authors');
+    }
     const idx = menuItems.findIndex(item => item.path !== '/' && route.path.startsWith(item.path));
     return idx !== -1 ? idx : 0;
   };
@@ -154,6 +157,7 @@ watch(hoverIndex, updateHighlight);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  z-index: 100;
 }
 
 .top {

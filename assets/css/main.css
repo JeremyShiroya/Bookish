@@ -7,6 +7,11 @@
 
 body {
   font-family: 'DM Sans', sans-serif;
+  font-weight: 400;
+}
+
+h1, h2, h3, h4, h5, h6, b, strong, span, p, div, button, input, select, textarea {
+  font-weight: 400 !important;
 }
 
 html,

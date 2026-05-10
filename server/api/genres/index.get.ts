@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
       bookCount: sql<number>`count(${booksToGenres.bookId})::int`,
     })
     .from(genres)
-    .leftJoin(booksToGenres, eq(genres.id, booksToGenres.genreId))
+    .innerJoin(booksToGenres, eq(genres.id, booksToGenres.genreId))
     .groupBy(genres.id)
     .orderBy(genres.name);
 

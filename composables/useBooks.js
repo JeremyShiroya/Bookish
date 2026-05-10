@@ -108,9 +108,7 @@ export const useBooks = () => {
         body: book,
       });
       books.value.unshift(savedBook);
-      if (!authors.value.some(a => a.name === savedBook.author)) {
-          fetchAllData(true);
-      }
+      await fetchAllData(true);
     } catch (error) {
       console.error("Failed to add book:", error);
       throw error;
@@ -135,6 +133,8 @@ export const useBooks = () => {
       // Replace with truth from server
       if (index !== -1) {
         books.value[index] = result;
+        // Refresh all data to sync Genres/Authors/Collections
+        fetchAllData(true);
       }
     } catch (error) {
       console.error("Failed to update book:", error);
@@ -151,6 +151,8 @@ export const useBooks = () => {
         method: "DELETE",
       });
       books.value = books.value.filter((b) => b.id !== bookId);
+      // Refresh authors and counts
+      await fetchAllData(true);
     } catch (error) {
       console.error("Failed to delete book:", error);
     }
