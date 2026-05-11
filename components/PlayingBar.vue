@@ -39,7 +39,7 @@
           <i class="ri-skip-back-line"></i>
         </button>
         <button class="play-btn" title="Play / Pause" :disabled="isIdle && !ttsBook" @click="handlePlayPause">
-          <i v-if="ttsStatus === 'loading' || ttsGenerating" class="ri-loader-4-line spinner"></i>
+          <i v-if="ttsStatus === 'loading'" class="ri-loader-4-line spinner"></i>
           <i v-else-if="ttsStatus === 'playing'" class="ri-pause-fill"></i>
           <i v-else class="ri-play-fill"></i>
         </button>
@@ -68,12 +68,6 @@
         <span class="time">{{ totalTime }}</span>
       </div>
 
-      <div v-if="!kokoroReady" class="kokoro-loading">
-        <span class="kokoro-label">Loading Voices {{ kokoroProgress }}%</span>
-        <div class="kokoro-bar-wrap">
-          <div class="kokoro-bar-fill" :style="{ width: kokoroProgress + '%' }"></div>
-        </div>
-      </div>
     </div>
 
     <!-- Right: Speed, Voice, Volume -->
@@ -124,16 +118,14 @@ import { useBooks } from '~/composables/useBooks'
 
 const {
   ttsBook, ttsStatus, ttsProgress, ttsSpeed, ttsVolume,
-  ttsVoiceId, ttsVoices, kokoroReady, kokoroProgress, ttsGenerating,
+  ttsVoiceId, ttsVoices,
   elapsedTime, totalTime,
   togglePlay, stop, skipChunks, setSpeed, setVolume, setVoice,
-  seekToProgress, loadKokoro,
+  seekToProgress, loadVoices,
 } = useTTS()
 
 onMounted(() => {
-  // Kick off model download / shader warmup as soon as the bar mounts so
-  // the first play click doesn't pay the cold-start cost.
-  loadKokoro()
+  loadVoices()
 })
 
 const { toggleFavourite } = useBooks()
@@ -435,31 +427,6 @@ const coverFallback = (event, title) => {
 
 .spinner { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-.kokoro-loading {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 2px;
-}
-.kokoro-label {
-  font-size: 0.65rem;
-  color: #9ca3af;
-  white-space: nowrap;
-}
-.kokoro-bar-wrap {
-  flex: 1;
-  height: 2px;
-  background: #e5e7eb;
-  border-radius: 1px;
-  overflow: hidden;
-}
-.kokoro-bar-fill {
-  height: 100%;
-  background: #8A2BE2;
-  border-radius: 1px;
-  transition: width 0.4s ease;
-}
 
 /* ── Responsive ── */
 @media (max-width: 768px) {

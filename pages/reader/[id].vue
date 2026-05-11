@@ -46,6 +46,7 @@
 
         <div
           v-else-if="book.content"
+          ref="bookTextRef"
           class="book-text"
           :style="{ fontSize: fontSize + 'px' }"
           v-html="displayContent"
@@ -73,8 +74,9 @@
 <script setup>
 definePageMeta({ layout: 'reader' });
 
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useBooks } from '~/composables/useBooks';
+import { useTTS, stripHtml, splitToChunks } from '~/composables/useTTS';
 
 const route = useRoute();
 const router = useRouter();
@@ -91,12 +93,89 @@ const isLegacyPdf = computed(() =>
   book.value?.format === 'pdf' && book.value?.content?.startsWith('data:')
 );
 
+function sanitizeHtml(html) {
+  const container = document.createElement('div')
+  container.innerHTML = html
+  const BLOCKED = ['script', 'iframe', 'object', 'embed', 'form', 'meta', 'link', 'base']
+  BLOCKED.forEach(tag => container.querySelectorAll(tag).forEach(el => el.remove()))
+  container.querySelectorAll('*').forEach(el => {
+    Array.from(el.attributes).forEach(attr => {
+      if (attr.name.startsWith('on')) {
+        el.removeAttribute(attr.name)
+      } else if (['href', 'src', 'action', 'formaction'].includes(attr.name)) {
+        if (attr.value.trim().toLowerCase().replace(/\s/g, '').startsWith('javascript:')) {
+          el.removeAttribute(attr.name)
+        }
+      }
+    })
+  })
+  return container.innerHTML
+}
+
 const displayContent = computed(() => {
   if (!book.value?.content) return '';
   const c = book.value.content;
-  if (/<[a-z][\s\S]*>/i.test(c)) return c;
+  if (/<[a-z][\s\S]*>/i.test(c)) return sanitizeHtml(c);
   return c.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>');
 });
+
+// ── TTS highlight ──────────────────────────────────────────────────────────
+const { ttsBook, ttsChunkIdx, ttsStatus, ttsCurrentChunk } = useTTS()
+
+const bookTextRef = ref(null)
+let _chunkEls = []   // pre-built chunk → DOM element map
+let _activeEl = null
+
+function _buildChunkMap() {
+  const container = bookTextRef.value
+  if (!container || !book.value?.content) return
+  const text = stripHtml(book.value.content)
+  const chunks = splitToChunks(text, 180)
+  const leaves = Array.from(
+    container.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote')
+  ).filter(el => !el.querySelector('p, h1, h2, h3, h4, h5, h6, li, blockquote'))
+
+  _chunkEls = chunks.map(chunk => {
+    const key = chunk.slice(0, 30)
+    return leaves.find(el => el.textContent.includes(key)) || null
+  })
+}
+
+function _highlightChunk(idx) {
+  if (_activeEl) { _activeEl.classList.remove('tts-active'); _activeEl = null }
+  const el = _chunkEls[idx]
+  if (!el) return
+  el.classList.add('tts-active')
+  _activeEl = el
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+// Rebuild the map whenever this book's content loads
+watch(
+  () => book.value?.content,
+  async () => {
+    await nextTick()
+    _buildChunkMap()
+    if (ttsBook.value?.id === book.value?.id && ttsStatus.value === 'playing') {
+      _highlightChunk(ttsChunkIdx.value)
+    }
+  }
+)
+
+// Highlight each new chunk when TTS is playing this book
+watch(ttsChunkIdx, (idx) => {
+  if (ttsBook.value?.id !== book.value?.id) return
+  if (ttsStatus.value === 'idle') return
+  _highlightChunk(idx)
+})
+
+// Clear highlight when TTS stops or switches to a different book
+watch([ttsStatus, ttsBook], ([status, tBook]) => {
+  if (status === 'idle' || tBook?.id !== book.value?.id) {
+    if (_activeEl) { _activeEl.classList.remove('tts-active'); _activeEl = null }
+  }
+})
+// ── end TTS highlight ───────────────────────────────────────────────────────
 
 const handleScroll = () => {
   const total = document.documentElement.scrollHeight - window.innerHeight;
@@ -284,6 +363,14 @@ const decreaseFontSize = () => { if (fontSize.value > 13) fontSize.value -= 1; }
   line-height: 1.9;
   color: var(--text);
   word-break: break-word;
+}
+
+.book-text :deep(.tts-active) {
+  background: rgba(138, 43, 226, 0.12);
+  border-radius: 4px;
+  outline: 2px solid rgba(138, 43, 226, 0.25);
+  outline-offset: 2px;
+  transition: background 0.25s, outline-color 0.25s;
 }
 
 .book-text :deep(p) { margin: 0 0 1.5em; }
