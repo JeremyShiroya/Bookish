@@ -1,5 +1,6 @@
 import { ref, computed } from "vue";
 import { useState } from "#app";
+import { useBookStorage } from '~/composables/useBookStorage';
 
 export const useBooks = () => {
   // Using Nuxt useState for cross-component shared state with SSR/Hydration support
@@ -35,11 +36,9 @@ export const useBooks = () => {
     }
   };
 
-  const fetchBookById = async (id, includeContent = false) => {
+  const fetchBookById = async (id) => {
     try {
-      return await $fetch(`/api/books/${id}`, {
-        query: { content: includeContent }
-      });
+      return await $fetch(`/api/books/${id}`);
     } catch (error) {
       console.error(`Failed to fetch book ${id}:`, error);
       return null;
@@ -109,6 +108,7 @@ export const useBooks = () => {
       });
       books.value.unshift(savedBook);
       await fetchAllData(true);
+      return savedBook;
     } catch (error) {
       console.error("Failed to add book:", error);
       throw error;
@@ -151,7 +151,10 @@ export const useBooks = () => {
         method: "DELETE",
       });
       books.value = books.value.filter((b) => b.id !== bookId);
-      // Refresh authors and counts
+      if (import.meta.client) {
+        const { deleteBookContent } = useBookStorage();
+        await deleteBookContent(bookId);
+      }
       await fetchAllData(true);
     } catch (error) {
       console.error("Failed to delete book:", error);
