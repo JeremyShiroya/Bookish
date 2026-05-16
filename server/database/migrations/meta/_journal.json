@@ -15,6 +15,13 @@
       "when": 1778224044753,
       "tag": "0001_naive_stark_industries",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778962519168,
+      "tag": "0002_drop_content_column",
+      "breakpoints": true
     }
   ]
 }

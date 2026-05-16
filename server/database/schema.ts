@@ -58,7 +58,6 @@ export const books = pgTable('books', {
   pages: integer('pages').default(0),
   status: text('status').default('Unread'),
   isFavourite: boolean('is_favourite').default(false),
-  content: text('content'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
