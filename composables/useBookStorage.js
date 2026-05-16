@@ -6,7 +6,10 @@ function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
     request.onupgradeneeded = (e) => {
-      e.target.result.createObjectStore(STORE_NAME)
+      const db = e.target.result
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME)
+      }
     }
     request.onsuccess = (e) => resolve(e.target.result)
     request.onerror = (e) => reject(e.target.error)
@@ -21,6 +24,7 @@ export const useBookStorage = () => {
       tx.objectStore(STORE_NAME).put({ content, pages }, bookId)
       tx.oncomplete = () => resolve()
       tx.onerror = (e) => reject(e.target.error)
+      tx.onabort = (e) => reject(e.target.error ?? new DOMException('Transaction aborted'))
     })
   }
 
@@ -41,6 +45,7 @@ export const useBookStorage = () => {
       tx.objectStore(STORE_NAME).delete(bookId)
       tx.oncomplete = () => resolve()
       tx.onerror = (e) => reject(e.target.error)
+      tx.onabort = (e) => reject(e.target.error ?? new DOMException('Transaction aborted'))
     })
   }
 
