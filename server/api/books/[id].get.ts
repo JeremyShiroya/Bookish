@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 export default defineEventHandler(async (event) => {
   try {
     const id = getRouterParam(event, 'id');
-    
+
     if (!id) {
       throw createError({
         statusCode: 400,
@@ -13,20 +13,16 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    const query = getQuery(event);
-    const includeContent = query.content === 'true';
-
     const result = await db.query.books.findFirst({
       where: eq(books.id, parseInt(id)),
-      ...(includeContent ? {} : { columns: { content: false } }),
       with: {
         author: true,
         genres: {
           with: {
-            genre: true
-          }
-        }
-      }
+            genre: true,
+          },
+        },
+      },
     });
 
     if (!result) {
@@ -36,12 +32,11 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    // Flatten for consumption
     return {
       ...result,
       author: result.author?.name || 'Unknown Author',
       authorImage: result.author?.image || null,
-      genres: result.genres.map(bg => bg.genre.name)
+      genres: result.genres.map((bg) => bg.genre.name),
     };
   } catch (error: any) {
     console.error('Fetch single book error:', error);

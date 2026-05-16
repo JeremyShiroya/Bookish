@@ -69,7 +69,6 @@ export default defineEventHandler(async (event) => {
       pages: body.pages || 0,
       status: body.status || 'Unread',
       isFavourite: body.isFavourite || false,
-      content: body.content || null,
       blurb: body.blurb || null,
       publishYear: body.publishYear || null,
       seriesInstallment: body.seriesInstallment || null,
