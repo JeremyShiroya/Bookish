@@ -77,10 +77,12 @@ definePageMeta({ layout: 'reader' });
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useBooks } from '~/composables/useBooks';
 import { useTTS, stripHtml, splitToChunks } from '~/composables/useTTS';
+import { useBookStorage } from '~/composables/useBookStorage';
 
 const route = useRoute();
 const router = useRouter();
 const { books, fetchBookById, updateBook } = useBooks();
+const { getBookContent } = useBookStorage();
 
 const book = ref(null);
 const loading = ref(true);
@@ -202,17 +204,28 @@ onMounted(async () => {
     loading.value = false;
     window.addEventListener('scroll', handleScroll, { passive: true });
 
-    // Fetch content in background
+    // ── Stage 2: load content from IndexedDB ─────────────────────────────────
     contentLoading.value = true;
-    const full = await fetchBookById(id, true);
-    if (full) book.value = full;
+    const stored = await getBookContent(id);
+    if (stored) {
+      book.value = { ...book.value, content: stored.content };
+    }
     contentLoading.value = false;
     await restoreScroll();
   } else {
-    // No cache — full blocking load (first visit or direct URL)
-    book.value = await fetchBookById(id, true);
+    // No cache — metadata fetch then load content from IndexedDB
+    let meta = await fetchBookById(id);
+    book.value = meta;
     loading.value = false;
     window.addEventListener('scroll', handleScroll, { passive: true });
+
+    // ── Stage 2: load content from IndexedDB ─────────────────────────────────
+    contentLoading.value = true;
+    const stored = await getBookContent(id);
+    if (stored) {
+      book.value = { ...book.value, content: stored.content };
+    }
+    contentLoading.value = false;
     await restoreScroll();
   }
 });
