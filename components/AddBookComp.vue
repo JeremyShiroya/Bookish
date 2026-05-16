@@ -236,10 +236,13 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
+import { useBookStorage } from '~/composables/useBookStorage'
 
 const router = useRouter()
 const { addBook } = useBooks()
 const { addToast } = useToast()
+const { saveBookContent } = useBookStorage()
+const extractedContent = ref(null)
 
 const newBook = ref({
   title: '',
@@ -312,7 +315,7 @@ const handleDocumentChange = async (event) => {
     isProcessing.value = true
     const reader = new FileReader()
     reader.onload = (e) => {
-      newBook.value.content = e.target.result
+      extractedContent.value = e.target.result
       isProcessing.value = false
     }
     reader.onerror = () => {
@@ -326,7 +329,7 @@ const handleDocumentChange = async (event) => {
     try {
       const { extractEpub } = await import('~/composables/useEpubExtractor.js')
       const result = await extractEpub(file)
-      newBook.value.content = result.content
+      extractedContent.value = result.content
       newBook.value.pages = result.pages || 0
     } catch (err) {
       extractionError.value = `Could not extract EPUB content. The book will be added without in-app reading.`
@@ -340,7 +343,7 @@ const handleDocumentChange = async (event) => {
     try {
       const { extractPdf } = await import('~/composables/usePdfExtractor.js')
       const result = await extractPdf(file)
-      newBook.value.content = result.content
+      extractedContent.value = result.content
       newBook.value.pages = result.pages || 0
     } catch (err) {
       extractionError.value = 'Could not extract PDF text. The book will be added without in-app reading.'
@@ -424,8 +427,15 @@ const saveBook = async () => {
   }
   
   try {
-    await addBook(bookToSave);
-    
+    const savedBook = await addBook(bookToSave);
+
+    if (extractedContent.value && savedBook?.id) {
+      await saveBookContent(savedBook.id, {
+        content: extractedContent.value,
+        pages: savedBook.pages || 0,
+      });
+    }
+
     addToast('Book added to library successfully', 'success');
     router.push('/books');
   } catch (error) {
