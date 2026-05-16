@@ -333,7 +333,6 @@ const handleDocumentChange = async (event) => {
       newBook.value.pages = result.pages || 0
     } catch (err) {
       extractionError.value = `Could not extract EPUB content. The book will be added without in-app reading.`
-      newBook.value.content = null
     } finally {
       isProcessing.value = false
     }
@@ -347,13 +346,10 @@ const handleDocumentChange = async (event) => {
       newBook.value.pages = result.pages || 0
     } catch (err) {
       extractionError.value = 'Could not extract PDF text. The book will be added without in-app reading.'
-      newBook.value.content = null
     } finally {
       isProcessing.value = false
     }
 
-  } else {
-    newBook.value.content = null
   }
 }
 
