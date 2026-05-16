@@ -426,10 +426,17 @@ const saveBook = async () => {
     const savedBook = await addBook(bookToSave);
 
     if (extractedContent.value && savedBook?.id) {
-      await saveBookContent(savedBook.id, {
-        content: extractedContent.value,
-        pages: savedBook.pages || 0,
-      });
+      try {
+        await saveBookContent(savedBook.id, {
+          content: extractedContent.value,
+          pages: savedBook.pages || 0,
+        });
+      } catch (storageErr) {
+        console.error('IndexedDB write failed:', storageErr);
+        addToast('Book added, but content could not be saved for in-app reading.', 'warning');
+        router.push('/books');
+        return;
+      }
     }
 
     addToast('Book added to library successfully', 'success');

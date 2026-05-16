@@ -200,12 +200,12 @@ onMounted(async () => {
   // Use cached metadata for instant render
   const cached = books.value.find(b => b.id === id);
   if (cached) {
+    contentLoading.value = true;
     book.value = cached;
     loading.value = false;
     window.addEventListener('scroll', handleScroll, { passive: true });
 
     // ── Stage 2: load content from IndexedDB ─────────────────────────────────
-    contentLoading.value = true;
     const stored = await getBookContent(id);
     if (stored) {
       book.value = { ...book.value, content: stored.content };
@@ -214,13 +214,17 @@ onMounted(async () => {
     await restoreScroll();
   } else {
     // No cache — metadata fetch then load content from IndexedDB
-    let meta = await fetchBookById(id);
+    const meta = await fetchBookById(id);
+    if (!meta) {
+      loading.value = false;
+      return;
+    }
+    contentLoading.value = true;
     book.value = meta;
     loading.value = false;
     window.addEventListener('scroll', handleScroll, { passive: true });
 
     // ── Stage 2: load content from IndexedDB ─────────────────────────────────
-    contentLoading.value = true;
     const stored = await getBookContent(id);
     if (stored) {
       book.value = { ...book.value, content: stored.content };
