@@ -2,6 +2,7 @@ import { defineEventHandler, getQuery, createError } from 'h3';
 import { searchKobo, scrapeKoboBook } from '../../utils/koboScraper';
 import { searchGoogleBooks, type GBResult } from '../../utils/googleBooksApi';
 import { getGoodreadsReview } from '../../utils/goodreadsScraper';
+import { searchOpenLibrary } from '../../utils/openLibraryApi';
 
 function norm(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -79,6 +80,25 @@ export default defineEventHandler(async (event) => {
         seriesInstallment: gb.seriesInstallment,
         genre: gb.genre,
         publishYear: gb.publishYear,
+        webReview,
+      })),
+    };
+  }
+
+  // 4. Both Kobo and Google Books failed — fall back to OpenLibrary
+  const olResults = await searchOpenLibrary(title, author);
+  if (olResults.length > 0) {
+    return {
+      results: olResults.map(ol => ({
+        googleId: ol.id,
+        title: ol.title,
+        author: ol.author,
+        cover: ol.cover,
+        blurb: ol.blurb,
+        series: ol.series,
+        seriesInstallment: ol.seriesInstallment,
+        genre: ol.genre,
+        publishYear: ol.publishYear,
         webReview,
       })),
     };
