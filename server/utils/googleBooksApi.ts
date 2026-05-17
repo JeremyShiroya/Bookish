@@ -2,7 +2,7 @@
 
 export interface GBResult {
   title: string;
-  author: string;
+  author: string | null;
   blurb: string | null;
   genre: string | null;
   publishYear: number | null;
@@ -41,21 +41,16 @@ export async function searchGoogleBooks(title: string, author?: string): Promise
             .replace(/^http:\/\//, 'https://');
         }
 
-        // Series info is only present on some volumes
-        let series: string | null = null;
+        // Series name is not reliably available in the Google Books API basic response
+        const series: string | null = null;
         let seriesInstallment: string | null = null;
-        const sv = info.seriesInfo?.volumeSeries?.[0];
-        if (sv?.shortSeriesBookTitle) {
-          const m = sv.shortSeriesBookTitle.match(/^(.*?)(?:\s+#?(\d+(?:\.\d+)?))?$/);
-          if (m) {
-            series = m[1].trim() || null;
-            seriesInstallment = m[2] || null;
-          }
+        if (info.seriesInfo?.bookDisplayNumber) {
+          seriesInstallment = info.seriesInfo.bookDisplayNumber.toString();
         }
 
         return {
           title: info.title,
-          author: (info.authors || []).join(', '),
+          author: info.authors?.join(', ') || null,
           blurb: info.description || null,
           genre: info.categories?.slice(0, 3).join(', ') || null,
           publishYear,
