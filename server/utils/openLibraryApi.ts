@@ -1,5 +1,3 @@
-import type { GBResult } from './googleBooksApi';
-
 export interface OLResult {
   id: string;
   title: string;

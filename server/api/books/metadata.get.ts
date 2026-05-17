@@ -1,6 +1,6 @@
 import { defineEventHandler, getQuery, createError } from 'h3';
 import { searchGoogleBooks, type GBResult } from '../../utils/googleBooksApi';
-import { searchOpenLibrary, findOlMatch } from '../../utils/openLibraryApi';
+import { searchOpenLibrary, findOlMatch, type OLResult } from '../../utils/openLibraryApi';
 import { getGoodreadsReview } from '../../utils/goodreadsScraper';
 
 function norm(s: string) {
@@ -23,50 +23,50 @@ export default defineEventHandler(async (event) => {
   }
 
   // Run all three sources in parallel
-  const [gbResult, olResult, reviewResult] = await Promise.allSettled([
-    searchGoogleBooks(title, author),
+  const [olResult, gbResult, reviewResult] = await Promise.allSettled([
     searchOpenLibrary(title, author),
+    searchGoogleBooks(title, author),
     getGoodreadsReview(title, author),
   ]);
 
-  const gbResults = gbResult.status === 'fulfilled' ? gbResult.value : [];
   const olResults = olResult.status === 'fulfilled' ? olResult.value : [];
+  const gbResults = gbResult.status === 'fulfilled' ? gbResult.value : [];
   const webReview = reviewResult.status === 'fulfilled' ? reviewResult.value : null;
 
-  // Primary path: Google Books results enriched with OpenLibrary gap-fills
-  if (gbResults.length > 0) {
+  // Primary path: OpenLibrary results with Google Books covers where available
+  if (olResults.length > 0) {
     return {
-      results: gbResults.map(gb => {
-        const ol = findOlMatch(gb.title, olResults);
+      results: olResults.map((ol: OLResult) => {
+        const gb = findGbMatch(ol.title, gbResults);
         return {
-          googleId: `gb:${gb.title}`,
-          title: gb.title,
-          author: gb.author ?? '',
-          cover: gb.cover ?? ol?.cover ?? null,
-          blurb: gb.blurb ?? ol?.blurb ?? null,
-          series: gb.series ?? ol?.series ?? null,
-          seriesInstallment: gb.seriesInstallment ?? ol?.seriesInstallment ?? null,
-          genre: gb.genre ?? ol?.genre ?? null,
-          publishYear: gb.publishYear ?? ol?.publishYear ?? null,
+          googleId: ol.id,
+          title: ol.title,
+          author: ol.author,
+          cover: gb?.cover ?? ol.cover,               // GB covers are higher res
+          blurb: ol.blurb ?? gb?.blurb ?? null,
+          series: ol.series ?? gb?.series ?? null,
+          seriesInstallment: ol.seriesInstallment ?? gb?.seriesInstallment ?? null,
+          genre: ol.genre ?? gb?.genre ?? null,
+          publishYear: ol.publishYear ?? gb?.publishYear ?? null,
           webReview,
         };
       }),
     };
   }
 
-  // Fallback: OpenLibrary standalone
-  if (olResults.length > 0) {
+  // Fallback: Google Books standalone
+  if (gbResults.length > 0) {
     return {
-      results: olResults.map(ol => ({
-        googleId: ol.id,
-        title: ol.title,
-        author: ol.author,
-        cover: ol.cover,
-        blurb: ol.blurb,
-        series: ol.series,
-        seriesInstallment: ol.seriesInstallment,
-        genre: ol.genre,
-        publishYear: ol.publishYear,
+      results: gbResults.map((gb: GBResult) => ({
+        googleId: `gb:${gb.title}`,
+        title: gb.title,
+        author: gb.author ?? '',
+        cover: gb.cover,
+        blurb: gb.blurb,
+        series: gb.series,
+        seriesInstallment: gb.seriesInstallment,
+        genre: gb.genre,
+        publishYear: gb.publishYear,
         webReview,
       })),
     };
