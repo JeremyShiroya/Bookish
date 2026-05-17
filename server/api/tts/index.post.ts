@@ -10,6 +10,12 @@ const RATE_MAP: Record<string, string> = {
   '2.0':  '+100%',
 }
 
+const ALLOWED_VOICES = new Set([
+  'en-US-ChristopherNeural', 'en-US-JennyNeural', 'en-US-AriaNeural',
+  'en-US-GuyNeural', 'en-US-DavisNeural', 'en-GB-SoniaNeural',
+  'en-GB-RyanNeural', 'en-AU-NatashaNeural',
+])
+
 function escapeXml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -29,6 +35,10 @@ export default defineEventHandler(async (event) => {
 
   if (text.length > 5000) {
     throw createError({ statusCode: 400, message: 'text too long (max 5000 chars)' })
+  }
+
+  if (!ALLOWED_VOICES.has(voice)) {
+    throw createError({ statusCode: 400, message: 'unknown voice' })
   }
 
   const rate = RATE_MAP[String(speed)] ?? '+0%'
