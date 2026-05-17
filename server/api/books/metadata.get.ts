@@ -43,7 +43,7 @@ export default defineEventHandler(async (event) => {
 
   const enrichedResults = scraped
     .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof scrapeKoboBook>>>> =>
-      r.status === 'fulfilled' && r.value !== null
+      r.status === 'fulfilled' && r.value !== null && r.value.title !== ''
     )
     .map(r => {
       const kobo = r.value;
@@ -72,7 +72,7 @@ export default defineEventHandler(async (event) => {
       results: gbResults.slice(0, 5).map(gb => ({
         googleId: `gb:${gb.title}`,
         title: gb.title,
-        author: gb.author,
+        author: gb.author ?? '',
         cover: gb.cover,
         blurb: gb.blurb,
         series: gb.series,
