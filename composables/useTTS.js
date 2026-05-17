@@ -274,7 +274,12 @@ export const useTTS = () => {
       ttsStatus.value = 'idle'
     }
 
-    audio.play()
+    audio.play().catch(() => {
+      if (_currentAudio === audio) {
+        _currentAudio = null
+        ttsStatus.value = 'idle'
+      }
+    })
   }
 
   const _stopInternal = () => {
