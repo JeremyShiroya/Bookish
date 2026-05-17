@@ -27,11 +27,15 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'text is required' })
   }
 
-  const rate = RATE_MAP[String(speed)] ?? '+0%'
-  const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='${voice}'><prosody rate='${rate}'>${escapeXml(text)}</prosody></voice></speak>`
+  if (text.length > 5000) {
+    throw createError({ statusCode: 400, message: 'text too long (max 5000 chars)' })
+  }
 
+  const rate = RATE_MAP[String(speed)] ?? '+0%'
+  const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='${escapeXml(voice)}'><prosody rate='${rate}'>${escapeXml(text)}</prosody></voice></speak>`
+
+  const tts = new MsEdgeTTS()
   try {
-    const tts = new MsEdgeTTS()
     await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3)
     const { audioStream } = tts.rawToStream(ssml)
 
@@ -44,5 +48,7 @@ export default defineEventHandler(async (event) => {
     return { audio }
   } catch (err: any) {
     throw createError({ statusCode: 500, message: err?.message ?? 'TTS generation failed' })
+  } finally {
+    tts.close()
   }
 })
