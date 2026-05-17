@@ -341,9 +341,12 @@ export const useTTS = () => {
     if (ttsStatus.value !== 'paused') return
     ttsStatus.value = 'playing'
     if (_currentAudio) {
-      _currentAudio.play()
+      _currentAudio.play().catch(() => {
+        if (ttsStatus.value === 'playing') {
+          ttsStatus.value = 'idle'
+        }
+      })
     } else {
-      // Between chunks when paused: fetch and play the current chunk
       _speakNextEdge()
     }
   }
