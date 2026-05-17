@@ -112,7 +112,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useTTS } from '~/composables/useTTS'
 import { useBooks } from '~/composables/useBooks'
 
@@ -121,12 +121,8 @@ const {
   ttsVoiceId, ttsVoices,
   elapsedTime, totalTime,
   togglePlay, stop, skipChunks, setSpeed, setVolume, setVoice,
-  seekToProgress, loadVoices,
+  seekToProgress,
 } = useTTS()
-
-onMounted(() => {
-  loadVoices()
-})
 
 const { toggleFavourite } = useBooks()
 
