@@ -35,11 +35,11 @@ export async function searchGoogleBooks(title: string, author?: string): Promise
           if (!isNaN(y)) publishYear = y;
         }
 
-        // Bump zoom param for a larger cover image (1→3 gives ~500px wide)
         let cover: string | null = null;
         if (info.imageLinks?.thumbnail) {
           cover = info.imageLinks.thumbnail
-            .replace('zoom=1', 'zoom=3')
+            .replace(/zoom=\d+/, 'zoom=6')  // zoom=6 gives ~600-800px wide
+            .replace('&edge=curl', '')       // remove page-curl effect
             .replace(/^http:\/\//, 'https://');
         }
 
