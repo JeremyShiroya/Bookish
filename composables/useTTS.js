@@ -220,7 +220,8 @@ export const useTTS = () => {
         body: { text: chunk, voice: ttsVoiceId.value, speed: ttsSpeed.value },
       })
       return data.audio ?? null
-    } catch {
+    } catch (err) {
+      console.warn('[TTS] fetch error:', err)
       return null
     }
   }
