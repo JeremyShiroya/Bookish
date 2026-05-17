@@ -14,6 +14,7 @@
     "cheerio": "^1.2.0",
     "drizzle-orm": "^0.45.2",
     "jszip": "^3.10.1",
+    "msedge-tts": "^2.0.5",
     "nuxt": "^4.4.2",
     "pdfjs-dist": "^5.7.284",
     "remixicon": "^4.9.1",
