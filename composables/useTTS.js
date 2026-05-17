@@ -1,5 +1,6 @@
 import { computed } from 'vue'
 import { useState } from '#app'
+import { useBookStorage } from '~/composables/useBookStorage'
 
 let _currentAudio = null
 let _prefetchAudio = null
@@ -300,11 +301,11 @@ export const useTTS = () => {
     let content = book.content
     if (!content) {
       try {
-        const full = await $fetch(`/api/books/${book.id}`, { query: { content: 'true' } })
-        content = full.content
-        ttsBook.value = { ...book, ...full }
+        const { getBookContent } = useBookStorage()
+        const stored = await getBookContent(book.id)
+        content = stored?.content ?? null
       } catch (e) {
-        console.error('[TTS] Failed to fetch book content:', e)
+        console.error('[TTS] Failed to load book content from storage:', e)
       }
     }
 
