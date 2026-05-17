@@ -80,7 +80,11 @@ export async function scrapeGoodreadsBook(bookUrl: string) {
     // Extract Series
     let series = null;
     let seriesInstallment = null;
-    const seriesText = $('h3[aria-label^="Book"] a').text().trim() || $('h2#bookSeries').text().trim() || $('div.infoBoxRowTitle:contains("Series")').next('.infoBoxRowItem').text().trim();
+    const seriesText = $('h3[aria-label^="Book"] a').text().trim()
+      || $('h3[aria-label*="of "] a').text().trim()
+      || $('h3[aria-label*="Part of"] a').text().trim()
+      || $('h2#bookSeries').text().trim()
+      || $('div.infoBoxRowTitle:contains("Series")').next('.infoBoxRowItem').text().trim();
     
     // Cleanup seriesText if it looks like "Dune #1"
     if (seriesText) {

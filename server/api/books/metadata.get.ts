@@ -16,36 +16,33 @@ export default defineEventHandler(async (event) => {
   try {
     // 1. Try Goodreads
     const grResults = await searchGoodreads(title, author);
-    
+
     if (grResults && grResults.length > 0) {
        // We only deeply scrape the top 3 results to keep the request fast
        const topResults = grResults.slice(0, 3);
-       
-       const enrichedResults = await Promise.all(topResults.map(async (book) => {
+
+       const settled = await Promise.all(topResults.map(async (book) => {
           const details = await scrapeGoodreadsBook(book.url);
-          if (details) {
-             return {
-               googleId: book.url, // Using URL as ID
-               title: book.title,
-               author: book.author,
-               blurb: details.blurb,
-               publishYear: details.publishYear,
-               cover: details.cover || book.cover, // Use high res if available
-               series: details.series,
-               seriesInstallment: details.seriesInstallment,
-               webReview: details.webReview,
-               genre: details.genre
-             };
-          }
+          if (!details) return null; // scrape blocked or failed — skip
           return {
-             googleId: book.url,
-             title: book.title,
-             author: book.author,
-             cover: book.cover
+            googleId: book.url,
+            title: book.title,
+            author: book.author,
+            blurb: details.blurb,
+            publishYear: details.publishYear,
+            cover: details.cover || book.cover,
+            series: details.series,
+            seriesInstallment: details.seriesInstallment,
+            webReview: details.webReview,
+            genre: details.genre
           };
        }));
-       
-       return { results: enrichedResults };
+
+       const enrichedResults = settled.filter(Boolean);
+       if (enrichedResults.length > 0) {
+         return { results: enrichedResults };
+       }
+       // All detail scrapes failed (bot detection etc.) — fall through to OpenLibrary
     }
   } catch (err) {
     console.warn("Goodreads scraper failed, falling back to OpenLibrary", err);
