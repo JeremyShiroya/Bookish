@@ -13,8 +13,10 @@ export interface GBResult {
 
 export async function searchGoogleBooks(title: string, author?: string): Promise<GBResult[]> {
   try {
-    const terms = [`intitle:${title}`, author ? `inauthor:${author}` : ''].filter(Boolean).join('+');
-    const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(terms)}&maxResults=5&printType=books`;
+    // Build query with unencoded field operators (Google Books requires intitle: and inauthor: unencoded)
+    const parts = [`intitle:${encodeURIComponent(title)}`];
+    if (author) parts.push(`inauthor:${encodeURIComponent(author)}`);
+    const url = `https://www.googleapis.com/books/v1/volumes?q=${parts.join('+')}&maxResults=5&printType=books`;
 
     const res = await fetch(url);
     if (!res.ok) return [];

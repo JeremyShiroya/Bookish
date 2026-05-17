@@ -84,5 +84,46 @@ export default defineEventHandler(async (event) => {
     };
   }
 
+  // 4. Both Kobo and Google Books failed — fall back to OpenLibrary
+  try {
+    let olUrl = `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&limit=5`;
+    if (author) olUrl += `&author=${encodeURIComponent(author)}`;
+
+    const olRes = await fetch(olUrl);
+    if (olRes.ok) {
+      const olData = await olRes.json();
+      if (olData.docs?.length) {
+        const results = await Promise.all(olData.docs.map(async (doc: any) => {
+          let blurb: string | null = null;
+          try {
+            const detailRes = await fetch(`https://openlibrary.org${doc.key}.json`);
+            if (detailRes.ok) {
+              const detail = await detailRes.json();
+              blurb = typeof detail.description === 'string'
+                ? detail.description
+                : detail.description?.value ?? null;
+            }
+          } catch {}
+
+          return {
+            googleId: doc.key,
+            title: doc.title,
+            author: doc.author_name ? doc.author_name.join(', ') : '',
+            cover: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : null,
+            blurb,
+            series: doc.series_name?.[0] ?? null,
+            seriesInstallment: doc.series_position?.[0] ?? null,
+            genre: doc.subject ? doc.subject.slice(0, 3).join(', ') : null,
+            publishYear: doc.first_publish_year ?? null,
+            webReview,
+          };
+        }));
+        return { results };
+      }
+    }
+  } catch (err) {
+    console.warn('OpenLibrary fallback failed:', err);
+  }
+
   return { results: [] };
 });
