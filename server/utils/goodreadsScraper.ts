@@ -147,3 +147,16 @@ export async function scrapeGoodreadsBook(bookUrl: string) {
     return null;
   }
 }
+
+// Returns only the webReview string (e.g. "Goodreads Rating: 4.23/5 (based on 1,234,567 reviews).")
+// Used by the metadata endpoint — one call per user search, not per result.
+export async function getGoodreadsReview(title: string, author?: string): Promise<string | null> {
+  try {
+    const results = await searchGoodreads(title, author);
+    if (!results.length) return null;
+    const details = await scrapeGoodreadsBook(results[0].url);
+    return details?.webReview || null;
+  } catch {
+    return null;
+  }
+}
