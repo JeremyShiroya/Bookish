@@ -6,9 +6,6 @@ export default defineEventHandler(async (event) => {
   try {
     // Using relational queries for a cleaner object structure
     const result = await db.query.books.findMany({
-      columns: {
-        content: false,
-      },
       with: {
         author: true,
         genres: {

@@ -131,16 +131,83 @@ let _activeEl = null
 function _buildChunkMap() {
   const container = bookTextRef.value
   if (!container || !book.value?.content) return
+
   const text = stripHtml(book.value.content)
   const chunks = splitToChunks(text, 180)
+
+  // Collect leaf block elements (no child block elements) — these hold the raw text nodes
   const leaves = Array.from(
     container.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote')
   ).filter(el => !el.querySelector('p, h1, h2, h3, h4, h5, h6, li, blockquote'))
 
-  _chunkEls = chunks.map(chunk => {
-    const key = chunk.slice(0, 30)
-    return leaves.find(el => el.textContent.includes(key)) || null
+  // Build normalized flat text from leaf textContent (mirrors stripHtml whitespace handling)
+  let flatText = ''
+  const leafMeta = leaves.map(el => {
+    const norm = el.textContent.replace(/\s+/g, ' ').trim()
+    const start = flatText.length
+    if (norm) flatText += norm + ' '
+    return { el, start, end: start + norm.length }
   })
+
+  // Plan which chunks go in which leaf, and what their key text is
+  const injectionsByLeaf = new Map()
+  let searchPos = 0
+  for (let i = 0; i < chunks.length; i++) {
+    const key = chunks[i].slice(0, 30)
+    const pos = flatText.indexOf(key, searchPos)
+    if (pos === -1) continue
+    searchPos = pos + 1
+
+    const entry = leafMeta.find(m => m.start <= pos && pos < m.end)
+    if (!entry) continue
+
+    if (!injectionsByLeaf.has(entry.el)) injectionsByLeaf.set(entry.el, [])
+    injectionsByLeaf.get(entry.el).push({ chunkIdx: i, searchKey: key, chunkLen: chunks[i].length })
+  }
+
+  // Inject <span data-chunk="N"> wrappers into the live DOM text nodes.
+  // Process each leaf's injections in reverse order so earlier positions
+  // in the same text node are not disturbed by later insertions.
+  _chunkEls = new Array(chunks.length).fill(null)
+
+  for (const [leafEl, injections] of injectionsByLeaf) {
+    for (let j = injections.length - 1; j >= 0; j--) {
+      const { chunkIdx, searchKey, chunkLen } = injections[j]
+
+      // Re-traverse text nodes each time so DOM changes from previous
+      // injections in this leaf are reflected
+      const found = _findTextNode(leafEl, searchKey)
+      if (!found) continue
+
+      const { node: tn, pos: startPos } = found
+      const raw = tn.textContent
+      const endPos = Math.min(startPos + chunkLen, raw.length)
+
+      const span = document.createElement('span')
+      span.dataset.chunk = chunkIdx
+      span.textContent = raw.slice(startPos, endPos)
+
+      const parent = tn.parentNode
+      if (!parent) continue
+      if (startPos > 0)    parent.insertBefore(document.createTextNode(raw.slice(0, startPos)), tn)
+      parent.insertBefore(span, tn)
+      if (endPos < raw.length) parent.insertBefore(document.createTextNode(raw.slice(endPos)), tn)
+      parent.removeChild(tn)
+
+      _chunkEls[chunkIdx] = span
+    }
+  }
+}
+
+// Walk text nodes inside `el` and return the first one that contains `searchKey`
+function _findTextNode(el, searchKey) {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+  let tn
+  while ((tn = walker.nextNode())) {
+    const pos = tn.textContent.indexOf(searchKey)
+    if (pos !== -1) return { node: tn, pos }
+  }
+  return null
 }
 
 function _highlightChunk(idx) {
@@ -196,6 +263,7 @@ const restoreScroll = async () => {
 
 onMounted(async () => {
   const id = Number(route.params.id);
+  window.addEventListener('scroll', handleScroll, { passive: true });
 
   // Use cached metadata for instant render
   const cached = books.value.find(b => b.id === id);
