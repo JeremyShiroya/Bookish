@@ -69,15 +69,25 @@ export async function searchKobo(title: string, author?: string): Promise<string
     if (match) {
       try {
         const nd = JSON.parse(match[1]);
-        const items: any[] =
-          nd?.props?.pageProps?.searchResults?.items
-          || nd?.props?.pageProps?.items
-          || [];
-        for (const item of items) {
-          const slug = item.slug || item.Slug || item.id;
+        const pp = nd?.props?.pageProps;
+        // Current Kobo structure: searchResultSSR.Items[].Book.Slug
+        const ssrItems: any[] = pp?.searchResultSSR?.Items || [];
+        for (const item of ssrItems) {
+          const slug = item.Book?.Slug || item.Book?.slug;
           if (slug && urls.length < 5) {
             const u = `https://www.kobo.com/us/en/ebook/${slug}`;
             if (!seen.has(u)) { seen.add(u); urls.push(u); }
+          }
+        }
+        // Legacy structure fallback
+        if (urls.length === 0) {
+          const legacyItems: any[] = pp?.searchResults?.items || pp?.items || [];
+          for (const item of legacyItems) {
+            const slug = item.slug || item.Slug || item.id;
+            if (slug && urls.length < 5) {
+              const u = `https://www.kobo.com/us/en/ebook/${slug}`;
+              if (!seen.has(u)) { seen.add(u); urls.push(u); }
+            }
           }
         }
       } catch {}
