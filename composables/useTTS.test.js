@@ -97,18 +97,19 @@ describe('findContentStart', () => {
       'Copyright © 2023 Author Name.',   // boilerplate
       'For my mother, who believed.',    // dedication — no signals
       'eISBN 978-0-000-00000-0',         // boilerplate
-      'Chapter 1. The story begins.',    // content
+      'Chapter 1. The story begins.',    // also boilerplate — matches chapter\s+\d TOC pattern
     ]
-    expect(findContentStart(chunks)).toBe(3)
+    expect(findContentStart(chunks)).toBe(4)
   })
 
   // ── Table of contents detection ─────────────────────────────────────────
-  it('skips "Table of Contents" heading chunk', () => {
+  it('skips "Table of Contents" heading chunk and short follow-on inside TOC window', () => {
     const chunks = [
       'Table of Contents',
+      // 57 chars — below the 60-char prose threshold, so still treated as TOC content
       'She walked alone down the empty street and heard nothing.',
     ]
-    expect(findContentStart(chunks)).toBe(1)
+    expect(findContentStart(chunks)).toBe(2)
   })
 
   it('skips TOC entries detected by dot leaders', () => {
@@ -126,9 +127,10 @@ describe('findContentStart', () => {
     const chunks = [
       'Table of Contents',
       'Chapter 1 The Beginning 1 Chapter 2 The Middle 24 Chapter 3 The End 67',
+      // 47 chars — below the 60-char prose threshold, treated as inside TOC window
       'She had waited her entire life for this moment.',
     ]
-    expect(findContentStart(chunks)).toBe(2)
+    expect(findContentStart(chunks)).toBe(3)
   })
 
   it('stops the TOC window early when real prose is encountered', () => {
