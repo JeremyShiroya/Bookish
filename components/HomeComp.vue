@@ -1,114 +1,138 @@
 <template>
   <div class="home-container">
     <div v-if="loading && !initialized" class="home-loading">
-        <div class="loader-spinner"></div>
-        <p>Preparing your library...</p>
+      <div class="loader-spinner"></div>
+      <p>Preparing your library...</p>
     </div>
 
     <template v-else-if="initialized">
-        <section class="home-section">
-          <div class="section-header">
-            <h2 class="section-title">Recently Added</h2>
-            <NuxtLink to="/books" class="show-all-btn">
-              See all <i class="ri-arrow-right-s-line"></i>
-            </NuxtLink>
+      <section class="home-section">
+        <div class="section-header">
+          <h2 class="section-title">Recently Added</h2>
+          <NuxtLink to="/books" class="show-all-btn">
+            See all <i class="ri-arrow-right-s-line"></i>
+          </NuxtLink>
+        </div>
+        <div v-if="recentlyAddedBooks.length > 0" class="recent-grid">
+          <div
+            v-for="book in recentlyAddedBooks.slice(0, 3)"
+            :key="book.id"
+            class="recent-card"
+            @click="router.push(`/reader/${book.id}`)"
+          >
+            <div class="recent-card-bg-container">
+              <div
+                class="recent-bg"
+                :style="{ backgroundImage: `url(${book.cover})` }"
+              ></div>
+              <div class="recent-bg-overlay"></div>
+            </div>
+            <img :src="book.cover" :alt="book.title" class="recent-cover" />
+            <div class="recent-info">
+              <h4 class="recent-title">{{ book.title }}</h4>
+              <p class="recent-meta">
+                {{ book.pages || "—" }} Pages • {{ book.format || "EPUB" }}
+              </p>
+            </div>
+            <button
+              class="recent-go-btn"
+              title="Listen"
+              @click.stop="handlePlay(book)"
+            >
+              <i class="ri-play-line"></i>
+            </button>
           </div>
-          <div v-if="recentlyAddedBooks.length > 0" class="recent-grid">
-            <div v-for="book in recentlyAddedBooks.slice(0, 3)" :key="book.id" class="recent-card" @click="router.push(`/reader/${book.id}`)">
-              <div class="recent-card-bg-container">
-                <div class="recent-bg" :style="{ backgroundImage: `url(${book.cover})` }"></div>
-                <div class="recent-bg-overlay"></div>
+        </div>
+        <EmptyState
+          v-else
+          title="Your library is clear"
+          description="Start building your digital library by uploading your first book."
+          icon="ri-folder-add-line"
+        >
+          <template #action>
+            <NuxtLink to="/books" class="add-btn">
+              <i class="ri-add-line"></i>
+              Add Book
+            </NuxtLink>
+          </template>
+        </EmptyState>
+      </section>
+
+      <!-- Main Content Row: Popular Books and Your Authors -->
+      <div class="main-content-row">
+        <!-- Popular Books Column -->
+        <section class="popular-column">
+          <div class="section-header">
+            <h2 class="section-title">Popular Books</h2>
+          </div>
+          <div v-if="popularBooks.length > 0" class="popular-grid">
+            <div
+              v-for="book in popularBooks"
+              :key="book.id"
+              class="popular-card"
+              @click="router.push(`/reader/${book.id}`)"
+            >
+              <img :src="book.cover" :alt="book.title" class="popular-cover" />
+              <div class="popular-info">
+                <h4 class="popular-title">{{ book.title }}</h4>
+                <p class="popular-author">{{ book.author }}</p>
+                <p class="popular-blurb">{{ truncate(book.blurb, 90) }}</p>
               </div>
-              <img :src="book.cover" :alt="book.title" class="recent-cover" />
-              <div class="recent-info">
-                <h4 class="recent-title">{{ book.title }}</h4>
-                <p class="recent-meta">{{ book.pages || '—' }} Pages • {{ book.format || 'EPUB' }}</p>
-              </div>
-              <button class="recent-go-btn" title="Listen" @click.stop="handlePlay(book)">
-                <i class="ri-play-line"></i>
+              <button
+                class="popular-play-btn"
+                title="Listen"
+                @click.stop="handlePlay(book)"
+              >
+                <i class="ri-play-fill"></i>
               </button>
             </div>
           </div>
           <EmptyState
             v-else
-            title="Your library is clear"
-            description="Start building your digital library by uploading your first book."
-            icon="ri-folder-add-line"
-          >
-            <template #action>
-              <NuxtLink to="/books" class="add-btn">
-                <i class="ri-add-line"></i>
-                Add Book
-              </NuxtLink>
-            </template>
-          </EmptyState>
+            title="No popular books"
+            description="Add and rate books to see your favorites here."
+            icon="ri-star-line"
+          />
         </section>
 
-        <!-- Main Content Row: Popular Books and Your Authors -->
-        <div class="main-content-row">
-          
-          <!-- Popular Books Column -->
-          <section class="popular-column">
-            <div class="section-header">
-              <h2 class="section-title">Popular Books</h2>
-            </div>
-            <div v-if="popularBooks.length > 0" class="popular-grid">
-              <div 
-                v-for="book in popularBooks" 
-                :key="book.id" 
-                class="popular-card"
-                @click="router.push(`/reader/${book.id}`)"
-              >
-                <img :src="book.cover" :alt="book.title" class="popular-cover" />
-                <div class="popular-info">
-                  <h4 class="popular-title">{{ book.title }}</h4>
-                  <p class="popular-author">{{ book.author }}</p>
-                  <p class="popular-blurb">{{ truncate(book.blurb, 90) }}</p>
-                </div>
-                <button class="popular-play-btn" title="Listen" @click.stop="handlePlay(book)">
-                  <i class="ri-play-fill"></i>
-                </button>
-              </div>
-            </div>
-            <EmptyState
-              v-else
-              title="No popular books"
-              description="Add and rate books to see your favorites here."
-              icon="ri-star-line"
-            />
-          </section>
-
-          <!-- Your Authors Column -->
-          <section class="your-authors-column">
-            <div class="section-header">
-              <h2 class="section-title">Your Authors</h2>
-            </div>
-            <div v-if="recentAuthors.length > 0" class="authors-list-card">
-              <div
-                v-for="author in recentAuthors"
-                :key="author.id"
-                class="author-list-item"
-                @click="router.push(`/author/${author.id}`)"
-              >
-                <div class="author-list-avatar">
-                  <img v-if="author.image" :src="author.image" :alt="author.name" />
-                  <div v-else class="author-initial">{{ author.name.charAt(0) }}</div>
-                </div>
-                <div class="author-list-info">
-                  <p class="author-list-name">{{ author.name }}</p>
-                  <p class="author-list-count">{{ getAuthorBookCount(author.name) }} Books</p>
+        <!-- Your Authors Column -->
+        <section class="your-authors-column">
+          <div class="section-header">
+            <h2 class="section-title">Your Authors</h2>
+          </div>
+          <div v-if="recentAuthors.length > 0" class="authors-list-card">
+            <div
+              v-for="author in recentAuthors"
+              :key="author.id"
+              class="author-list-item"
+              @click="router.push(`/author/${author.id}`)"
+            >
+              <div class="author-list-avatar">
+                <img
+                  v-if="author.image"
+                  :src="author.image"
+                  :alt="author.name"
+                />
+                <div v-else class="author-initial">
+                  {{ author.name.charAt(0) }}
                 </div>
               </div>
+              <div class="author-list-info">
+                <p class="author-list-name">{{ author.name }}</p>
+                <p class="author-list-count">
+                  {{ getAuthorBookCount(author.name) }} Books
+                </p>
+              </div>
             </div>
-            <EmptyState
-              v-else
-              title="No authors yet"
-              description="Your most read authors will appear here."
-              icon="ri-user-smile-line"
-            />
-          </section>
-          
-        </div>
+          </div>
+          <EmptyState
+            v-else
+            title="No authors yet"
+            description="Your most read authors will appear here."
+            icon="ri-group-line"
+          />
+        </section>
+      </div>
     </template>
   </div>
 </template>
@@ -119,7 +143,15 @@ import { useBooks } from "~/composables/useBooks";
 import { useTTS } from "~/composables/useTTS";
 import EmptyState from "./EmptyState.vue";
 
-const { books, recentlyReadBooks, recentlyAddedBooks, recentAuthors, popularBooks, loading, initialized } = useBooks();
+const {
+  books,
+  recentlyReadBooks,
+  recentlyAddedBooks,
+  recentAuthors,
+  popularBooks,
+  loading,
+  initialized,
+} = useBooks();
 const { play: playTTS } = useTTS();
 const router = useRouter();
 
@@ -128,13 +160,13 @@ const handlePlay = (book) => {
 };
 
 const getAuthorBookCount = (authorName) => {
-  return books.value.filter(b => b.author === authorName).length;
+  return books.value.filter((b) => b.author === authorName).length;
 };
 
 const truncate = (text, length) => {
-  if (!text) return '';
+  if (!text) return "";
   if (text.length <= length) return text;
-  return text.substring(0, length).trim() + '...';
+  return text.substring(0, length).trim() + "...";
 };
 </script>
 
@@ -152,12 +184,12 @@ const truncate = (text, length) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.0rem;
+  margin-bottom: 1rem;
 }
 
 .section-title {
   font-size: 1.25rem;
-  font-weight: 400;;
+  font-weight: 400;
   color: #000;
   margin: 0;
 }
@@ -222,7 +254,6 @@ const truncate = (text, length) => {
   border-radius: 16px;
   overflow: hidden;
   z-index: -1;
-
 }
 
 .recent-bg {
@@ -243,13 +274,16 @@ const truncate = (text, length) => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, rgba(20, 20, 25, 0.7) 0%, rgba(20, 20, 25, 0.4) 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(20, 20, 25, 0.7) 0%,
+    rgba(20, 20, 25, 0.4) 100%
+  );
 }
 
 .recent-card:hover {
   transform: translateY(-5px);
 }
-
 
 .recent-cover {
   position: absolute;
@@ -277,7 +311,7 @@ const truncate = (text, length) => {
 
 .recent-title {
   font-size: 1.1rem;
-  font-weight: 400;;
+  font-weight: 400;
   line-height: 1.3;
   margin: 0 0 0.5rem 0;
   display: -webkit-box;
@@ -285,17 +319,15 @@ const truncate = (text, length) => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .recent-meta {
   font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.85);
   margin: 0;
-  font-weight: 400;;
+  font-weight: 400;
 }
-
-
 
 .recent-go-btn {
   position: absolute;
@@ -306,8 +338,8 @@ const truncate = (text, length) => {
   height: 36px;
   padding: 0;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.3);
-  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.05);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -317,8 +349,8 @@ const truncate = (text, length) => {
 }
 
 .recent-card:hover .recent-go-btn {
-  background: rgba(255,255,255,0.2);
-  border-color: rgba(255,255,255,0.8);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.8);
   transform: translateY(-50%) scale(1.05);
 }
 
@@ -327,10 +359,10 @@ const truncate = (text, length) => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.25rem;
-  background: linear-gradient(135deg, #8A2BE2 0%, #6A0DAD 100%);
+  background: linear-gradient(135deg, #8a2be2 0%, #6a0dad 100%);
   color: white;
   border-radius: 0.5rem;
-  font-weight: 400;;
+  font-weight: 400;
   text-decoration: none;
   font-size: 0.875rem;
   transition: all 0.2s;
@@ -384,7 +416,7 @@ const truncate = (text, length) => {
   height: 165px;
   border-radius: 8px;
   object-fit: cover;
-  box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
   flex-shrink: 0;
 }
 
@@ -475,7 +507,7 @@ const truncate = (text, length) => {
   height: 60px;
   border-radius: 50%;
   overflow: hidden;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
   flex-shrink: 0;
 }
 
@@ -504,7 +536,7 @@ const truncate = (text, length) => {
 
 .author-list-name {
   font-size: 1.05rem;
-  font-weight: 400;;
+  font-weight: 400;
   color: var(--text-color);
   margin: 0 0 0.25rem 0;
 }
@@ -535,12 +567,14 @@ const truncate = (text, length) => {
   width: 40px;
   height: 40px;
   border: 4px solid rgba(138, 43, 226, 0.1);
-  border-top-color: #8A2BE2;
+  border-top-color: #8a2be2;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

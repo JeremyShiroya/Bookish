@@ -8,6 +8,7 @@ export interface OLResult {
   seriesInstallment: string | null;
   genre: string | null;
   publishYear: number | null;
+  isbn13s: string[];
 }
 
 export async function searchOpenLibrary(title: string, author?: string): Promise<OLResult[]> {
@@ -34,6 +35,10 @@ export async function searchOpenLibrary(title: string, author?: string): Promise
           }
         } catch {}
 
+        const isbn13s: string[] = doc.isbn
+          ? (doc.isbn as string[]).filter((s: string) => s.length === 13)
+          : [];
+
         return {
           id: doc.key,
           title: doc.title,
@@ -44,6 +49,7 @@ export async function searchOpenLibrary(title: string, author?: string): Promise
           seriesInstallment: doc.series_position?.[0] ?? null,
           genre: doc.subject ? (doc.subject as string[]).slice(0, 3).join(', ') : null,
           publishYear: doc.first_publish_year ?? null,
+          isbn13s,
         };
       })
     );
@@ -53,11 +59,4 @@ export async function searchOpenLibrary(title: string, author?: string): Promise
     console.error('OpenLibrary search error:', err);
     return [];
   }
-}
-
-export function findOlMatch(targetTitle: string, olResults: OLResult[]): OLResult | null {
-  if (!olResults.length) return null;
-  const n = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const nt = n(targetTitle);
-  return olResults.find(r => n(r.title).includes(nt) || nt.includes(n(r.title))) ?? olResults[0];
 }

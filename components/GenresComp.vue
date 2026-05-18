@@ -26,7 +26,7 @@
       v-else
       title="Searching for genres"
       description="Genres will be automatically extracted from the books you add to your library."
-      icon="ri-price-tag-3-line"
+      icon="ri-planet-line"
     >
       <template #action>
         <NuxtLink to="/books" class="add-btn">

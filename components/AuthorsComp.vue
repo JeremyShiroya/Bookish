@@ -35,7 +35,7 @@
           v-else
           title="No authors found"
           description="Start adding books and their authors will appear here automatically."
-          icon="ri-user-smile-line"
+          icon="ri-group-line"
         >
           <template #action>
             <NuxtLink to="/books" class="add-btn">

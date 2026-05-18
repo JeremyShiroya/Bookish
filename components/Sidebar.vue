@@ -60,7 +60,7 @@ const menuItems = [
   { name: "Collections", icon: "ri-archive-line", path: "/collections" },
   { name: "Favourites", icon: "ri-heart-line", path: "/favourites" },
   { name: "Series", icon: "ri-book-shelf-line", path: "/series" },
-  { name: "Genres", icon: "ri-quill-pen-line", path: "/genres" },
+  { name: "Genres", icon: "ri-planet-line", path: "/genres" },
   { name: "Authors", icon: "ri-group-line", path: "/authors" },
 ];
 

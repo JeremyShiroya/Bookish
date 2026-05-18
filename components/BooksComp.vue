@@ -313,7 +313,7 @@
         v-else
         title="Your library is empty"
         description="Connect your first document to start building your personal book collection."
-        icon="ri-book-read-line"
+        icon="ri-book-open-line"
       >
         <template #action>
           <button class="add-book-btn" @click="router.push('/add')">

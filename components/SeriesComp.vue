@@ -44,7 +44,7 @@
       v-else
       title="No series detected"
       description="Books that are part of the same collection will automatically group into series here."
-      icon="ri-layout-grid-line"
+      icon="ri-book-shelf-line"
     >
       <template #action>
         <NuxtLink to="/books" class="add-btn">

@@ -231,6 +231,10 @@ export const useTTS = () => {
   }
 
   const _speakNextEdge = async () => {
+    // Capture generation at call time — if _cancelAudio() fires mid-await,
+    // the generation increments and we know to abort.
+    const myGen = _prefetchGeneration
+
     if (_chunkIdx >= _chunks.length) {
       ttsStatus.value = 'idle'
       ttsProgress.value = 100
@@ -245,7 +249,8 @@ export const useTTS = () => {
       audioSrc = await _fetchChunkAudio(_chunkIdx)
     }
 
-    // Bail if stop/pause/seek happened while we were awaiting the fetch
+    // Bail if cancel/seek/voice-switch happened while we were awaiting the fetch
+    if (_prefetchGeneration !== myGen) return
     if (ttsStatus.value !== 'playing') return
 
     if (!audioSrc) {

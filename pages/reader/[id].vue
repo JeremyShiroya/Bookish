@@ -133,7 +133,7 @@ function _buildChunkMap() {
   if (!container || !book.value?.content) return
 
   const text = stripHtml(book.value.content)
-  const chunks = splitToChunks(text, 180)
+  const chunks = splitToChunks(text, 400)
 
   // Collect leaf block elements (no child block elements) — these hold the raw text nodes
   const leaves = Array.from(

@@ -77,23 +77,18 @@ export async function scrapeGoodreadsBook(bookUrl: string) {
        blurb = $('#description span').last().text().trim();
     }
     
-    // Extract Series
+    // Extract Series — use aria-label for precision: "Book 2 in the Grant County series"
     let series = null;
     let seriesInstallment = null;
-    const seriesText = $('h3[aria-label^="Book"] a').text().trim()
-      || $('h3[aria-label*="of "] a').text().trim()
-      || $('h3[aria-label*="Part of"] a').text().trim()
-      || $('h2#bookSeries').text().trim()
-      || $('div.infoBoxRowTitle:contains("Series")').next('.infoBoxRowItem').text().trim();
-    
-    // Cleanup seriesText if it looks like "Dune #1"
-    if (seriesText) {
-      const match = seriesText.match(/^(.*?)(?:\s+#(\d+(?:\.\d+)?))?$/);
-      if (match) {
-        series = match[1].trim();
-        if (match[2]) seriesInstallment = match[2];
+    $('h3[aria-label]').each((_, el) => {
+      if (series) return;
+      const label = $(el).attr('aria-label') || '';
+      const m = label.match(/Book\s+([\d.]+)\s+(?:in the|of(?:\s+the)?)\s+(.*?)(?:\s+series)?$/i);
+      if (m) {
+        seriesInstallment = m[1];
+        series = m[2].trim();
       }
-    }
+    });
     
     // Extract Rating
     let ratingStr = $('div.RatingStatistics__rating').first().text().trim() || $('span[itemprop="ratingValue"]').first().text().trim();
@@ -122,7 +117,7 @@ export async function scrapeGoodreadsBook(bookUrl: string) {
     // Extract Genres
     const genresList: string[] = [];
     $('div[data-testid="genresList"] a.Button--tag').each((i, el) => {
-       const g = $(el).find('span.Button__label').text().trim() || $(el).text().trim();
+       const g = $(el).find('span.Button__labelItem').text().trim() || $(el).text().trim();
        if (g && !genresList.includes(g)) genresList.push(g);
     });
     if (genresList.length === 0) {
