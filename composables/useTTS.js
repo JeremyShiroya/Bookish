@@ -1,6 +1,5 @@
 import { computed } from 'vue'
 import { useState } from '#app'
-import { useBookStorage } from '~/composables/useBookStorage'
 
 let _currentAudio = null
 let _prefetchAudio = null
@@ -183,6 +182,8 @@ export const useTTS = () => {
   const ttsVoices       = useState('tts:voices',       () => EDGE_VOICES)
   const ttsCurrentChunk = useState('tts:currentChunk', () => '')
 
+  const { getBookContent } = useBookStorage()
+
   const elapsedTime = computed(() => {
     const secsPerChunk = (WORDS_PER_CHUNK / WORDS_PER_MIN) * 60 / ttsSpeed.value
     return formatDuration(ttsChunkIdx.value * secsPerChunk)
@@ -308,7 +309,6 @@ export const useTTS = () => {
     let content = book.content
     if (!content) {
       try {
-        const { getBookContent } = useBookStorage()
         const stored = await getBookContent(book.id)
         content = stored?.content ?? null
       } catch (e) {
