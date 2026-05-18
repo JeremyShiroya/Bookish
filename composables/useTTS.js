@@ -4,6 +4,7 @@ import { useBookStorage } from '~/composables/useBookStorage'
 
 let _currentAudio = null
 let _prefetchAudio = null
+let _prefetchGeneration = 0   // incremented on cancel to invalidate in-flight pre-fetches
 let _chunks = []
 let _chunkIdx = 0
 
@@ -210,6 +211,7 @@ export const useTTS = () => {
       _currentAudio = null
     }
     _prefetchAudio = null
+    _prefetchGeneration++
   }
 
   const _fetchChunkAudio = async (chunkIdx) => {
@@ -256,10 +258,15 @@ export const useTTS = () => {
     audio.volume = ttsVolume.value
     _currentAudio = audio
 
-    // Pre-fetch next chunk while this one plays to hide network latency
+    // Pre-fetch next chunk while this one plays to hide network latency.
+    // Capture generation so a cancel() that arrives before this resolves
+    // doesn't let stale audio (wrong voice/speed) overwrite _prefetchAudio.
     const nextIdx = _chunkIdx + 1
     if (nextIdx < _chunks.length) {
-      _fetchChunkAudio(nextIdx).then(src => { _prefetchAudio = src })
+      const gen = _prefetchGeneration
+      _fetchChunkAudio(nextIdx).then(src => {
+        if (_prefetchGeneration === gen) _prefetchAudio = src
+      })
     }
 
     audio.onended = () => {
