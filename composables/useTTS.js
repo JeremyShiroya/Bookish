@@ -379,6 +379,9 @@ export const useTTS = () => {
     if (ttsStatus.value === 'playing') {
       _cancelAudio()
       _speakNextEdge()
+    } else if (ttsStatus.value === 'paused') {
+      // Discard paused audio so resume() re-fetches at the new speed
+      _cancelAudio()
     }
   }
 
@@ -392,6 +395,9 @@ export const useTTS = () => {
     if (ttsStatus.value === 'playing') {
       _cancelAudio()
       _speakNextEdge()
+    } else if (ttsStatus.value === 'paused') {
+      // Discard paused audio so resume() re-fetches with the new voice
+      _cancelAudio()
     }
   }
 
