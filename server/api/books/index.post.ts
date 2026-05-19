@@ -30,8 +30,11 @@ export default defineEventHandler(async (event) => {
           if (wikiResponse.originalimage?.source) authorImage = wikiResponse.originalimage.source;
           else if (wikiResponse.thumbnail?.source) authorImage = wikiResponse.thumbnail.source;
         }
-      } catch (e) {
-        console.warn('Enriching author failed:', authorName);
+      } catch (e: any) {
+        // 404 = author simply not on Wikipedia — completely normal, no noise needed
+        if (e?.status !== 404 && e?.statusCode !== 404) {
+          console.warn('Enriching author failed:', authorName, '—', e?.message ?? 'network error')
+        }
       }
     }
 

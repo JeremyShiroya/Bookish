@@ -3,9 +3,12 @@ import { useState } from '#app'
 
 let _currentAudio = null
 let _prefetchAudio = null
-let _prefetchGeneration = 0   // incremented on cancel to invalidate in-flight pre-fetches
+let _prefetchBoundaries = null   // word boundaries for the pre-fetched next chunk
+let _prefetchGeneration = 0      // incremented on cancel to invalidate in-flight pre-fetches
 let _chunks = []
 let _chunkIdx = 0
+let _currentBoundaries = []      // word boundaries for the currently playing chunk
+let _rafId = null                // requestAnimationFrame handle for word-highlight loop
 
 const WORDS_PER_CHUNK = 28
 const WORDS_PER_MIN = 145
@@ -181,6 +184,10 @@ export const useTTS = () => {
   const ttsVoiceId      = useState('tts:voice',        () => 'en-US-ChristopherNeural')
   const ttsVoices       = useState('tts:voices',       () => EDGE_VOICES)
   const ttsCurrentChunk = useState('tts:currentChunk', () => '')
+  // Word-level highlight: index into the boundary array for the current chunk
+  const ttsWordIdx      = useState('tts:wordIdx',      () => -1)
+  // The boundary array for the currently-playing chunk (populated from TTS response)
+  const ttsBoundaries   = useState('tts:boundaries',   () => [])
 
   const { getBookContent } = useBookStorage()
 
@@ -212,9 +219,14 @@ export const useTTS = () => {
       _currentAudio = null
     }
     _prefetchAudio = null
+    _prefetchBoundaries = null
     _prefetchGeneration++
+    // Stop the word-highlight rAF loop
+    if (_rafId !== null) { cancelAnimationFrame(_rafId); _rafId = null }
+    _currentBoundaries = []
   }
 
+  // Returns { audio: dataUrl, boundaries: [...] } or null
   const _fetchChunkAudio = async (chunkIdx) => {
     const chunk = _chunks[chunkIdx]
     if (!chunk) return null
@@ -223,11 +235,31 @@ export const useTTS = () => {
         method: 'POST',
         body: { text: chunk, voice: ttsVoiceId.value, speed: ttsSpeed.value },
       })
-      return data.audio ?? null
+      return { audio: data.audio ?? null, boundaries: data.boundaries ?? [] }
     } catch (err) {
       console.warn('[TTS] fetch error:', err)
       return null
     }
+  }
+
+  // rAF loop: maps audio.currentTime → the current word boundary index
+  const _startWordLoop = (wordBoundaries) => {
+    if (_rafId !== null) { cancelAnimationFrame(_rafId); _rafId = null }
+    if (!wordBoundaries.length) return
+    const loop = () => {
+      if (!_currentAudio || ttsStatus.value !== 'playing') { _rafId = null; return }
+      const t = _currentAudio.currentTime
+      // Binary search: find the last boundary whose offset ≤ currentTime
+      let lo = 0, hi = wordBoundaries.length - 1, found = -1
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1
+        if (wordBoundaries[mid].offset <= t) { found = mid; lo = mid + 1 }
+        else hi = mid - 1
+      }
+      if (found !== -1 && found !== ttsWordIdx.value) ttsWordIdx.value = found
+      _rafId = requestAnimationFrame(loop)
+    }
+    _rafId = requestAnimationFrame(loop)
   }
 
   const _speakNextEdge = async () => {
@@ -243,35 +275,43 @@ export const useTTS = () => {
     }
     _updateProgress()
 
-    let audioSrc = _prefetchAudio
-    _prefetchAudio = null
-    if (!audioSrc) {
-      audioSrc = await _fetchChunkAudio(_chunkIdx)
+    // Use pre-fetched result if available, otherwise fetch now
+    let chunkData = null
+    if (_prefetchAudio) {
+      chunkData = { audio: _prefetchAudio, boundaries: _prefetchBoundaries ?? [] }
+      _prefetchAudio = null
+      _prefetchBoundaries = null
+    } else {
+      chunkData = await _fetchChunkAudio(_chunkIdx)
     }
 
     // Bail if cancel/seek/voice-switch happened while we were awaiting the fetch
     if (_prefetchGeneration !== myGen) return
     if (ttsStatus.value !== 'playing') return
 
-    if (!audioSrc) {
+    if (!chunkData?.audio) {
       const { addToast } = useToast()
       addToast('TTS failed — check your connection.', 'error')
       ttsStatus.value = 'idle'
       return
     }
 
-    const audio = new Audio(audioSrc)
+    const audio = new Audio(chunkData.audio)
     audio.volume = ttsVolume.value
     _currentAudio = audio
+    _currentBoundaries = chunkData.boundaries ?? []
+    ttsBoundaries.value = _currentBoundaries   // expose via reactive state
+    ttsWordIdx.value = -1                       // reset word index for new chunk
 
-    // Pre-fetch next chunk while this one plays to hide network latency.
-    // Capture generation so a cancel() that arrives before this resolves
-    // doesn't let stale audio (wrong voice/speed) overwrite _prefetchAudio.
+    // Pre-fetch next chunk while this one plays
     const nextIdx = _chunkIdx + 1
     if (nextIdx < _chunks.length) {
       const gen = _prefetchGeneration
-      _fetchChunkAudio(nextIdx).then(src => {
-        if (_prefetchGeneration === gen) _prefetchAudio = src
+      _fetchChunkAudio(nextIdx).then(result => {
+        if (_prefetchGeneration === gen && result) {
+          _prefetchAudio = result.audio
+          _prefetchBoundaries = result.boundaries
+        }
       })
     }
 
@@ -295,6 +335,9 @@ export const useTTS = () => {
         ttsStatus.value = 'idle'
       }
     })
+
+    // Start word-level highlight loop after audio begins
+    audio.oncanplay = () => _startWordLoop(_currentBoundaries)
   }
 
   const _stopInternal = () => {
@@ -302,6 +345,7 @@ export const useTTS = () => {
     _chunks = []
     _chunkIdx = 0
     ttsCurrentChunk.value = ''
+    ttsWordIdx.value = -1
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -406,6 +450,18 @@ export const useTTS = () => {
     }
   }
 
+  const restart = () => {
+    if (!_chunks.length) return
+    const wasActive = ttsStatus.value === 'playing' || ttsStatus.value === 'paused'
+    _cancelAudio()
+    _chunkIdx = 0
+    _updateProgress()
+    if (wasActive) {
+      ttsStatus.value = 'playing'
+      _speakNextEdge()
+    }
+  }
+
   const seekToProgress = (pct) => {
     if (!_chunks.length) return
     _cancelAudio()
@@ -422,11 +478,20 @@ export const useTTS = () => {
     if (ttsStatus.value === 'playing') _speakNextEdge()
   }
 
+  // Skip by wall-clock seconds (converted to chunk count based on current speed)
+  const skipSeconds = (seconds) => {
+    if (!_chunks.length) return
+    const secsPerChunk = (WORDS_PER_CHUNK / WORDS_PER_MIN) * 60 / ttsSpeed.value
+    const delta = Math.sign(seconds) * Math.max(1, Math.round(Math.abs(seconds) / secsPerChunk))
+    skipChunks(delta)
+  }
+
   return {
     ttsBook, ttsStatus, ttsProgress, ttsChunkIdx, ttsTotalChunks,
     ttsSpeed, ttsVolume, ttsVoiceId, ttsVoices, ttsCurrentChunk,
+    ttsWordIdx, ttsBoundaries,
     elapsedTime, totalTime,
-    play, pause, resume, togglePlay, stop,
-    setSpeed, setVolume, setVoice, seekToProgress, skipChunks,
+    play, pause, resume, togglePlay, stop, restart,
+    setSpeed, setVolume, setVoice, seekToProgress, skipChunks, skipSeconds,
   }
 }

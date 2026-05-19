@@ -243,6 +243,7 @@ const { addBook } = useBooks()
 const { addToast } = useToast()
 const { saveBookContent } = useBookStorage()
 const extractedContent = ref(null)
+const extractedTocTitles = ref([])
 
 const newBook = ref({
   title: '',
@@ -330,7 +331,13 @@ const handleDocumentChange = async (event) => {
       const { extractEpub } = await import('~/composables/useEpubExtractor.js')
       const result = await extractEpub(file)
       extractedContent.value = result.content
+      extractedTocTitles.value = result.tocTitles ?? []
       newBook.value.pages = result.pages || 0
+      // Auto-populate cover from the EPUB's embedded cover image if the user
+      // hasn't already selected one manually.
+      if (result.cover && !coverPreview.value) {
+        coverPreview.value = result.cover
+      }
     } catch (err) {
       extractionError.value = `Could not extract EPUB content. The book will be added without in-app reading.`
     } finally {
@@ -430,6 +437,7 @@ const saveBook = async () => {
         await saveBookContent(savedBook.id, {
           content: extractedContent.value,
           pages: savedBook.pages || 0,
+          tocTitles: extractedTocTitles.value,
         });
       } catch (storageErr) {
         console.error('IndexedDB write failed:', storageErr);

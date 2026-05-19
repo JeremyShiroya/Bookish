@@ -25,6 +25,13 @@ function escapeXml(text: string): string {
     .replace(/'/g, '&apos;')
 }
 
+interface WordBoundary {
+  word: string
+  offset: number    // seconds from audio start
+  duration: number  // seconds
+  charIndex: number // character offset within the chunk text
+}
+
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const { text, voice = 'en-US-ChristopherNeural', speed = 1.0 } = body ?? {}
@@ -32,11 +39,9 @@ export default defineEventHandler(async (event) => {
   if (!text?.trim()) {
     throw createError({ statusCode: 400, message: 'text is required' })
   }
-
   if (text.length > 5000) {
     throw createError({ statusCode: 400, message: 'text too long (max 5000 chars)' })
   }
-
   if (!ALLOWED_VOICES.has(voice)) {
     throw createError({ statusCode: 400, message: 'unknown voice' })
   }
@@ -47,15 +52,62 @@ export default defineEventHandler(async (event) => {
   const tts = new MsEdgeTTS()
   try {
     await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3)
-    const { audioStream } = tts.rawToStream(ssml)
 
-    const buffers: Buffer[] = []
-    for await (const chunk of audioStream) {
-      buffers.push(Buffer.from(chunk))
+    const streamResult = tts.rawToStream(ssml)
+    const audioStream    = streamResult.audioStream
+    const metadataStream = (streamResult as any).metadataStream ?? null
+
+    const boundaries: WordBoundary[] = []
+    const audioBuffers: Buffer[] = []
+
+    if (metadataStream) {
+      // Consume audio and metadata concurrently
+      await Promise.all([
+        (async () => {
+          for await (const chunk of audioStream) {
+            audioBuffers.push(Buffer.from(chunk))
+          }
+        })(),
+        (async () => {
+          try {
+            // Build a lookup map from word text → char offset in the original text
+            const lowerText = text.toLowerCase()
+            let searchFrom = 0
+
+            for await (const meta of metadataStream) {
+              // msedge-tts emits objects: { type: 'WordBoundary', Data: { Offset, Duration, text: { Text, Length } } }
+              if (meta?.type !== 'WordBoundary') continue
+              const word     = meta.Data?.text?.Text ?? ''
+              const offsetNs = meta.Data?.Offset  ?? 0  // 100-nanosecond units
+              const durNs    = meta.Data?.Duration ?? 0
+
+              // Find the character index of this word in the original chunk text
+              const wordLower = word.toLowerCase()
+              const charIdx   = lowerText.indexOf(wordLower, searchFrom)
+              if (charIdx !== -1) searchFrom = charIdx + word.length
+
+              boundaries.push({
+                word,
+                offset:    offsetNs / 10_000_000,  // → seconds
+                duration:  durNs    / 10_000_000,
+                charIndex: charIdx,
+              })
+            }
+          } catch {
+            // Non-fatal — metadata is enhancement only
+          }
+        })(),
+      ])
+    } else {
+      // Older msedge-tts version — audio only
+      for await (const chunk of audioStream) {
+        audioBuffers.push(Buffer.from(chunk))
+      }
     }
-    const audio = `data:audio/mp3;base64,${Buffer.concat(buffers).toString('base64')}`
 
-    return { audio }
+    const audio = `data:audio/mp3;base64,${Buffer.concat(audioBuffers).toString('base64')}`
+    return { audio, boundaries }
+
   } catch (err: any) {
     throw createError({ statusCode: 500, message: err?.message ?? 'TTS generation failed' })
   } finally {

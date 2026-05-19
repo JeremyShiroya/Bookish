@@ -17,11 +17,11 @@ function openDB() {
 }
 
 export const useBookStorage = () => {
-  const saveBookContent = async (bookId, { content, pages }) => {
+  const saveBookContent = async (bookId, { content, pages, tocTitles }) => {
     const db = await openDB()
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite')
-      tx.objectStore(STORE_NAME).put({ content, pages }, bookId)
+      tx.objectStore(STORE_NAME).put({ content, pages, tocTitles: tocTitles ?? null }, bookId)
       tx.oncomplete = () => resolve()
       tx.onerror = (e) => reject(e.target.error)
       tx.onabort = (e) => reject(e.target.error ?? new DOMException('Transaction aborted'))

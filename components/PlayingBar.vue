@@ -35,19 +35,36 @@
     <!-- Center: Controls + Progress -->
     <div class="player-controls">
       <div class="control-buttons">
-        <button class="icon-btn" title="Skip back" :disabled="isIdle" @click="skipChunks(-10)">
-          <i class="ri-skip-back-line"></i>
+        <!-- |◄ Restart from beginning -->
+        <button class="icon-btn" title="Restart from beginning" :disabled="isIdle" @click="restart">
+          <i class="ri-skip-back-fill"></i>
         </button>
+        <!-- ◄ Previous sentence -->
+        <button class="icon-btn" title="Previous sentence" :disabled="isIdle" @click="skipChunks(-1)">
+          <i class="ri-arrow-left-s-line"></i>
+        </button>
+        <!-- ⟲10 Rewind 10s -->
+        <button class="icon-btn" title="Rewind 10s" :disabled="isIdle" @click="skipSeconds(-10)">
+          <i class="ri-replay-10-line"></i>
+        </button>
+
         <button class="play-btn" title="Play / Pause" :disabled="isIdle && !ttsBook" @click="handlePlayPause">
           <i v-if="ttsStatus === 'loading'" class="ri-loader-4-line spinner"></i>
           <i v-else-if="ttsStatus === 'playing'" class="ri-pause-fill"></i>
           <i v-else class="ri-play-fill"></i>
         </button>
-        <button class="icon-btn" title="Skip forward" :disabled="isIdle" @click="skipChunks(10)">
-          <i class="ri-skip-forward-line"></i>
+
+        <!-- ⟳10 Forward 10s -->
+        <button class="icon-btn" title="Forward 10s" :disabled="isIdle" @click="skipSeconds(10)">
+          <i class="ri-forward-10-line"></i>
         </button>
+        <!-- ► Next sentence -->
+        <button class="icon-btn" title="Next sentence" :disabled="isIdle" @click="skipChunks(1)">
+          <i class="ri-arrow-right-s-line"></i>
+        </button>
+        <!-- ►| Stop -->
         <button class="icon-btn stop-btn" title="Stop" :disabled="isIdle" @click="stop">
-          <i class="ri-stop-fill"></i>
+          <i class="ri-skip-forward-fill"></i>
         </button>
       </div>
 
@@ -120,7 +137,7 @@ const {
   ttsBook, ttsStatus, ttsProgress, ttsSpeed, ttsVolume,
   ttsVoiceId, ttsVoices,
   elapsedTime, totalTime,
-  togglePlay, stop, skipChunks, setSpeed, setVolume, setVoice,
+  togglePlay, stop, restart, skipChunks, skipSeconds, setSpeed, setVolume, setVoice,
   seekToProgress,
 } = useTTS()
 
@@ -223,7 +240,7 @@ const coverFallback = (event, title) => {
   justify-content: center;
   transition: all 0.2s ease;
 }
-.icon-btn:hover:not(:disabled) { color: #1f2937; background: #f3f4f6; }
+.icon-btn:hover:not(:disabled) { color: #8A2BE2; background: #f3f4f6; }
 .icon-btn:disabled { opacity: 0.35; cursor: default; }
 
 /* ── Left: Track info ── */
@@ -294,7 +311,7 @@ const coverFallback = (event, title) => {
 }
 
 .play-btn {
-  background: #1f2937;
+  background: #8A2BE2;
   color: white;
   border: none;
   border-radius: 50%;
@@ -308,10 +325,17 @@ const coverFallback = (event, title) => {
   transition: transform 0.15s, background 0.15s;
   flex-shrink: 0;
 }
-.play-btn:hover:not(:disabled) { background: #374151; transform: scale(1.05); }
+.play-btn:hover:not(:disabled) { background: #6A0DAD; transform: scale(1.05); }
 .play-btn:disabled { opacity: 0.4; cursor: default; }
 
 .stop-btn { font-size: 1.2rem; }
+
+.time-skip-btn {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  min-width: 30px;
+}
 
 .progress-container {
   display: flex;
@@ -415,11 +439,11 @@ const coverFallback = (event, title) => {
   position: absolute;
   top: 0; left: 0;
   height: 100%;
-  background: #4b5563;
+  background: #8A2BE2;
   border-radius: 2px;
   pointer-events: none;
 }
-.volume-slider-wrapper:hover .volume-fill { background: #8A2BE2; }
+.volume-slider-wrapper:hover .volume-fill { background: #6A0DAD; }
 
 .spinner { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

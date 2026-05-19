@@ -39,8 +39,10 @@ export default defineEventHandler(async (event) => {
           }
         }
       }
-    } catch (e) {
-      console.warn('Wiki image search failed');
+    } catch (e: any) {
+      if (e?.status !== 404 && e?.statusCode !== 404) {
+        console.warn('Wiki image search failed:', e?.message ?? 'network error')
+      }
     }
 
     // 2. Try a general search (DuckDuckGo or similar if possible, but Wikipedia is safest server-side)
@@ -56,8 +58,10 @@ export default defineEventHandler(async (event) => {
            });
          }
       }
-    } catch (e) {
-      console.warn('File search failed');
+    } catch (e: any) {
+      if (e?.status !== 404 && e?.statusCode !== 404) {
+        console.warn('File search failed:', e?.message ?? 'network error')
+      }
     }
 
     // Deduplicate and filter
