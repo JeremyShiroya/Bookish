@@ -46,6 +46,10 @@ describe('splitToChunks', () => {
     expect(chunks.length).toBeGreaterThan(0)
     expect(chunks.join(' ')).toContain('plain sentence')
   })
+  it('keeps normal sentences as individual playback chunks', () => {
+    const chunks = splitToChunks('First sentence. Second sentence! Third sentence?')
+    expect(chunks).toEqual(['First sentence.', 'Second sentence!', 'Third sentence?'])
+  })
 })
 
 describe('findContentStart', () => {

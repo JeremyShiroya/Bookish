@@ -34,7 +34,7 @@ describe('useEpubExtractor', () => {
   it('extracts chapter HTML from a valid epub in spine order', async () => {
     const { extractEpub } = await import('./useEpubExtractor.js')
     const file = await buildMinimalEpub()
-    const html = await extractEpub(file)
+    const { content: html } = await extractEpub(file)
     expect(html).toContain('Hello from chapter one.')
     expect(html).toContain('Hello from chapter two.')
     // chapter one must appear before chapter two

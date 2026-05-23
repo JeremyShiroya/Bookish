@@ -10,7 +10,7 @@ let _chunkIdx = 0
 let _currentBoundaries = []      // word boundaries for the currently playing chunk
 let _rafId = null                // requestAnimationFrame handle for word-highlight loop
 
-const WORDS_PER_CHUNK = 28
+const DEFAULT_SENTENCE_MAX_CHARS = 480
 const WORDS_PER_MIN = 145
 
 const EDGE_VOICES = [
@@ -45,22 +45,43 @@ export function stripHtml(html) {
     .trim()
 }
 
-export function splitToChunks(text, maxChars = 400) {
-  const sentences = text.match(/[^.!?]+[.!?]*/g) || [text]
+function splitLongSentence(sentence, maxChars) {
   const result = []
-  let buf = ''
-  for (const s of sentences) {
-    const trimmed = s.trim()
-    if (!trimmed) continue
-    if (buf && (buf + ' ' + trimmed).length > maxChars) {
-      result.push(buf)
-      buf = trimmed
+  const words = sentence.split(/\s+/).filter(Boolean)
+  let buffer = ''
+
+  for (const word of words) {
+    if (buffer && `${buffer} ${word}`.length > maxChars) {
+      result.push(buffer)
+      buffer = word
     } else {
-      buf = buf ? buf + ' ' + trimmed : trimmed
+      buffer = buffer ? `${buffer} ${word}` : word
     }
   }
-  if (buf) result.push(buf)
-  return result.filter(c => c.length > 0)
+
+  if (buffer) result.push(buffer)
+  return result
+}
+
+export function splitToChunks(text, maxChars = DEFAULT_SENTENCE_MAX_CHARS) {
+  const normalized = (text || '').replace(/\s+/g, ' ').trim()
+  if (!normalized) return []
+
+  const sentences = normalized.match(/[^.!?]+(?:[.!?]+["')\]]*)?|[.!?]+/g) || [normalized]
+  const chunks = []
+
+  for (const sentence of sentences) {
+    const trimmed = sentence.trim()
+    if (!trimmed) continue
+
+    if (trimmed.length <= maxChars) {
+      chunks.push(trimmed)
+    } else {
+      chunks.push(...splitLongSentence(trimmed, maxChars))
+    }
+  }
+
+  return chunks
 }
 
 export function formatDuration(seconds) {
@@ -191,14 +212,21 @@ export const useTTS = () => {
 
   const { getBookContent } = useBookStorage()
 
+  const _estimatedChunkSeconds = (chunk) => {
+    const words = (chunk?.match(/\S+/g) || []).length || 1
+    return (words / WORDS_PER_MIN) * 60 / ttsSpeed.value
+  }
+
   const elapsedTime = computed(() => {
-    const secsPerChunk = (WORDS_PER_CHUNK / WORDS_PER_MIN) * 60 / ttsSpeed.value
-    return formatDuration(ttsChunkIdx.value * secsPerChunk)
+    const seconds = _chunks
+      .slice(0, Math.max(0, ttsChunkIdx.value))
+      .reduce((sum, chunk) => sum + _estimatedChunkSeconds(chunk), 0)
+    return formatDuration(seconds)
   })
 
   const totalTime = computed(() => {
-    const secsPerChunk = (WORDS_PER_CHUNK / WORDS_PER_MIN) * 60 / ttsSpeed.value
-    return formatDuration(ttsTotalChunks.value * secsPerChunk)
+    const seconds = _chunks.reduce((sum, chunk) => sum + _estimatedChunkSeconds(chunk), 0)
+    return formatDuration(seconds)
   })
 
   // ── Internal helpers ───────────────────────────────────────────────────────
@@ -260,6 +288,16 @@ export const useTTS = () => {
       _rafId = requestAnimationFrame(loop)
     }
     _rafId = requestAnimationFrame(loop)
+  }
+
+  const _syncWordIndexForTime = (time) => {
+    if (!_currentBoundaries.length) return
+    let found = -1
+    for (let i = 0; i < _currentBoundaries.length; i++) {
+      if (_currentBoundaries[i].offset <= time) found = i
+      else break
+    }
+    if (found !== -1) ttsWordIdx.value = found
   }
 
   const _speakNextEdge = async () => {
@@ -329,15 +367,14 @@ export const useTTS = () => {
       ttsStatus.value = 'idle'
     }
 
-    audio.play().catch(() => {
+    audio.play().then(() => {
+      _startWordLoop(_currentBoundaries)
+    }).catch(() => {
       if (_currentAudio === audio) {
         _currentAudio = null
         ttsStatus.value = 'idle'
       }
     })
-
-    // Start word-level highlight loop after audio begins
-    audio.oncanplay = () => _startWordLoop(_currentBoundaries)
   }
 
   const _stopInternal = () => {
@@ -374,7 +411,7 @@ export const useTTS = () => {
       return
     }
 
-    _chunks = splitToChunks(text, 400)
+    _chunks = splitToChunks(text)
     const contentStart = findContentStart(_chunks)
     _chunkIdx = contentStart
     ttsTotalChunks.value = _chunks.length
@@ -399,7 +436,9 @@ export const useTTS = () => {
     if (ttsStatus.value !== 'paused') return
     ttsStatus.value = 'playing'
     if (_currentAudio) {
-      _currentAudio.play().catch(() => {
+      _currentAudio.play().then(() => {
+        _startWordLoop(_currentBoundaries)
+      }).catch(() => {
         if (ttsStatus.value === 'playing') {
           ttsStatus.value = 'idle'
         }
@@ -478,12 +517,21 @@ export const useTTS = () => {
     if (ttsStatus.value === 'playing') _speakNextEdge()
   }
 
-  // Skip by wall-clock seconds (converted to chunk count based on current speed)
+  // Seek by wall-clock seconds inside the current sentence when possible.
+  // If the seek crosses a sentence boundary, move to the adjacent sentence.
   const skipSeconds = (seconds) => {
     if (!_chunks.length) return
-    const secsPerChunk = (WORDS_PER_CHUNK / WORDS_PER_MIN) * 60 / ttsSpeed.value
-    const delta = Math.sign(seconds) * Math.max(1, Math.round(Math.abs(seconds) / secsPerChunk))
-    skipChunks(delta)
+
+    if (_currentAudio && Number.isFinite(_currentAudio.duration)) {
+      const target = _currentAudio.currentTime + seconds
+      if (target >= 0 && target < _currentAudio.duration) {
+        _currentAudio.currentTime = target
+        _syncWordIndexForTime(target)
+        return
+      }
+    }
+
+    skipChunks(seconds < 0 ? -1 : 1)
   }
 
   return {

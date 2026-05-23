@@ -23,6 +23,38 @@ describe('useBookStorage', () => {
     expect(result).toEqual({ content: '<p>New</p>', pages: 8 })
   })
 
+  it('stores optional PDF source and outline metadata when provided', async () => {
+    const source = new TextEncoder().encode('pdf bytes').buffer
+    await saveBookContent(20, {
+      content: '<p>PDF text</p>',
+      pages: 12,
+      source,
+      tocItems: [{ title: 'Chapter One', page: 3, level: 0 }],
+      format: 'pdf',
+    })
+    const result = await getBookContent(20)
+    expect(result.source).toBeInstanceOf(ArrayBuffer)
+    expect(new TextDecoder().decode(result.source)).toBe('pdf bytes')
+    expect(result.tocItems).toEqual([{ title: 'Chapter One', page: 3, level: 0 }])
+    expect(result.format).toBe('pdf')
+  })
+
+  it('can retrieve a PDF source even when only the source was saved', async () => {
+    const source = new TextEncoder().encode('only pdf bytes').buffer
+
+    await saveBookContent(21, {
+      content: null,
+      pages: 0,
+      source,
+      format: 'pdf',
+    })
+
+    const result = await getBookContent(21)
+    expect(result.content).toBeNull()
+    expect(result.source).toBeInstanceOf(ArrayBuffer)
+    expect(new TextDecoder().decode(result.source)).toBe('only pdf bytes')
+  })
+
   it('deleteBookContent removes the entry', async () => {
     await saveBookContent(3, { content: '<p>Gone</p>', pages: 1 })
     await deleteBookContent(3)

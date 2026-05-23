@@ -1,7 +1,5 @@
 <template>
   <div class="playing-bar">
-
-    <!-- Left: Book info -->
     <div class="track-info">
       <template v-if="ttsBook">
         <div class="album-art">
@@ -20,8 +18,10 @@
           :title="ttsBook.isFavourite ? 'Unfavourite' : 'Favourite'"
           @click="handleFavourite"
         >
-          <i :class="ttsBook.isFavourite ? 'ri-heart-fill' : 'ri-heart-line'"
-             :style="{ color: ttsBook.isFavourite ? '#ef4444' : '' }"></i>
+          <i
+            :class="ttsBook.isFavourite ? 'ri-heart-fill' : 'ri-heart-line'"
+            :style="{ color: ttsBook.isFavourite ? '#ef4444' : '' }"
+          ></i>
         </button>
       </template>
       <template v-else>
@@ -32,69 +32,84 @@
       </template>
     </div>
 
-    <!-- Center: Controls + Progress -->
     <div class="player-controls">
-      <div class="control-buttons">
-        <!-- |◄ Restart from beginning -->
-        <button class="icon-btn" title="Restart from beginning" :disabled="isIdle" @click="restart">
+      <div class="control-buttons" aria-label="Read aloud controls">
+        <button
+          class="transport-btn"
+          title="Previous book"
+          :disabled="!hasPreviousBook"
+          @click="playAdjacentBook(-1)"
+        >
           <i class="ri-skip-back-fill"></i>
         </button>
-        <!-- ◄ Previous sentence -->
-        <button class="icon-btn" title="Previous sentence" :disabled="isIdle" @click="skipChunks(-1)">
+
+        <button
+          class="transport-btn"
+          title="Previous sentence"
+          :disabled="isIdle"
+          @click="skipChunks(-1)"
+        >
           <i class="ri-arrow-left-s-line"></i>
         </button>
-        <!-- ⟲10 Rewind 10s -->
-        <button class="icon-btn" title="Rewind 10s" :disabled="isIdle" @click="skipSeconds(-10)">
+
+        <button
+          class="transport-btn time-jump-btn"
+          title="Rewind 10 seconds"
+          :disabled="isIdle"
+          @click="skipSeconds(-10)"
+        >
           <i class="ri-replay-10-line"></i>
         </button>
 
-        <button class="play-btn" title="Play / Pause" :disabled="isIdle && !ttsBook" @click="handlePlayPause">
+        <button
+          class="play-btn"
+          title="Play / Pause"
+          :disabled="isIdle && !ttsBook"
+          @click="handlePlayPause"
+        >
           <i v-if="ttsStatus === 'loading'" class="ri-loader-4-line spinner"></i>
           <i v-else-if="ttsStatus === 'playing'" class="ri-pause-fill"></i>
           <i v-else class="ri-play-fill"></i>
         </button>
 
-        <!-- ⟳10 Forward 10s -->
-        <button class="icon-btn" title="Forward 10s" :disabled="isIdle" @click="skipSeconds(10)">
+        <button
+          class="transport-btn time-jump-btn"
+          title="Forward 10 seconds"
+          :disabled="isIdle"
+          @click="skipSeconds(10)"
+        >
           <i class="ri-forward-10-line"></i>
         </button>
-        <!-- ► Next sentence -->
-        <button class="icon-btn" title="Next sentence" :disabled="isIdle" @click="skipChunks(1)">
+
+        <button
+          class="transport-btn"
+          title="Next sentence"
+          :disabled="isIdle"
+          @click="skipChunks(1)"
+        >
           <i class="ri-arrow-right-s-line"></i>
         </button>
-        <!-- ►| Stop -->
-        <button class="icon-btn stop-btn" title="Stop" :disabled="isIdle" @click="stop">
+
+        <button
+          class="transport-btn"
+          title="Next book"
+          :disabled="!hasNextBook"
+          @click="playAdjacentBook(1)"
+        >
           <i class="ri-skip-forward-fill"></i>
         </button>
       </div>
-
-      <div class="progress-container">
-        <span class="time">{{ elapsedTime }}</span>
-        <div class="progress-bar-wrapper">
-          <input
-            type="range"
-            min="0"
-            max="100"
-            :value="ttsProgress"
-            class="progress-slider"
-            :disabled="isIdle"
-            @input="seekToProgress(Number($event.target.value))"
-          />
-          <div class="progress-fill" :style="{ width: ttsProgress + '%' }"></div>
-        </div>
-        <span class="time">{{ totalTime }}</span>
-      </div>
-
     </div>
 
-    <!-- Right: Speed, Voice, Volume -->
     <div class="extra-controls">
       <button
         class="icon-btn speed-btn"
         :disabled="isIdle"
         title="Playback speed"
         @click="cycleSpeed"
-      >{{ speedLabel }}</button>
+      >
+        {{ speedLabel }}
+      </button>
 
       <div class="voice-select-wrap" v-if="ttsVoices.length > 0">
         <select
@@ -124,24 +139,21 @@
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useTTS } from '~/composables/useTTS'
 import { useBooks } from '~/composables/useBooks'
 
 const {
-  ttsBook, ttsStatus, ttsProgress, ttsSpeed, ttsVolume,
+  ttsBook, ttsStatus, ttsSpeed, ttsVolume,
   ttsVoiceId, ttsVoices,
-  elapsedTime, totalTime,
-  togglePlay, stop, restart, skipChunks, skipSeconds, setSpeed, setVolume, setVoice,
-  seekToProgress,
+  play, togglePlay, skipChunks, skipSeconds, setSpeed, setVolume, setVoice,
 } = useTTS()
 
-const { toggleFavourite } = useBooks()
+const { books, toggleFavourite } = useBooks()
 
 const isIdle = computed(() => ttsStatus.value === 'idle')
 const isMuted = ref(false)
@@ -150,9 +162,19 @@ const prevVolume = ref(1.0)
 const SPEEDS = [0.75, 1.0, 1.25, 1.5, 2.0]
 
 const speedLabel = computed(() => {
-  const s = ttsSpeed.value
-  return s === 1.0 ? '1×' : s + '×'
+  const speed = ttsSpeed.value
+  return speed === 1.0 ? '1x' : `${speed}x`
 })
+
+const currentBookIndex = computed(() => {
+  if (!ttsBook.value) return -1
+  return books.value.findIndex(book => book.id === ttsBook.value.id)
+})
+
+const hasPreviousBook = computed(() => currentBookIndex.value > 0)
+const hasNextBook = computed(() => (
+  currentBookIndex.value !== -1 && currentBookIndex.value < books.value.length - 1
+))
 
 const cycleSpeed = () => {
   const idx = SPEEDS.indexOf(ttsSpeed.value)
@@ -162,6 +184,11 @@ const cycleSpeed = () => {
 const handlePlayPause = () => {
   if (ttsStatus.value === 'loading') return
   togglePlay()
+}
+
+const playAdjacentBook = (delta) => {
+  const nextBook = books.value[currentBookIndex.value + delta]
+  if (nextBook) play(nextBook)
 }
 
 const handleFavourite = () => {
@@ -189,12 +216,10 @@ const generateCoverPlaceholder = (title) => {
   const hash = [...title].reduce((acc, c) => acc + c.charCodeAt(0), 0)
   const color = colors[hash % colors.length]
   const initial = title.trim()[0]?.toUpperCase() || '?'
-  const displayTitle = title.length > 18 ? title.substring(0, 18) + '…' : title
+  const displayTitle = title.length > 18 ? `${title.substring(0, 18)}...` : title
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="130" font-family="serif" font-size="100" fill="rgba(255,255,255,0.25)" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="rgba(255,255,255,0.65)" text-anchor="middle">${displayTitle}</text></svg>`
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
-
-
 
 const resolveBookCover = (book) => {
   if (!book.cover) return generateCoverPlaceholder(book.title)
@@ -204,7 +229,6 @@ const resolveBookCover = (book) => {
 const coverFallback = (event, title) => {
   event.target.src = generateCoverPlaceholder(title)
 }
-
 </script>
 
 <style scoped>
@@ -213,7 +237,7 @@ const coverFallback = (event, title) => {
   bottom: 0;
   left: 0;
   width: 100%;
-  box-sizing: border-box; /* padding included in 100% width — prevents overflow */
+  box-sizing: border-box;
   height: 90px;
   background: #ffffff;
   border-top: 1px solid #e5e7eb;
@@ -226,24 +250,51 @@ const coverFallback = (event, title) => {
   overflow: hidden;
 }
 
-/* ── Shared icon button ── */
-.icon-btn {
+.icon-btn,
+.transport-btn {
   background: transparent;
   border: none;
   cursor: pointer;
-  color: #6b7280;
-  font-size: 1.1rem;
-  padding: 8px;
+  color: #8A2BE2;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
 }
-.icon-btn:hover:not(:disabled) { color: #8A2BE2; background: #f3f4f6; }
-.icon-btn:disabled { opacity: 0.35; cursor: default; }
 
-/* ── Left: Track info ── */
+.icon-btn {
+  color: #6b7280;
+  font-size: 1.1rem;
+}
+
+.transport-btn {
+  font-size: 1.42rem;
+}
+
+.time-jump-btn {
+  font-size: 1.6rem;
+}
+
+.icon-btn:hover:not(:disabled),
+.transport-btn:hover:not(:disabled) {
+  color: #6A0DAD;
+  background: #f3f0ff;
+}
+
+.transport-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.icon-btn:disabled,
+.transport-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 .track-info {
   display: flex;
   align-items: center;
@@ -261,9 +312,18 @@ const coverFallback = (event, title) => {
   flex-shrink: 0;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-.album-art img { width: 100%; height: 100%; object-fit: cover; }
 
-.track-details { overflow: hidden; flex: 1; }
+.album-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.track-details {
+  overflow: hidden;
+  flex: 1;
+}
+
 .track-title {
   font-size: 0.875rem;
   font-weight: 400;
@@ -273,6 +333,7 @@ const coverFallback = (event, title) => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .artist-name {
   font-size: 0.75rem;
   color: #6b7280;
@@ -289,94 +350,59 @@ const coverFallback = (event, title) => {
   color: #9ca3af;
   font-size: 0.875rem;
 }
-.idle-info i { font-size: 1.25rem; }
 
-.like-btn:hover:not(:disabled) { color: #ef4444 !important; }
+.idle-info i {
+  font-size: 1.25rem;
+}
 
-/* ── Center: Controls + progress ── */
+.like-btn:hover:not(:disabled) {
+  color: #ef4444 !important;
+}
+
 .player-controls {
   display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
   flex: 1 1 auto;
   min-width: 0;
   max-width: 560px;
-  gap: 0.35rem;
 }
 
 .control-buttons {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, 38px) 48px repeat(3, 38px);
   align-items: center;
-  gap: 0.75rem;
+  justify-content: center;
+  gap: 0.78rem;
 }
 
 .play-btn {
-  background: #8A2BE2;
-  color: white;
+  background: transparent;
+  color: #6A0DAD;
   border: none;
   border-radius: 50%;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 1.2rem;
-  transition: transform 0.15s, background 0.15s;
+  font-size: 2rem;
+  transition: transform 0.15s, background 0.15s, color 0.15s;
   flex-shrink: 0;
 }
-.play-btn:hover:not(:disabled) { background: #6A0DAD; transform: scale(1.05); }
-.play-btn:disabled { opacity: 0.4; cursor: default; }
 
-.stop-btn { font-size: 1.2rem; }
-
-.time-skip-btn {
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  min-width: 30px;
+.play-btn:hover:not(:disabled) {
+  background: #f3f0ff;
+  color: #4c0887;
+  transform: scale(1.04);
 }
 
-.progress-container {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  gap: 0.6rem;
+.play-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
-.time { font-size: 0.7rem; color: #9ca3af; min-width: 32px; text-align: center; }
 
-.progress-bar-wrapper {
-  position: relative;
-  flex: 1;
-  height: 4px;
-  background: #e5e7eb;
-  border-radius: 2px;
-  cursor: pointer;
-}
-.progress-slider {
-  position: absolute;
-  top: -8px;
-  left: 0;
-  width: 100%;
-  height: 20px;
-  opacity: 0;
-  cursor: pointer;
-  z-index: 2;
-  margin: 0;
-}
-.progress-slider:disabled { cursor: default; }
-.progress-fill {
-  position: absolute;
-  top: 0; left: 0;
-  height: 100%;
-  background: #4b5563;
-  border-radius: 2px;
-  pointer-events: none;
-  transition: width 0.3s linear;
-}
-.progress-bar-wrapper:hover .progress-fill { background: #8A2BE2; }
-
-/* ── Right: Speed / Voice / Volume ── */
 .extra-controls {
   display: flex;
   align-items: center;
@@ -393,10 +419,13 @@ const coverFallback = (event, title) => {
   font-weight: 400;
   min-width: 36px;
   padding: 4px 6px;
-  letter-spacing: 0.01em;
 }
 
-.voice-select-wrap { max-width: 100px; overflow: hidden; }
+.voice-select-wrap {
+  max-width: 100px;
+  overflow: hidden;
+}
+
 .voice-select {
   font-size: 0.7rem;
   color: #6b7280;
@@ -410,13 +439,18 @@ const coverFallback = (event, title) => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.voice-select:disabled { opacity: 0.4; cursor: default; }
+
+.voice-select:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 
 .volume-control {
   display: flex;
   align-items: center;
   gap: 0.25rem;
 }
+
 .volume-slider-wrapper {
   position: relative;
   width: 70px;
@@ -425,9 +459,11 @@ const coverFallback = (event, title) => {
   border-radius: 2px;
   cursor: pointer;
 }
+
 .volume-slider {
   position: absolute;
-  top: -8px; left: 0;
+  top: -8px;
+  left: 0;
   width: 100%;
   height: 20px;
   opacity: 0;
@@ -435,28 +471,57 @@ const coverFallback = (event, title) => {
   z-index: 2;
   margin: 0;
 }
+
 .volume-fill {
   position: absolute;
-  top: 0; left: 0;
+  top: 0;
+  left: 0;
   height: 100%;
   background: #8A2BE2;
   border-radius: 2px;
   pointer-events: none;
 }
-.volume-slider-wrapper:hover .volume-fill { background: #6A0DAD; }
 
-.spinner { animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── Responsive ── */
-@media (max-width: 768px) {
-  .extra-controls { display: none; }
-  .track-info { flex: 0 0 38%; }
-  .player-controls { flex: 1 1 auto; }
+.volume-slider-wrapper:hover .volume-fill {
+  background: #6A0DAD;
 }
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+  .extra-controls {
+    display: none;
+  }
+
+  .track-info {
+    flex: 0 0 34%;
+  }
+
+  .control-buttons {
+    gap: 0.35rem;
+    grid-template-columns: repeat(3, 32px) 42px repeat(3, 32px);
+  }
+
+  .transport-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 1.2rem;
+  }
+}
+
 @media (max-width: 500px) {
-  .album-art { display: none; }
-  .track-info { flex: 0 1 auto; }
-  .player-controls { flex: 1 1 auto; }
+  .album-art {
+    display: none;
+  }
+
+  .track-info {
+    flex: 0 1 auto;
+  }
 }
 </style>

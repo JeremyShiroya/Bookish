@@ -244,6 +244,8 @@ const { addToast } = useToast()
 const { saveBookContent } = useBookStorage()
 const extractedContent = ref(null)
 const extractedTocTitles = ref([])
+const extractedSource = ref(null)
+const extractedTocItems = ref([])
 
 const newBook = ref({
   title: '',
@@ -305,6 +307,10 @@ const handleDocumentChange = async (event) => {
 
   extractionError.value = null
   documentFile.value = file
+  extractedContent.value = null
+  extractedTocTitles.value = []
+  extractedSource.value = null
+  extractedTocItems.value = []
   const extension = file.name.split('.').pop().toLowerCase()
   newBook.value.format = extension
 
@@ -350,6 +356,8 @@ const handleDocumentChange = async (event) => {
       const { extractPdf } = await import('~/composables/usePdfExtractor.js')
       const result = await extractPdf(file)
       extractedContent.value = result.content
+      extractedSource.value = result.source ?? null
+      extractedTocItems.value = result.tocItems ?? []
       newBook.value.pages = result.pages || 0
     } catch (err) {
       extractionError.value = 'Could not extract PDF text. The book will be added without in-app reading.'
@@ -415,6 +423,14 @@ const selectMetadata = (result) => {
   addToast('Metadata applied successfully', 'success');
 }
 
+const getPdfSourceForStorage = async () => {
+  if (extractedSource.value) return extractedSource.value
+  if (newBook.value.format === 'pdf' && documentFile.value) {
+    return await documentFile.value.arrayBuffer()
+  }
+  return null
+}
+
 const saveBook = async () => {
   if (!documentFile.value || isProcessing.value) return
   
@@ -431,16 +447,39 @@ const saveBook = async () => {
   
   try {
     const savedBook = await addBook(bookToSave);
+    const pdfSourceForStorage = bookToSave.format === 'pdf'
+      ? await getPdfSourceForStorage()
+      : extractedSource.value
 
-    if (extractedContent.value && savedBook?.id) {
+    if ((extractedContent.value || pdfSourceForStorage) && savedBook?.id) {
       try {
         await saveBookContent(savedBook.id, {
           content: extractedContent.value,
           pages: savedBook.pages || 0,
           tocTitles: extractedTocTitles.value,
+          source: pdfSourceForStorage,
+          tocItems: extractedTocItems.value,
+          format: savedBook.format || newBook.value.format,
         });
       } catch (storageErr) {
         console.error('IndexedDB write failed:', storageErr);
+        if (bookToSave.format === 'pdf' && pdfSourceForStorage) {
+          try {
+            await saveBookContent(savedBook.id, {
+              content: null,
+              pages: savedBook.pages || newBook.value.pages || 0,
+              tocTitles: [],
+              source: pdfSourceForStorage,
+              tocItems: extractedTocItems.value,
+              format: savedBook.format || newBook.value.format,
+            });
+            addToast('Book added. PDF pages were saved, but extracted text was too large to keep.', 'warning');
+            router.push('/books');
+            return;
+          } catch (fallbackErr) {
+            console.error('IndexedDB PDF fallback write failed:', fallbackErr);
+          }
+        }
         addToast('Book added, but content could not be saved for in-app reading.', 'warning');
         router.push('/books');
         return;
