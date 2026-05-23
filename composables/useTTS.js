@@ -90,6 +90,17 @@ export function formatDuration(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+export async function resolveReadableText(book, stored = null) {
+  const htmlText = stripHtml(book?.content || stored?.content || '')
+  if (htmlText.trim()) return htmlText
+
+  const isPdf = (book?.format || stored?.format || '').toLowerCase() === 'pdf'
+  if (!isPdf || !stored?.source) return ''
+
+  const { extractPdfTextFromSource } = await import('~/composables/usePdfExtractor.js')
+  return await extractPdfTextFromSource(stored.source)
+}
+
 // ── Copyright / frontmatter skip ──────────────────────────────────────────
 
 const MAX_SCAN_CHUNKS = 60
@@ -392,17 +403,22 @@ export const useTTS = () => {
     ttsBook.value = book
     ttsStatus.value = 'loading'
 
-    let content = book.content
-    if (!content) {
+    let stored = null
+    if (!book?.content) {
       try {
-        const stored = await getBookContent(book.id)
-        content = stored?.content ?? null
+        stored = await getBookContent(book.id)
       } catch (e) {
         console.error('[TTS] Failed to load book content from storage:', e)
       }
     }
 
-    const text = stripHtml(content || '')
+    let text = ''
+    try {
+      text = await resolveReadableText(book, stored)
+    } catch (e) {
+      console.error('[TTS] Failed to extract readable PDF text:', e)
+    }
+
     if (!text.trim()) {
       const { addToast } = useToast()
       addToast('This book has no readable text content for audio playback.', 'error')

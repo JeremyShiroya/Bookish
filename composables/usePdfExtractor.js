@@ -42,6 +42,69 @@ async function extractPdfOutline(pdf) {
   return tocItems
 }
 
+export const pdfSourceToBytes = async (source) => {
+  if (!source) return null
+  if (source instanceof Uint8Array) return source
+  if (source instanceof ArrayBuffer) return new Uint8Array(source.slice(0))
+  if (typeof Blob !== 'undefined' && source instanceof Blob) {
+    return new Uint8Array(await source.arrayBuffer())
+  }
+  if (typeof source === 'string') {
+    const base64 = source.includes(',') ? source.split(',')[1] : source
+    const binary = atob(base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return bytes
+  }
+  return null
+}
+
+function bucketTextLines(items, tolerance = 3) {
+  const buckets = []
+
+  for (const item of items) {
+    const text = item.str?.replace(/\s+/g, ' ').trim()
+    if (!text) continue
+
+    const x = item.transform?.[4] ?? 0
+    const y = item.transform?.[5] ?? 0
+    let bucket = buckets.find(line => Math.abs(line.y - y) <= tolerance)
+
+    if (!bucket) {
+      bucket = { y, items: [] }
+      buckets.push(bucket)
+    }
+
+    bucket.items.push({ text, x })
+  }
+
+  return buckets
+    .sort((a, b) => b.y - a.y)
+    .map(line => ({
+      y: line.y,
+      text: line.items
+        .sort((a, b) => a.x - b.x)
+        .map(item => item.text)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    }))
+    .filter(line => line.text)
+}
+
+async function loadPdfDocument(source) {
+  const bytes = await pdfSourceToBytes(source)
+  if (!bytes?.byteLength) return null
+
+  const pdfjsLib = await import('pdfjs-dist')
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.mjs',
+    import.meta.url
+  ).toString()
+
+  return await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise
+}
+
 export function extractVisiblePdfToc(pageLines) {
   const tocItems = []
   const tocHeadingRe = /^(?:table\s+of\s+contents|contents)$/i
@@ -110,13 +173,7 @@ export async function extractPdf(file) {
   const source = arrayBuffer.slice(0)
 
   try {
-    const pdfjsLib = await import('pdfjs-dist')
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-      'pdfjs-dist/build/pdf.worker.mjs',
-      import.meta.url
-    ).toString()
-
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise
+    const pdf = await loadPdfDocument(arrayBuffer)
     const numPages = pdf.numPages
     let tocItems = await extractPdfOutline(pdf)
     const pageLinesForToc = []
@@ -126,29 +183,9 @@ export async function extractPdf(file) {
       const page = await pdf.getPage(pageNum)
       const textContent = await page.getTextContent()
 
-      const items = textContent.items.filter(item => item.str && item.str.trim())
-      if (!items.length) continue
+      const lines = bucketTextLines(textContent.items)
+      if (!lines.length) continue
 
-      // Group items into lines by Y coordinate (PDF coords are bottom-up)
-      const lineMap = new Map()
-      for (const item of items) {
-        const y = Math.round(item.transform[5])
-        let bucket = null
-        for (const key of lineMap.keys()) {
-          if (Math.abs(key - y) <= 3) {
-            bucket = key
-            break
-          }
-        }
-        if (bucket === null) {
-          lineMap.set(y, [item.str])
-        } else {
-          lineMap.get(bucket).push(item.str)
-        }
-      }
-
-      const sortedYs = Array.from(lineMap.keys()).sort((a, b) => b - a)
-      const lines = sortedYs.map(y => ({ y, text: lineMap.get(y).join('') }))
       pageLinesForToc.push({ page: pageNum, lines: lines.map(line => line.text) })
 
       const paragraphs = []
@@ -188,4 +225,27 @@ export async function extractPdf(file) {
     console.warn('[PDF] Text extraction failed; preserving original PDF source for page rendering.', error)
     return { content: null, pages: 0, source, tocItems: [] }
   }
+}
+
+export async function extractPdfTextFromSource(source) {
+  const pdf = await loadPdfDocument(source)
+  if (!pdf) return ''
+
+  const pages = []
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum)
+    const textContent = await page.getTextContent()
+    const lines = bucketTextLines(textContent.items).map(line => line.text)
+
+    if (lines.length) {
+      pages.push(lines.join('\n'))
+    }
+  }
+
+  return pages
+    .join('\n\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
