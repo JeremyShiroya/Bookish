@@ -45,11 +45,13 @@
 <script setup>
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { stripHtml, splitToChunks } from '~/composables/useTTS'
+import { findPdfHighlightRange, highlightsForPdfRange } from '~/composables/usePdfHighlight'
 
 const props = defineProps({
   src: { required: true },
   zoom: { type: Number, default: 1 },
   activeChunkIndex: { type: Number, default: -1 },
+  activeChunkText: { type: String, default: '' },
   textContent: { type: String, default: '' },
 })
 
@@ -149,7 +151,7 @@ const renderPage = async (pageNumber, baseScale, generation) => {
     textItemRefs.push({
       pageNumber,
       start,
-      end: flatPdfText.length - 1,
+      end: start + text.length - 1,
       rect: rectForTextItem(item, viewport),
     })
   }
@@ -256,24 +258,16 @@ const findChunkRange = (chunkIndex) => {
 }
 
 const updateHighlights = () => {
-  const range = findChunkRange(props.activeChunkIndex)
+  const range = props.activeChunkText
+    ? findPdfHighlightRange(flatPdfText, props.activeChunkText)
+    : findChunkRange(props.activeChunkIndex)
+
   if (!range) {
     highlightsByPage.value = {}
     return
   }
 
-  const nextHighlights = {}
-  for (const item of textItemRefs) {
-    if (item.end < range.start || item.start > range.end) continue
-    if (!nextHighlights[item.pageNumber]) nextHighlights[item.pageNumber] = []
-    nextHighlights[item.pageNumber].push({
-      left: Math.max(0, item.rect.left - 2),
-      top: Math.max(0, item.rect.top - 1),
-      width: item.rect.width + 4,
-      height: item.rect.height + 2,
-    })
-  }
-
+  const nextHighlights = highlightsForPdfRange(textItemRefs, range)
   highlightsByPage.value = nextHighlights
 
   const firstPage = Number(Object.keys(nextHighlights)[0])
@@ -324,6 +318,7 @@ onUnmounted(() => {
 watch(() => props.src, renderPdf)
 watch(() => props.zoom, renderPdf)
 watch(() => props.activeChunkIndex, updateHighlights)
+watch(() => props.activeChunkText, updateHighlights)
 watch(() => props.textContent, updateHighlights)
 </script>
 

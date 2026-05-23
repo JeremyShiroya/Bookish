@@ -93,6 +93,7 @@
           :zoom="zoomLevel"
           :text-content="rawContent"
           :active-chunk-index="activeTtsChunkIndex"
+          :active-chunk-text="activeTtsChunkText"
           @page-change="currentPdfPage = $event"
           @loaded="handlePdfLoaded"
         />
@@ -151,7 +152,7 @@ const route = useRoute()
 const router = useRouter()
 const { books, fetchBookById, updateBook } = useBooks()
 const { getBookContent } = useBookStorage()
-const { ttsBook, ttsChunkIdx, ttsStatus } = useTTS()
+const { ttsBook, ttsChunkIdx, ttsCurrentChunk, ttsStatus } = useTTS()
 
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2.5
@@ -298,6 +299,11 @@ const tocEmptyMessage = computed(() => {
 const activeTtsChunkIndex = computed(() => {
   if (ttsBook.value?.id !== book.value?.id || ttsStatus.value === 'idle') return -1
   return ttsChunkIdx.value
+})
+
+const activeTtsChunkText = computed(() => {
+  if (ttsBook.value?.id !== book.value?.id || ttsStatus.value === 'idle') return ''
+  return ttsCurrentChunk.value || ''
 })
 
 function tocItemLabel(item, index) {
