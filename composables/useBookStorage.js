@@ -50,7 +50,7 @@ export const useBookStorage = () => {
     })
   }
 
-  const saveBookContent = async (bookId, { content, pages, tocTitles, source, tocItems, format }) => {
+  const saveBookContent = async (bookId, { content, pages, tocTitles, source, tocItems, format, pdfTocChecked }) => {
     if (source !== undefined) {
       await savePdfSource(bookId, source)
     }
@@ -62,6 +62,7 @@ export const useBookStorage = () => {
       if (tocTitles !== undefined) record.tocTitles = tocTitles ?? null
       if (tocItems !== undefined) record.tocItems = tocItems ?? null
       if (format !== undefined) record.format = format ?? null
+      if (pdfTocChecked !== undefined) record.pdfTocChecked = !!pdfTocChecked
       tx.objectStore(STORE_NAME).put(record, bookId)
       tx.oncomplete = () => resolve()
       tx.onerror = (e) => reject(e.target.error)

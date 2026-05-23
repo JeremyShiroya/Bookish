@@ -31,12 +31,14 @@ describe('useBookStorage', () => {
       source,
       tocItems: [{ title: 'Chapter One', page: 3, level: 0 }],
       format: 'pdf',
+      pdfTocChecked: true,
     })
     const result = await getBookContent(20)
     expect(result.source).toBeInstanceOf(ArrayBuffer)
     expect(new TextDecoder().decode(result.source)).toBe('pdf bytes')
     expect(result.tocItems).toEqual([{ title: 'Chapter One', page: 3, level: 0 }])
     expect(result.format).toBe('pdf')
+    expect(result.pdfTocChecked).toBe(true)
   })
 
   it('can retrieve a PDF source even when only the source was saved', async () => {

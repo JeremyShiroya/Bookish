@@ -146,12 +146,12 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useBooks } from '~/composables/useBooks'
 import { stripHtml, splitToChunks, useTTS } from '~/composables/useTTS'
 import { useBookStorage } from '~/composables/useBookStorage'
-import { extractVisiblePdfToc } from '~/composables/usePdfExtractor'
+import { extractPdfTocFromSource } from '~/composables/usePdfExtractor'
 
 const route = useRoute()
 const router = useRouter()
 const { books, fetchBookById, updateBook } = useBooks()
-const { getBookContent } = useBookStorage()
+const { getBookContent, saveBookContent } = useBookStorage()
 const { ttsBook, ttsChunkIdx, ttsCurrentChunk, ttsStatus } = useTTS()
 
 const MIN_ZOOM = 0.5
@@ -167,6 +167,8 @@ const contentLoading = ref(false)
 const rawContent = ref('')
 const tocTitles = ref([])
 const tocItems = ref([])
+const pdfTocChecked = ref(false)
+const tocLoading = ref(false)
 const pdfSource = ref(null)
 
 const zoomLevel = ref(1.0)
@@ -252,28 +254,9 @@ const chapterList = computed(() => {
   }))
 })
 
-function pdfContentPageLines(content) {
-  if (!content) return []
-
-  return content
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .split(/<hr[^>]*chapter-break[^>]*\/?>/i)
-    .map((html, index) => {
-      const div = import.meta.client ? document.createElement('div') : null
-      if (div) div.innerHTML = html
-      const lines = div
-        ? Array.from(div.querySelectorAll('p, h1, h2, h3, h4, li'))
-          .map(el => el.textContent || '')
-        : stripHtml(html).split(/\n+/)
-
-      return { page: index + 1, lines }
-    })
-}
-
 const pdfTocItems = computed(() => {
   if (!isPdfBook.value) return []
-  if (tocItems.value?.length) return tocItems.value
-  return extractVisiblePdfToc(pdfContentPageLines(rawContent.value))
+  return tocItems.value || []
 })
 
 const displayTocItems = computed(() => {
@@ -289,6 +272,10 @@ const displayTocItems = computed(() => {
 })
 
 const tocEmptyMessage = computed(() => {
+  if (isPdfBook.value && tocLoading.value) {
+    return 'Loading contents...'
+  }
+
   if (isPdfBook.value && !isPdfRenderable.value) {
     return 'Re-upload this PDF to load its table of contents.'
   }
@@ -543,24 +530,58 @@ function _highlightChunk(index) {
   el.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
+async function ensurePdfToc(bookId) {
+  if (!isPdfBook.value || !pdfSource.value || tocItems.value?.length || pdfTocChecked.value) return
+
+  tocLoading.value = true
+  try {
+    const extractedItems = await extractPdfTocFromSource(pdfSource.value)
+    tocItems.value = extractedItems
+    pdfTocChecked.value = true
+
+    await saveBookContent(bookId, {
+      content: rawContent.value || null,
+      pages: totalPages.value || book.value?.pages || 0,
+      tocTitles: tocTitles.value,
+      tocItems: extractedItems,
+      format: bookFormat.value,
+      pdfTocChecked: true,
+    })
+  } catch (error) {
+    console.error('[Reader] Failed to extract PDF table of contents:', error)
+    pdfTocChecked.value = true
+  } finally {
+    tocLoading.value = false
+  }
+}
+
 function updateBookEdge() {
   if (!import.meta.client) return
 
   const target = document.querySelector(
     '.pdf-page-wrap, .pdf-unavailable-card, .chapter-section'
   )
+  const topbar = document.querySelector('.reader-topbar')
 
   const rect = target?.getBoundingClientRect()
-  const fallback = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')) || 250
-  const left = Math.max(0, rect?.left ?? fallback)
-  const tocWidth = window.innerWidth <= 768
+  const sidebarWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')) || 250
+  const contentLeft = Math.max(0, topbar?.getBoundingClientRect()?.left ?? sidebarWidth)
+  const bookLeft = Math.max(contentLeft, rect?.left ?? contentLeft)
+  const preferredWidth = window.innerWidth <= 768
     ? Math.min(window.innerWidth * 0.82, 300)
     : 300
-  const tocLeft = Math.max(0, left - tocWidth)
+  const availableMargin = Math.max(0, bookLeft - contentLeft)
+  const availableContentWidth = Math.max(0, window.innerWidth - contentLeft)
+  const tocWidth = availableMargin > 0
+    ? availableMargin
+    : Math.min(preferredWidth, availableContentWidth)
+  const tocLeft = contentLeft
 
-  readerPageRef.value?.style.setProperty('--book-left', `${left}px`)
+  readerPageRef.value?.style.setProperty('--book-left', `${bookLeft}px`)
+  readerPageRef.value?.style.setProperty('--reader-content-left', `${contentLeft}px`)
   readerPageRef.value?.style.setProperty('--toc-width', `${tocWidth}px`)
   readerPageRef.value?.style.setProperty('--toc-left', `${tocLeft}px`)
+  readerPageRef.value?.style.setProperty('--toc-backdrop-left', `${tocLeft + tocWidth}px`)
 }
 
 function handlePdfLoaded(payload) {
@@ -599,6 +620,7 @@ async function loadBook(id) {
       rawContent.value = stored.content ?? ''
       tocTitles.value = stored.tocTitles ?? []
       tocItems.value = stored.tocItems ?? []
+      pdfTocChecked.value = !!stored.pdfTocChecked
       pdfSource.value = stored.source ?? null
       totalPages.value = stored.pages || book.value?.pages || 0
       book.value = { ...book.value, content: stored.content ?? '' }
@@ -614,6 +636,7 @@ async function loadBook(id) {
   _buildChunkMap()
   observeChapters()
   updateBookEdge()
+  await ensurePdfToc(id)
 
   if (!isPdfBook.value && book.value?.progress > 0 && chapterList.value.length > 0) {
     const targetIdx = Math.round((book.value.progress / 100) * (chapterList.value.length - 1))
@@ -715,8 +738,10 @@ onUnmounted(async () => {
 
 .reader-page {
   --book-left: var(--sidebar-width, 250px);
+  --reader-content-left: var(--sidebar-width, 250px);
   --toc-width: 300px;
   --toc-left: 0px;
+  --toc-backdrop-left: var(--book-left);
   --reader-page-height: 920px;
   background: var(--bg);
   color: var(--text);
@@ -816,7 +841,7 @@ onUnmounted(async () => {
   display: none;
   position: fixed;
   top: 48px;
-  left: var(--book-left);
+  left: var(--toc-backdrop-left);
   right: 0;
   bottom: 0;
   background: transparent;

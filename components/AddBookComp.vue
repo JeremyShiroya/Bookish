@@ -460,6 +460,7 @@ const saveBook = async () => {
           source: pdfSourceForStorage,
           tocItems: extractedTocItems.value,
           format: savedBook.format || newBook.value.format,
+          pdfTocChecked: (savedBook.format || newBook.value.format) === 'pdf',
         });
       } catch (storageErr) {
         console.error('IndexedDB write failed:', storageErr);
@@ -472,6 +473,7 @@ const saveBook = async () => {
               source: pdfSourceForStorage,
               tocItems: extractedTocItems.value,
               format: savedBook.format || newBook.value.format,
+              pdfTocChecked: (savedBook.format || newBook.value.format) === 'pdf',
             });
             addToast('Book added. PDF pages were saved, but extracted text was too large to keep.', 'warning');
             router.push('/books');

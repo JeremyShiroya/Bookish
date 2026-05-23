@@ -17,7 +17,7 @@ async function resolveOutlinePage(pdf, dest) {
   }
 }
 
-async function extractPdfOutline(pdf) {
+export async function extractPdfOutline(pdf) {
   const outline = await pdf.getOutline()
   if (!outline?.length) return []
 
@@ -105,6 +105,22 @@ async function loadPdfDocument(source) {
   return await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise
 }
 
+async function collectPdfPageLines(pdf) {
+  const pageLines = []
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum)
+    const textContent = await page.getTextContent()
+    const lines = bucketTextLines(textContent.items)
+
+    if (lines.length) {
+      pageLines.push({ page: pageNum, lines: lines.map(line => line.text) })
+    }
+  }
+
+  return pageLines
+}
+
 export function extractVisiblePdfToc(pageLines) {
   const tocItems = []
   const tocHeadingRe = /^(?:table\s+of\s+contents|contents)$/i
@@ -168,6 +184,31 @@ export function extractVisiblePdfToc(pageLines) {
   return tocItems
 }
 
+export async function extractPdfTocFromDocument(pdf, pageLines = null) {
+  const outlineItems = await extractPdfOutline(pdf)
+  if (outlineItems.length) return outlineItems
+
+  const lines = pageLines ?? await collectPdfPageLines(pdf)
+  return extractVisiblePdfToc(lines)
+}
+
+export async function extractPdfTocFromSource(source) {
+  let pdf = null
+
+  try {
+    pdf = await loadPdfDocument(source)
+    if (!pdf) return []
+    return await extractPdfTocFromDocument(pdf)
+  } catch (error) {
+    console.warn('[PDF] Table of contents extraction failed.', error)
+    return []
+  } finally {
+    try {
+      await pdf?.destroy?.()
+    } catch {}
+  }
+}
+
 export async function extractPdf(file) {
   const arrayBuffer = await file.arrayBuffer()
   const source = arrayBuffer.slice(0)
@@ -216,9 +257,7 @@ export async function extractPdf(file) {
       }
     }
 
-    if (!tocItems.length) {
-      tocItems = extractVisiblePdfToc(pageLinesForToc)
-    }
+    if (!tocItems.length) tocItems = extractVisiblePdfToc(pageLinesForToc)
 
     return { content: html || null, pages: numPages, source, tocItems }
   } catch (error) {
