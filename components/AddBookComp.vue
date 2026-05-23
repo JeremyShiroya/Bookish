@@ -18,8 +18,7 @@
           </button>
         </div>
         <div v-if="isFetchingMetadata" class="metadata-loading">
-          <i class="ri-loader-4-line spinner"></i>
-          <p>Searching for books...</p>
+          <SkeletonLoader variant="metadata" />
         </div>
         <div v-else-if="metadataResults.length === 0" class="metadata-empty">
           <p>No results found for "{{ newBook.title }}" by "{{ newBook.author || 'any' }}".</p>
@@ -898,11 +897,11 @@ const saveBook = async () => {
 
 .spinner {
   display: inline-block;
-  animation: spin 1s linear infinite;
+  animation: spin 0.85s linear infinite;
 }
 
 @keyframes spin {
-  100% { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Metadata Modal Styles */
@@ -960,17 +959,8 @@ const saveBook = async () => {
 }
 
 .metadata-loading, .metadata-empty {
-  padding: 4rem 2rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
+  padding: 1.5rem;
   color: #64748b;
-}
-
-.metadata-loading i {
-  font-size: 2.5rem;
-  color: #8A2BE2;
 }
 
 .metadata-results {

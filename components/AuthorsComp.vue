@@ -7,8 +7,7 @@
     </div>
 
     <div v-if="loading && !initialized" class="authors-loading">
-        <div class="loader-spinner"></div>
-        <p>Gathering authors...</p>
+        <SkeletonLoader variant="authors-grid" :count="8" />
     </div>
 
     <template v-else-if="initialized">

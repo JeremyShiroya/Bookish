@@ -68,6 +68,10 @@
         </button>
       </nav>
 
+      <div v-else-if="isPdfBook && tocLoading" class="toc-skeleton">
+        <SkeletonLoader variant="toc" :count="6" />
+      </div>
+
       <div v-else class="toc-empty">
         {{ tocEmptyMessage }}
       </div>
@@ -75,8 +79,7 @@
 
     <main class="reader-body">
       <div v-if="loading || contentLoading" class="state-center">
-        <div class="loader-spinner"></div>
-        <p>{{ loading ? 'Opening book...' : 'Loading content...' }}</p>
+        <SkeletonLoader variant="reader" />
       </div>
 
       <div v-else-if="!book" class="state-center state-error">
@@ -272,10 +275,6 @@ const displayTocItems = computed(() => {
 })
 
 const tocEmptyMessage = computed(() => {
-  if (isPdfBook.value && tocLoading.value) {
-    return 'Loading contents...'
-  }
-
   if (isPdfBook.value && !isPdfRenderable.value) {
     return 'Re-upload this PDF to load its table of contents.'
   }
@@ -953,6 +952,10 @@ onUnmounted(async () => {
   line-height: 1.5;
 }
 
+.toc-skeleton {
+  padding: 1rem;
+}
+
 .reader-body {
   padding: calc(48px + 2rem) 1rem 4rem;
   min-height: 100vh;
@@ -1137,19 +1140,6 @@ onUnmounted(async () => {
 
 .btn-primary:hover {
   background: #7B1FD9;
-}
-
-.loader-spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid rgba(138, 43, 226, 0.18);
-  border-top-color: #8A2BE2;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 768px) {

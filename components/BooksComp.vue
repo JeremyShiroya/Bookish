@@ -186,8 +186,7 @@
 
     <!-- Loading State -->
     <div v-if="loading" class="books-loading">
-      <div class="loader-spinner"></div>
-      <p>Loading your books...</p>
+      <SkeletonLoader variant="books-grid" :count="6" />
     </div>
 
     <!-- Books Content -->

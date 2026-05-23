@@ -1,8 +1,7 @@
 <template>
   <div class="home-container">
     <div v-if="loading && !initialized" class="home-loading">
-      <div class="loader-spinner"></div>
-      <p>Preparing your library...</p>
+      <HomeSkeleton />
     </div>
 
     <template v-else-if="initialized">
@@ -142,6 +141,7 @@ import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import { useTTS } from "~/composables/useTTS";
 import EmptyState from "./EmptyState.vue";
+import HomeSkeleton from "./HomeSkeleton.vue";
 
 const {
   books,
@@ -554,27 +554,6 @@ const truncate = (text, length) => {
 }
 
 .home-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 10rem 0;
-  gap: 1.5rem;
-  color: #6b7280;
-}
-
-.loader-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(138, 43, 226, 0.1);
-  border-top-color: #8a2be2;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  padding: 0.5rem;
 }
 </style>

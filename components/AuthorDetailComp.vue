@@ -19,7 +19,7 @@
               <span>Change Image</span>
             </div>
             <div v-if="isScraping" class="image-loading-overlay">
-              <div class="loader-spinner mini"></div>
+              <span class="mini-skeleton circle"></span>
             </div>
           </div>
           
@@ -41,8 +41,9 @@
             <div class="bio-content">
               <p v-if="author.bio" class="bio-text">{{ author.bio }}</p>
               <div v-else class="bio-loading">
-                <div class="loader-spinner mini"></div>
-                <span>Retrieving biography...</span>
+                <span class="bio-skeleton wide"></span>
+                <span class="bio-skeleton medium"></span>
+                <span class="bio-skeleton short"></span>
               </div>
               <a v-if="author.bio" :href="`https://en.wikipedia.org/wiki/${author.name.replace(/\s+/g, '_')}`" target="_blank" class="wiki-link">
                 Source: Wikipedia <i class="ri-external-link-line"></i>
@@ -147,8 +148,7 @@
 
         <!-- Loader inside modal -->
         <div v-if="isScraping" class="picker-loader">
-          <div class="loader-spinner"></div>
-          <span>Scraping the web...</span>
+          <SkeletonLoader variant="authors-grid" :count="6" />
         </div>
 
         <div v-else class="picker-grid">
@@ -172,8 +172,7 @@
   </div>
 
   <div v-else-if="loading" class="loading-overlay">
-    <div class="loader-spinner"></div>
-    <p>Processing...</p>
+    <SkeletonLoader variant="author-detail" />
   </div>
 
   <div v-else-if="error" class="error-overlay">
@@ -548,11 +547,9 @@ const formatWebRating = (rating) => {
 
 .bio-loading {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  padding: 1rem 0;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
 }
 
 .wiki-link {
@@ -876,33 +873,57 @@ const formatWebRating = (rating) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(4px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
+  padding: 2.5rem;
   z-index: 2000;
 }
 
-.loader-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(138, 43, 226, 0.1);
-  border-top-color: #8A2BE2;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+.mini-skeleton,
+.bio-skeleton {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  background: linear-gradient(135deg, #ece9e3, #f8fafc);
+  border: 1px solid rgba(214, 210, 202, 0.72);
 }
 
-.loader-spinner.mini {
+.mini-skeleton::after,
+.bio-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(100deg, transparent 25%, rgba(255, 255, 255, 0.42) 48%, transparent 72%);
+  animation: inline-skeleton-shimmer 2.4s ease-in-out infinite;
+}
+
+.mini-skeleton.circle {
   width: 24px;
   height: 24px;
-  border-width: 2px;
+  border-radius: 50%;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.bio-skeleton {
+  height: 0.8rem;
+  border-radius: 999px;
+}
+
+.bio-skeleton.wide {
+  width: 100%;
+}
+
+.bio-skeleton.medium {
+  width: 78%;
+}
+
+.bio-skeleton.short {
+  width: 52%;
+}
+
+@keyframes inline-skeleton-shimmer {
+  0% { transform: translateX(-120%); }
+  52%, 100% { transform: translateX(120%); }
 }
 
 @media (max-width: 1024px) {
@@ -968,12 +989,7 @@ const formatWebRating = (rating) => {
 }
 
 .picker-loader {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.5rem;
-  padding: 4rem 0;
+  padding: 1rem 0;
   flex: 1;
 }
 
@@ -1079,5 +1095,3 @@ const formatWebRating = (rating) => {
   transform: scale(1.05);
 }
 </style>
-
-

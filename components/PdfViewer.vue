@@ -6,8 +6,7 @@
     </div>
 
     <div v-else-if="!ready" class="pdf-loading">
-      <div class="loader-spinner"></div>
-      <p>Rendering PDF...</p>
+      <SkeletonLoader variant="pdf" />
     </div>
 
     <template v-else>
@@ -371,19 +370,6 @@ watch(() => props.textContent, updateHighlights)
   padding: 4rem 0;
   color: #6b7280;
   text-align: center;
-}
-
-.loader-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid rgba(138, 43, 226, 0.2);
-  border-top-color: #8A2BE2;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .pdf-error i {

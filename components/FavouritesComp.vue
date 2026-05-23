@@ -7,8 +7,7 @@
     </div>
 
     <div v-if="loading && !initialized" class="favourites-loading">
-        <div class="loader-spinner"></div>
-        <p>Fetching your favourites...</p>
+        <SkeletonLoader variant="favourites-grid" :count="6" />
     </div>
 
     <template v-else-if="initialized">
@@ -99,26 +98,7 @@ const router = useRouter();
 }
 
 .favourites-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 10rem 0;
-  gap: 1.5rem;
-  color: #6b7280;
-}
-
-.loader-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(138, 43, 226, 0.1);
-  border-top-color: #8A2BE2;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+  padding: 0.5rem 0;
 }
 
 .book-card {

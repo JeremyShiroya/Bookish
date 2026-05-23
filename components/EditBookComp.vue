@@ -9,8 +9,7 @@
     </div>
 
     <div v-if="isLoading" class="loading-state">
-      <i class="ri-loader-4-line spinner"></i>
-      <p>Loading book details...</p>
+      <SkeletonLoader variant="form" />
     </div>
 
     <template v-else>
@@ -24,8 +23,7 @@
             </button>
           </div>
           <div v-if="isFetchingMetadata" class="metadata-loading">
-            <i class="ri-loader-4-line spinner"></i>
-            <p>Searching for books...</p>
+            <SkeletonLoader variant="metadata" />
           </div>
           <div v-else-if="metadataResults.length === 0" class="metadata-empty">
             <p>No results found for "{{ editBook.title }}" by "{{ editBook.author || 'any' }}".</p>
@@ -441,22 +439,15 @@ const handleUpdateBook = async () => {
 }
 
 .loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 5rem;
-  gap: 1rem;
-  color: #64748b;
+  width: 100%;
 }
 
 .spinner {
-  font-size: 2rem;
-  animation: spin 1s linear infinite;
+  display: inline-block;
+  animation: spin 0.85s linear infinite;
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
@@ -887,8 +878,7 @@ const handleUpdateBook = async () => {
 }
 
 .metadata-loading, .metadata-empty {
-  padding: 4rem 2rem;
-  text-align: center;
+  padding: 1.5rem;
   color: #64748b;
 }
 

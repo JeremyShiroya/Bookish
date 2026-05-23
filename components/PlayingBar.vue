@@ -487,7 +487,8 @@ const coverFallback = (event, title) => {
 }
 
 .spinner {
-  animation: spin 0.8s linear infinite;
+  display: inline-block;
+  animation: spin 0.85s linear infinite;
 }
 
 @keyframes spin {
