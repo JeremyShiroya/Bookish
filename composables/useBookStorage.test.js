@@ -3,7 +3,25 @@ import { describe, it, expect } from 'vitest'
 import { useBookStorage } from './useBookStorage.js'
 
 describe('useBookStorage', () => {
-  const { saveBookContent, getBookContent, deleteBookContent, hasBookContent } = useBookStorage()
+  const {
+    saveBookContent,
+    getBookContent,
+    deleteBookContent,
+    hasBookContent,
+    getStorageSummary,
+  } = useBookStorage()
+
+  it('returns an empty storage summary before content is saved', async () => {
+    const summary = await getStorageSummary()
+
+    expect(summary).toMatchObject({
+      available: true,
+      contentCount: 0,
+      sourceCount: 0,
+      error: null,
+    })
+    expect(summary.totalBytes).toBe(0)
+  })
 
   it('saves and retrieves content by bookId', async () => {
     await saveBookContent(1, { content: '<p>Hello</p>', pages: 10 })
@@ -39,6 +57,12 @@ describe('useBookStorage', () => {
     expect(result.tocItems).toEqual([{ title: 'Chapter One', page: 3, level: 0 }])
     expect(result.format).toBe('pdf')
     expect(result.pdfTocChecked).toBe(true)
+
+    const summary = await getStorageSummary()
+    expect(summary.available).toBe(true)
+    expect(summary.contentCount).toBeGreaterThan(0)
+    expect(summary.sourceCount).toBeGreaterThan(0)
+    expect(summary.totalBytes).toBeGreaterThan(0)
   })
 
   it('can retrieve a PDF source even when only the source was saved', async () => {
@@ -70,5 +94,22 @@ describe('useBookStorage', () => {
 
   it('hasBookContent returns false when not stored', async () => {
     expect(await hasBookContent(9998)).toBe(false)
+  })
+
+  it('storage summary fails gracefully when IndexedDB is unavailable', async () => {
+    const originalIndexedDB = globalThis.indexedDB
+    globalThis.indexedDB = undefined
+
+    try {
+      const summary = await getStorageSummary()
+
+      expect(summary.available).toBe(false)
+      expect(summary.contentCount).toBe(0)
+      expect(summary.sourceCount).toBe(0)
+      expect(summary.totalBytes).toBe(0)
+      expect(summary.error).toBeTruthy()
+    } finally {
+      globalThis.indexedDB = originalIndexedDB
+    }
   })
 })

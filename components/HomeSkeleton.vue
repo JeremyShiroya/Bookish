@@ -1,39 +1,30 @@
 <template>
   <div class="home-skeleton" aria-hidden="true">
-    <div class="sk-header">
-      <span class="sk-block sk-title"></span>
-      <span class="sk-block sk-link"></span>
+    <div class="recent-row">
+      <span v-for="item in 3" :key="`recent-${item}`" class="sk-block recent-block"></span>
     </div>
 
-    <div class="sk-recent-row">
-      <div v-for="item in 3" :key="`recent-${item}`" class="sk-recent-card">
-        <span class="sk-block sk-recent-icon"></span>
-        <span class="sk-block sk-recent-text"></span>
-        <span class="sk-block sk-recent-button"></span>
-      </div>
-    </div>
-
-    <div class="sk-main-row">
-      <section class="sk-popular-column">
-        <span class="sk-block sk-section-title"></span>
-        <div class="sk-book-grid">
-          <div v-for="item in 4" :key="`popular-${item}`" class="sk-book-card">
-            <span class="sk-block sk-book-cover"></span>
-            <span class="sk-block sk-book-title"></span>
-            <span class="sk-block sk-book-meta"></span>
+    <div class="home-body">
+      <!-- Popular Books Loader (matches popular-grid and popular-card) -->
+      <section class="book-columns">
+        <div v-for="item in 4" :key="`book-${item}`" class="book-row">
+          <span class="sk-block cover-block"></span>
+          <div class="line-stack">
+            <span class="sk-block line title"></span>
+            <span class="sk-block line author"></span>
+            <span class="sk-block line blurb"></span>
+            <span class="sk-block line blurb-short"></span>
           </div>
         </div>
       </section>
 
-      <section class="sk-authors-column">
-        <span class="sk-block sk-section-title"></span>
-        <div class="sk-author-panel">
-          <div v-for="item in 4" :key="`author-${item}`" class="sk-author-row">
-            <span class="sk-block sk-avatar"></span>
-            <div class="sk-author-copy">
-              <span class="sk-block sk-author-name"></span>
-              <span class="sk-block sk-author-count"></span>
-            </div>
+      <!-- Your Authors Loader (matches authors-list-card and author-list-item) -->
+      <section class="author-panel">
+        <div v-for="item in 4" :key="`author-${item}`" class="author-row">
+          <span class="sk-block avatar-block"></span>
+          <div class="author-info-stack">
+            <span class="sk-block line author-name"></span>
+            <span class="sk-block line author-count"></span>
           </div>
         </div>
       </section>
@@ -43,205 +34,214 @@
 
 <style scoped>
 .home-skeleton {
-  --sk-base: #eef1f5;
-  --sk-mid: #f8fafc;
-  --sk-border: rgba(226, 232, 240, 0.86);
   width: 100%;
-  padding: 0.5rem;
 }
 
 .sk-block {
-  position: relative;
   display: block;
-  overflow: hidden;
-  background: linear-gradient(135deg, var(--sk-base), var(--sk-mid));
-  border: 1px solid var(--sk-border);
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-color) 25%,
+    var(--skeleton-shimmer) 37%,
+    var(--skeleton-color) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
   border-radius: 6px;
 }
 
-.sk-block::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-120%);
-  background: linear-gradient(100deg, transparent 26%, rgba(255, 255, 255, 0.55) 50%, transparent 74%);
-  animation: sk-shimmer 2.2s ease-in-out infinite;
-  pointer-events: none;
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
-@keyframes sk-shimmer {
-  0% { transform: translateX(-120%); }
-  55%, 100% { transform: translateX(120%); }
-}
-
-.sk-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.5rem;
-}
-
-.sk-title {
-  width: 150px;
-  height: 18px;
-}
-
-.sk-link {
-  width: 74px;
-  height: 14px;
-}
-
-.sk-recent-row {
+.recent-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2rem;
-  margin-bottom: 2.5rem;
+  gap: 1.75rem;
+  margin-bottom: 2.25rem;
 }
 
-.sk-recent-card {
-  height: 58px;
-  border: 1px solid var(--sk-border);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.46);
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0 1rem;
+/* Glassmorphic Loader Card matching horizontal recent card */
+.recent-block {
+  background: var(--color-background-overlay-strong) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--color-border-on-image);
+  border-radius: 16px;
+  height: 130px;
+  box-shadow: var(--shadow-card-subtle);
+  animation: none !important;
+  position: relative;
+  overflow: visible; /* Let cover pop out/bottom float if needed, but here simple matches shape */
 }
 
-.sk-recent-icon {
-  width: 22px;
+.recent-block::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  bottom: 10px;
+  width: 95px;
+  height: 145px;
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    var(--color-skeleton-inverse-base) 25%,
+    var(--color-skeleton-inverse-shimmer) 37%,
+    var(--color-skeleton-inverse-base) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  box-shadow: var(--shadow-control-subtle);
+}
+
+.recent-block::after {
+  content: '';
+  position: absolute;
+  left: 130px;
+  top: 50%;
+  transform: translateY(-50%);
   height: 18px;
-  border-radius: 5px;
-  flex-shrink: 0;
+  width: 45%;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--color-skeleton-inverse-base) 25%,
+    var(--color-skeleton-inverse-shimmer) 37%,
+    var(--color-skeleton-inverse-base) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  box-shadow: 0 24px 0 -3px var(--color-skeleton-inverse-base); /* represents sub-line */
 }
 
-.sk-recent-text {
-  width: min(46%, 150px);
-  height: 18px;
-}
-
-.sk-recent-button {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  margin-left: auto;
-}
-
-.sk-main-row {
+.home-body {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2rem;
-  margin-bottom: 6rem;
+  grid-template-columns: 2fr 1fr;
+  gap: 2.25rem;
 }
 
-.sk-popular-column {
-  grid-column: span 2;
-}
-
-.sk-authors-column {
-  grid-column: span 1;
-}
-
-.sk-section-title {
-  width: 132px;
-  height: 18px;
-  margin-bottom: 1.5rem;
-}
-
-.sk-book-grid {
+.book-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2rem;
+  column-gap: 2rem;
+  row-gap: 2rem;
 }
 
-.sk-book-card {
-  display: grid;
-  grid-template-columns: 110px 1fr;
-  column-gap: 1.5rem;
-  row-gap: 0.75rem;
-  min-height: 165px;
+.book-row {
+  display: flex;
+  gap: 1.5rem;
+  min-height: unset;
 }
 
-.sk-book-cover {
-  grid-row: span 3;
+.cover-block {
   width: 110px;
   height: 165px;
   border-radius: 8px;
+  flex-shrink: 0;
 }
 
-.sk-book-title {
-  width: min(78%, 190px);
-  height: 20px;
-  margin-top: 0.25rem;
+.line-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+  flex: 1;
 }
 
-.sk-book-meta {
-  width: min(52%, 140px);
-  height: 14px;
+.line {
+  border-radius: 4px;
 }
 
-.sk-author-panel {
-  background: rgba(255, 255, 255, 0.58);
-  border: 1px solid var(--sk-border);
+.line.title {
+  width: 80%;
+  height: 18px;
+}
+
+.line.author {
+  width: 45%;
+  height: 12px;
+  margin-bottom: 0.5rem;
+}
+
+.line.blurb {
+  width: 100%;
+  height: 10px;
+  opacity: 0.7;
+}
+
+.line.blurb-short {
+  width: 65%;
+  height: 10px;
+  opacity: 0.7;
+}
+
+/* White panel matching Your Authors */
+.author-panel {
+  background: var(--surface-color);
   border-radius: 20px;
   padding: 2rem;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  box-shadow: var(--shadow-form-shell);
+  border: 1px solid var(--border-color);
+  min-height: unset;
+  animation: none !important;
 }
 
-.sk-author-row {
+.author-row {
   display: flex;
   align-items: center;
   gap: 1.25rem;
 }
 
-.sk-avatar {
+.avatar-block {
   width: 60px;
   height: 60px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.sk-author-copy {
-  flex: 1;
+.author-info-stack {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 6px;
+  flex: 1;
 }
 
-.sk-author-name {
-  width: min(72%, 150px);
-  height: 16px;
+.author-name {
+  width: 65%;
+  height: 14px;
 }
 
-.sk-author-count {
-  width: min(44%, 90px);
-  height: 13px;
+.author-count {
+  width: 35%;
+  height: 10px;
 }
 
-@media (max-width: 1024px) {
-  .sk-recent-row,
-  .sk-main-row,
-  .sk-book-grid {
+@media (max-width: 1100px) {
+  .recent-row,
+  .home-body,
+  .book-columns {
     grid-template-columns: 1fr;
   }
-
-  .sk-popular-column,
-  .sk-authors-column {
-    grid-column: auto;
-  }
 }
 
-@media (max-width: 640px) {
-  .sk-book-card {
-    grid-template-columns: 92px 1fr;
+@media (max-width: 560px) {
+  .recent-block {
+    height: 110px;
   }
-
-  .sk-book-cover {
-    width: 92px;
-    height: 138px;
+  .recent-block::before {
+    width: 75px;
+    height: 115px;
+  }
+  .recent-block::after {
+    left: 105px;
+    width: 50%;
   }
 }
 </style>

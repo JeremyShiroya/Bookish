@@ -4,6 +4,20 @@
       <HomeSkeleton />
     </div>
 
+    <EmptyState
+      v-else-if="error && books.length === 0"
+      title="Library could not load"
+      :description="error"
+      icon="ri-error-warning-line"
+    >
+      <template #action>
+        <button class="add-btn retry-btn" @click="retryLoadLibrary">
+          <i class="ri-refresh-line"></i>
+          Retry
+        </button>
+      </template>
+    </EmptyState>
+
     <template v-else-if="initialized">
       <section class="home-section">
         <div class="section-header">
@@ -151,6 +165,8 @@ const {
   popularBooks,
   loading,
   initialized,
+  error,
+  fetchAllData,
 } = useBooks();
 const { play: playTTS } = useTTS();
 const router = useRouter();
@@ -161,6 +177,10 @@ const handlePlay = (book) => {
 
 const getAuthorBookCount = (authorName) => {
   return books.value.filter((b) => b.author === authorName).length;
+};
+
+const retryLoadLibrary = () => {
+  fetchAllData(true);
 };
 
 const truncate = (text, length) => {
@@ -190,7 +210,7 @@ const truncate = (text, length) => {
 .section-title {
   font-size: 1.25rem;
   font-weight: 400;
-  color: #000;
+  color: var(--color-brand-primary);
   margin: 0;
 }
 
@@ -199,20 +219,16 @@ const truncate = (text, length) => {
   align-items: center;
   gap: 0.5rem;
   background: transparent;
-  /* border: 1px solid #cccccc; */
-  padding: 0.5rem 1rem;
-  border-radius: 10px;
   text-decoration: none;
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
 .show-all-btn:hover {
-  border: 1px solid #cccccc;
-  background: #e5e7eb;
-  transform: translateY(-2px);
+  color: var(--color-text-primary);
+  /* transform: translateX(2px); */
 }
 
 .recent-grid {
@@ -238,7 +254,7 @@ const truncate = (text, length) => {
   cursor: pointer;
   scroll-snap-align: start;
   transition: transform 0.3s ease;
-  color: white;
+  color: var(--color-text-on-brand);
   text-decoration: none;
   background: transparent;
   z-index: 1;
@@ -276,8 +292,8 @@ const truncate = (text, length) => {
   height: 100%;
   background: linear-gradient(
     135deg,
-    rgba(20, 20, 25, 0.7) 0%,
-    rgba(20, 20, 25, 0.4) 100%
+    var(--color-background-overlay-strong) 0%,
+    var(--color-background-overlay-faint) 100%
   );
 }
 
@@ -318,13 +334,13 @@ const truncate = (text, length) => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  color: var(--color-text-on-brand);
+  text-shadow: var(--shadow-text-on-image);
 }
 
 .recent-meta {
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--color-text-on-image-secondary);
   margin: 0;
   font-weight: 400;
 }
@@ -338,19 +354,19 @@ const truncate = (text, length) => {
   height: 36px;
   padding: 0;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border-on-image-strong);
+  background: var(--color-surface-on-image-soft);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--color-text-on-brand);
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
 .recent-card:hover .recent-go-btn {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.8);
+  background: var(--color-surface-on-image-hover);
+  border-color: var(--color-text-on-image-secondary);
   transform: translateY(-50%) scale(1.05);
 }
 
@@ -359,8 +375,8 @@ const truncate = (text, length) => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.25rem;
-  background: linear-gradient(135deg, #8a2be2 0%, #6a0dad 100%);
-  color: white;
+  background: var(--gradient-brand-primary);
+  color: var(--color-text-on-brand);
   border-radius: 0.5rem;
   font-weight: 400;
   text-decoration: none;
@@ -370,7 +386,13 @@ const truncate = (text, length) => {
 
 .add-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 6px -1px rgba(138, 43, 226, 0.4);
+  box-shadow: 0 4px 6px -1px var(--shadow-brand-glow);
+}
+
+.retry-btn {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 /* Main Content Layout */
@@ -416,7 +438,7 @@ const truncate = (text, length) => {
   height: 165px;
   border-radius: 8px;
   object-fit: cover;
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-cover);
   flex-shrink: 0;
 }
 
@@ -463,7 +485,7 @@ const truncate = (text, length) => {
   height: 32px;
   border-radius: 50%;
   background: var(--primary-color);
-  color: white;
+  color: var(--color-text-on-brand);
   border: none;
   display: flex;
   align-items: center;
@@ -487,7 +509,7 @@ const truncate = (text, length) => {
   flex-direction: column;
   gap: 1.5rem;
   margin-top: 1.5rem;
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-form-shell);
 }
 
 .author-list-item {
@@ -507,7 +529,7 @@ const truncate = (text, length) => {
   height: 60px;
   border-radius: 50%;
   overflow: hidden;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-control-subtle);
   flex-shrink: 0;
 }
 

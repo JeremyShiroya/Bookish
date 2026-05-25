@@ -42,11 +42,22 @@
       </div>
     </div>
 
+    <CoverImageModal
+      :visible="showCoverModal"
+      :mode="coverModalMode"
+      :loading="isSearchingCovers"
+      :images="coverOptions"
+      @close="closeCoverModal"
+      @upload="triggerCoverInput"
+      @search="searchBookCovers"
+      @select="selectBookCover"
+    />
+
     <form @submit.prevent="saveBook" class="add-form">
       <!-- Media Section -->
       <div class="media-column">
         <!-- Cover Upload -->
-        <div class="cover-container" @click="triggerCoverInput">
+        <div class="cover-container" @click="openCoverModal">
           <img v-if="coverPreview" :src="coverPreview" alt="Book Cover" class="cover-image" />
           <div v-else class="cover-placeholder">
             <i class="ri-image-add-line"></i>
@@ -236,11 +247,14 @@ import { useRouter } from 'vue-router'
 import { useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
 import { useBookStorage } from '~/composables/useBookStorage'
+import { useCoverImageCache } from '~/composables/useCoverImageCache'
+import CoverImageModal from './CoverImageModal.vue'
 
 const router = useRouter()
 const { addBook } = useBooks()
 const { addToast } = useToast()
 const { saveBookContent } = useBookStorage()
+const { cacheCoverImage } = useCoverImageCache()
 const extractedContent = ref(null)
 const extractedTocTitles = ref([])
 const extractedSource = ref(null)
@@ -273,8 +287,25 @@ const extractionError = ref(null)
 const showMetadataModal = ref(false)
 const isFetchingMetadata = ref(false)
 const metadataResults = ref([])
+const showCoverModal = ref(false)
+const coverModalMode = ref('choice')
+const isSearchingCovers = ref(false)
+const coverOptions = ref([])
 
-const triggerCoverInput = () => coverInput.value.click()
+const openCoverModal = () => {
+  coverModalMode.value = 'choice'
+  showCoverModal.value = true
+}
+
+const closeCoverModal = () => {
+  showCoverModal.value = false
+  coverModalMode.value = 'choice'
+}
+
+const triggerCoverInput = () => {
+  closeCoverModal()
+  coverInput.value?.click()
+}
 const triggerDocumentInput = () => documentInput.value.click()
 
 const goBack = () => {
@@ -290,13 +321,55 @@ const handleCoverChange = (event) => {
   }
 }
 
+const searchBookCovers = async () => {
+  if (!newBook.value.title) {
+    addToast('Enter a title before searching for covers.', 'error')
+    return
+  }
+
+  coverModalMode.value = 'picker'
+  isSearchingCovers.value = true
+  coverOptions.value = []
+
+  try {
+    const query = new URLSearchParams()
+    query.append('title', newBook.value.title)
+    if (newBook.value.author) query.append('author', newBook.value.author)
+
+    const response = await fetch(`/api/books/search-covers?${query.toString()}`)
+    const data = await response.json()
+    coverOptions.value = data.images || []
+    if (!coverOptions.value.length) {
+      addToast('No cover images found on the web.', 'error')
+    }
+  } catch (error) {
+    console.error('Failed to search covers:', error)
+    addToast('Failed to search for cover images.', 'error')
+  } finally {
+    isSearchingCovers.value = false
+  }
+}
+
+const selectBookCover = async (imageUrl) => {
+  coverPreview.value = await cacheCoverImage(imageUrl)
+  closeCoverModal()
+}
+
 const generateCoverPlaceholder = (title) => {
-  const colors = ['#8A2BE2', '#7B68EE', '#9370DB', '#BA55D3', '#DDA0DD']
+  const colors = getThemeCssVars([
+    { name: '--color-book-cover-placeholder-one', fallback: '#8A2BE2' },
+    { name: '--color-book-cover-placeholder-two', fallback: '#6A0DAD' },
+    { name: '--color-book-cover-placeholder-three', fallback: '#9370DB' },
+    { name: '--color-book-cover-placeholder-four', fallback: '#BA55D3' },
+    { name: '--color-book-cover-placeholder-five', fallback: '#DDA0DD' },
+  ])
   const hash = [...title].reduce((acc, c) => acc + c.charCodeAt(0), 0)
   const color = colors[hash % colors.length]
   const initial = title.trim()[0]?.toUpperCase() || '?'
-  const displayTitle = title.length > 18 ? title.substring(0, 18) + '…' : title
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="130" font-family="serif" font-size="100" fill="rgba(255,255,255,0.25)" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="rgba(255,255,255,0.65)" text-anchor="middle">${displayTitle}</text></svg>`
+  const displayTitle = title.length > 18 ? `${title.substring(0, 18)}...` : title
+  const softText = getThemeCssVar('--color-book-cover-placeholder-text-soft', 'rgba(255,255,255,0.25)')
+  const strongText = getThemeCssVar('--color-book-cover-placeholder-text-strong', 'rgba(255,255,255,0.65)')
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="130" font-family="serif" font-size="100" fill="${softText}" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="${strongText}" text-anchor="middle">${displayTitle}</text></svg>`
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
@@ -404,7 +477,7 @@ const fetchMetadata = async () => {
   }
 }
 
-const selectMetadata = (result) => {
+const selectMetadata = async (result) => {
   newBook.value.title = result.title || newBook.value.title;
   newBook.value.author = result.author || newBook.value.author;
   newBook.value.blurb = result.blurb || newBook.value.blurb;
@@ -415,7 +488,7 @@ const selectMetadata = (result) => {
   newBook.value.genre = result.genre || newBook.value.genre;
   
   if (result.cover) {
-    coverPreview.value = result.cover;
+    coverPreview.value = await cacheCoverImage(result.cover);
   }
   
   showMetadataModal.value = false;
@@ -434,10 +507,11 @@ const saveBook = async () => {
   if (!documentFile.value || isProcessing.value) return
   
   isProcessing.value = true;
+  const cachedCover = await cacheCoverImage(coverPreview.value);
 
   const bookToSave = {
     ...newBook.value,
-    cover: coverPreview.value || generateCoverPlaceholder(newBook.value.title || 'Book')
+    cover: cachedCover || generateCoverPlaceholder(newBook.value.title || 'Book')
   }
   
   if (!bookToSave.series || bookToSave.series.trim() === '') {
@@ -515,41 +589,41 @@ const saveBook = async () => {
 .page-header h1 {
   font-size: 1.5rem;
   font-weight: 400;
-  color: #0f172a;
+  color: var(--color-text-primary);
   margin: 0 0 0.5rem 0;
   letter-spacing: -0.02em;
 }
 
 .subtitle {
   font-size: 1rem;
-  color: #64748b;
+  color: var(--color-text-muted);
   margin: 0;
 }
 
 .btn-cancel {
   padding: 0.75rem 1.5rem;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-weight: 400;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn-cancel:hover {
-  background: #f8fafc;
+  background: var(--color-surface-secondary);
 }
 
 .add-form {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 3rem;
-  background: #ffffff;
+  background: var(--color-surface-primary);
   padding: 2.5rem;
   border-radius: 20px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--color-border-card);
+  box-shadow: var(--shadow-form-shell);
 }
 
 .media-column {
@@ -562,8 +636,8 @@ const saveBook = async () => {
   width: 100%;
   aspect-ratio: 2 / 3;
   border-radius: 12px;
-  background: #f8fafc;
-  border: 2px dashed #e2e8f0;
+  background: var(--color-surface-primary);
+  border: 2px dashed var(--color-border-card);
   position: relative;
   overflow: hidden;
   cursor: pointer;
@@ -574,8 +648,8 @@ const saveBook = async () => {
 }
 
 .cover-container:hover {
-  border-color: #8A2BE2;
-  background: #f3e8ff;
+  border-color: var(--color-border-focus);
+  background: var(--color-surface-tertiary);
 }
 
 .cover-placeholder {
@@ -583,7 +657,7 @@ const saveBook = async () => {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .cover-placeholder i {
@@ -604,12 +678,12 @@ const saveBook = async () => {
 .cover-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--color-background-overlay-strong);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--color-text-on-brand);
   opacity: 0;
   transition: opacity 0.2s;
   gap: 0.5rem;
@@ -628,26 +702,26 @@ const saveBook = async () => {
   align-items: center;
   gap: 1rem;
   padding: 1.25rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-border-card);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .document-dropzone:hover {
-  border-color: #8A2BE2;
-  background: #f3e8ff;
+  border-color: var(--color-border-focus);
+  background: var(--color-surface-secondary);
 }
 
 .document-dropzone.has-file {
-  background: rgba(16, 185, 129, 0.1);
-  border-color: #10b981;
+  background: var(--color-status-success-soft);
+  border-color: var(--color-status-success-strong);
 }
 
 .document-dropzone.is-processing {
-  background: #fffbeb;
-  border-color: #fde68a;
+  background: var(--color-status-warning-soft);
+  border-color: var(--color-status-warning-border);
   pointer-events: none;
 }
 
@@ -655,18 +729,18 @@ const saveBook = async () => {
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--color-surface-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-control-subtle);
   font-size: 1.5rem;
-  color: #64748b;
+  color: var(--color-text-muted);
   flex-shrink: 0;
 }
 
 .text-success {
-  color: #10b981;
+  color: var(--color-status-success-strong);
 }
 
 .doc-info {
@@ -678,7 +752,7 @@ const saveBook = async () => {
 .doc-title {
   font-size: 0.95rem;
   font-weight: 400;
-  color: #0f172a;
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -686,13 +760,13 @@ const saveBook = async () => {
 
 .doc-subtitle {
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .error-message {
   margin-top: 0.5rem;
   font-size: 0.8rem;
-  color: #ef4444;
+  color: var(--color-status-danger-bright);
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -709,8 +783,8 @@ const saveBook = async () => {
   align-items: center;
   justify-content: space-between;
   padding: 1.25rem;
-  background: linear-gradient(to right, #f3e8ff, #ffffff);
-  border: 1px solid #8A2BE2;
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-brand-primary);
   border-radius: 12px;
   margin-bottom: 0.5rem;
 }
@@ -723,7 +797,7 @@ const saveBook = async () => {
 
 .fetch-info i {
   font-size: 2rem;
-  color: #8A2BE2;
+  color: var(--color-brand-primary);
 }
 
 .web-review-label {
@@ -745,30 +819,30 @@ const saveBook = async () => {
 .fetch-info strong {
   display: block;
   font-size: 1rem;
-  color: #0f172a;
+  color: var(--color-text-primary);
 }
 
 .fetch-info p {
   margin: 0;
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .btn-fetch {
   padding: 0.75rem 1.5rem;
-  background: #8A2BE2;
-  color: white;
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
   border: none;
   border-radius: 8px;
   font-weight: 400;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 6px -1px rgba(138, 43, 226, 0.3);
+  box-shadow: var(--shadow-brand-button);
 }
 
 .btn-fetch:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 10px -1px rgba(138, 43, 226, 0.3);
+  box-shadow: var(--shadow-brand-button-hover);
 }
 
 .btn-fetch:disabled {
@@ -793,24 +867,24 @@ const saveBook = async () => {
 .form-group label {
   font-size: 0.9rem;
   font-weight: 400;
-  color: #0f172a;
+  color: var(--color-text-primary);
   display: flex;
   align-items: center;
   gap: 0.25rem;
 }
 
 .required {
-  color: #ef4444;
+  color: var(--color-status-danger-bright);
 }
 
 .form-input {
   width: 100%;
   padding: 0.85rem 1rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border-card);
   border-radius: 10px;
   font-size: 0.95rem;
-  color: #0f172a;
+  color: var(--color-text-primary);
   transition: all 0.2s;
   font-family: inherit;
 }
@@ -821,14 +895,13 @@ const saveBook = async () => {
 }
 
 .form-input::placeholder {
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .form-input:focus {
   outline: none;
-  background: #ffffff;
-  border-color: #8A2BE2;
-  box-shadow: 0 0 0 3px #f3e8ff;
+  background: var(--color-surface-tertiary);
+  border-color: var(--color-border-focus);
 }
 
 .select-wrapper {
@@ -846,17 +919,17 @@ const saveBook = async () => {
   right: 1rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #64748b;
+  color: var(--color-text-muted);
   pointer-events: none;
 }
 
 .readonly-review {
   padding: 1rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
   font-size: 0.95rem;
-  color: #334155;
+  color: var(--color-text-secondary);
   line-height: 1.5;
 }
 
@@ -865,7 +938,7 @@ const saveBook = async () => {
   justify-content: flex-end;
   margin-top: 1.5rem;
   padding-top: 2rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--color-border-card);
 }
 
 .btn-primary {
@@ -873,20 +946,20 @@ const saveBook = async () => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.85rem 2rem;
-  background: linear-gradient(135deg, #8A2BE2 0%, #6A0DAD 100%);
+  background: var(--gradient-brand-primary);
   border: none;
   border-radius: 10px;
-  color: white;
+  color: var(--color-text-on-brand);
   font-weight: 400;
   font-size: 1rem;
   cursor: pointer;
-  box-shadow: 0 4px 6px -1px rgba(138, 43, 226, 0.3);
+  box-shadow: var(--shadow-brand-button);
   transition: all 0.2s;
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 12px -1px rgba(138, 43, 226, 0.3);
+  box-shadow: var(--shadow-brand-button-hover);
 }
 
 .btn-primary:disabled {
@@ -908,7 +981,7 @@ const saveBook = async () => {
 .metadata-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--color-background-overlay-soft);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -918,20 +991,20 @@ const saveBook = async () => {
 }
 
 .metadata-modal-container {
-  background: #ffffff;
+  background: var(--color-surface-primary);
   width: 100%;
   max-width: 600px;
   max-height: 80vh;
   border-radius: 16px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-modal);
   overflow: hidden;
 }
 
 .metadata-modal-header {
   padding: 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--color-border-subtle);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -940,27 +1013,27 @@ const saveBook = async () => {
 .metadata-modal-header h2 {
   margin: 0;
   font-size: 1.25rem;
-  color: #0f172a;
+  color: var(--color-text-primary);
 }
 
 .close-button {
   background: transparent;
   border: none;
   font-size: 1.5rem;
-  color: #64748b;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 0.25rem;
   border-radius: 6px;
 }
 
 .close-button:hover {
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-primary);
 }
 
 .metadata-loading, .metadata-empty {
   padding: 1.5rem;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .metadata-results {
@@ -975,16 +1048,16 @@ const saveBook = async () => {
   display: flex;
   gap: 1.5rem;
   padding: 1rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border-subtle);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
-  background: #ffffff;
+  background: var(--color-surface-primary);
 }
 
 .metadata-card:hover {
-  border-color: #8A2BE2;
-  background: #f3e8ff;
+  border-color: var(--color-brand-primary);
+  background: var(--color-surface-active);
   transform: translateY(-2px);
 }
 
@@ -993,7 +1066,7 @@ const saveBook = async () => {
   height: 105px;
   object-fit: cover;
   border-radius: 6px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-control-subtle);
 }
 
 .metadata-info {
@@ -1007,20 +1080,20 @@ const saveBook = async () => {
 .metadata-info h4 {
   margin: 0;
   font-size: 1.1rem;
-  color: #0f172a;
+  color: var(--color-text-primary);
   line-height: 1.3;
 }
 
 .metadata-author {
   margin: 0;
   font-size: 0.95rem;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .metadata-year, .metadata-series {
   margin: 0;
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 /* Responsive */

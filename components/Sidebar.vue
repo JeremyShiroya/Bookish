@@ -55,12 +55,11 @@ const navRef = ref(null);
 
 const menuItems = [
   { name: "Home", icon: "ri-home-smile-2-line", path: "/" },
-  { name: "Search", icon: "ri-search-line", path: "/search" },
   { name: "Books", icon: "ri-book-open-line", path: "/books" },
   { name: "Collections", icon: "ri-archive-line", path: "/collections" },
   { name: "Favourites", icon: "ri-heart-line", path: "/favourites" },
   { name: "Series", icon: "ri-book-shelf-line", path: "/series" },
-  { name: "Genres", icon: "ri-planet-line", path: "/genres" },
+  { name: "Genres", icon: "ri-price-tag-3-line", path: "/genres" },
   { name: "Authors", icon: "ri-group-line", path: "/authors" },
 ];
 
@@ -245,7 +244,7 @@ watch(hoverIndex, updateHighlight);
 }
 
 .menu-item.active {
-  color: #8A2BE2;
+  color: var(--color-brand-primary);
 }
 
 .menu-item i {
@@ -255,7 +254,7 @@ watch(hoverIndex, updateHighlight);
 
 .settings {
   padding: 0 10px 30px 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--color-border-on-image);
   position: relative;
 }
 

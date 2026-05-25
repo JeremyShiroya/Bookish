@@ -11,6 +11,48 @@ export interface OLResult {
   isbn13s: string[];
 }
 
+function normalizeSubjectGenre(subject: string) {
+  const cleaned = subject.replace(/\s+/g, ' ').trim();
+  const lower = cleaned.toLowerCase();
+  if (!cleaned || cleaned.length > 40) return null;
+  if (
+    lower.includes('imaginary place')
+    || lower.includes('protected daisy')
+    || lower.includes('accessible book')
+    || lower.includes('large type')
+    || lower.includes('open library')
+    || lower.includes('overdrive')
+    || lower.includes('translation')
+    || lower.includes('reviewed')
+    || lower === 'general'
+  ) return null;
+  if (/^(fiction|literature)$/i.test(cleaned)) return cleaned;
+  return cleaned.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function extractGenres(subjects: string[]) {
+  const seen = new Set<string>();
+  return subjects
+    .flatMap((subject) => subject.split(','))
+    .map(normalizeSubjectGenre)
+    .filter((subject): subject is string => Boolean(subject))
+    .sort((a, b) => {
+      if (/science fiction/i.test(a) && !/science fiction/i.test(b)) return -1;
+      if (/science fiction/i.test(b) && !/science fiction/i.test(a)) return 1;
+      if (/^fiction$/i.test(a)) return 1;
+      if (/^fiction$/i.test(b)) return -1;
+      return 0;
+    })
+    .filter((subject) => {
+      const key = subject.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 3)
+    .join(', ') || null;
+}
+
 export async function searchOpenLibrary(title: string, author?: string): Promise<OLResult[]> {
   try {
     let url = `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&limit=5`;
@@ -25,6 +67,7 @@ export async function searchOpenLibrary(title: string, author?: string): Promise
     const results = await Promise.all(
       (data.docs as any[]).map(async (doc): Promise<OLResult> => {
         let blurb: string | null = null;
+        let detailSubjects: string[] = [];
         try {
           const detailRes = await fetch(`https://openlibrary.org${doc.key}.json`);
           if (detailRes.ok) {
@@ -32,6 +75,7 @@ export async function searchOpenLibrary(title: string, author?: string): Promise
             blurb = typeof detail.description === 'string'
               ? detail.description
               : detail.description?.value ?? null;
+            detailSubjects = Array.isArray(detail.subjects) ? detail.subjects : [];
           }
         } catch {}
 
@@ -47,7 +91,7 @@ export async function searchOpenLibrary(title: string, author?: string): Promise
           blurb,
           series: doc.series_name?.[0] ?? null,
           seriesInstallment: doc.series_position?.[0] ?? null,
-          genre: doc.subject ? (doc.subject as string[]).slice(0, 3).join(', ') : null,
+          genre: extractGenres([...(doc.subject || []), ...detailSubjects]),
           publishYear: doc.first_publish_year ?? null,
           isbn13s,
         };

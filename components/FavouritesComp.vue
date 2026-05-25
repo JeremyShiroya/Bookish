@@ -75,12 +75,12 @@ const router = useRouter();
 .favourites-title {
   font-size: 1.5rem;
   font-weight: 400;
-  color: #8A2BE2;
+  color: var(--color-brand-primary);
   margin: 0;
 }
 
 .favourites-count {
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   font-weight: normal;
 }
 
@@ -118,7 +118,7 @@ const router = useRouter();
   aspect-ratio: 7/10;
   border-radius: 0.5rem;
   overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-card-subtle);
   margin-bottom: 0.75rem;
   transition: all 0.3s ease;
   position: relative;
@@ -128,7 +128,7 @@ const router = useRouter();
   position: absolute;
   top: 10px;
   right: 10px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--color-surface-glass);
   border-radius: 50%;
   border: none;
   width: 32px;
@@ -140,14 +140,14 @@ const router = useRouter();
   opacity: 0;
   transform: translateY(-10px);
   transition: all 0.3s ease;
-  color: #ef4444;
+  color: var(--color-status-danger-bright);
 }
 
 .play-btn {
   position: absolute;
   bottom: 10px;
   right: 10px;
-  background: #8A2BE2;
+  background: var(--color-brand-primary);
   border-radius: 50%;
   border: none;
   width: 48px;
@@ -162,7 +162,7 @@ const router = useRouter();
 }
 
 .play-btn i {
-  color: #fff;
+  color: var(--color-text-on-brand);
   font-size: 24px;
 }
 
@@ -186,13 +186,13 @@ const router = useRouter();
 .book-title {
   font-size: 0.875rem;
   font-weight: 400;
-  color: #1f2937;
+  color: var(--color-text-primary);
   margin: 0 0 0.25rem 0;
 }
 
 .book-author {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin: 0;
 }
 
@@ -202,7 +202,7 @@ const router = useRouter();
   align-items: center;
   justify-content: center;
   padding: 5rem 0;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
 }
 
 .empty-state i {

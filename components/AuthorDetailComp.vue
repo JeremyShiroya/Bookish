@@ -129,7 +129,7 @@
             <i class="ri-global-line"></i>
             <div class="choice-text">
               <strong>Scrape Web</strong>
-              <span>Auto-fetch from Wikipedia</span>
+              <span>Find web portraits</span>
             </div>
           </button>
         </div>
@@ -158,7 +158,7 @@
             class="picker-item"
             @click="selectImage(img)"
           >
-            <img :src="img" alt="Author option" loading="lazy" />
+            <img :src="img" alt="Author option" loading="lazy" @error="removeImageOption(img)" />
             <div class="picker-item-overlay">
               <i class="ri-check-line"></i>
             </div>
@@ -300,6 +300,10 @@ const selectImage = async (imgUrl) => {
   addToast('Author image updated', 'success');
 };
 
+const removeImageOption = (imgUrl) => {
+  imageOptions.value = imageOptions.value.filter((image) => image !== imgUrl);
+};
+
 const updateAuthorImage = async (newImageUrl) => {
   try {
     // Show a subtle loading state instead of full overlay
@@ -368,7 +372,7 @@ const formatWebRating = (rating) => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, rgba(138, 43, 226, 0.05) 0%, transparent 100%);
+  background: linear-gradient(135deg, var(--color-brand-primary-faint) 0%, transparent 100%);
   z-index: -1;
 }
 
@@ -380,9 +384,9 @@ const formatWebRating = (rating) => {
 
 /* Left Column / Sidebar */
 .author-sidebar {
-  background: white;
+  background: var(--color-surface-primary);
   padding: 3rem 2rem;
-  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.02);
+  box-shadow: var(--shadow-card-subtle);
   border-right: 1px solid var(--border-color);
   position: sticky;
   top: 0;
@@ -421,7 +425,7 @@ const formatWebRating = (rating) => {
   padding: 6px;
   background: var(--primary-color);
   margin-bottom: 1.5rem;
-  box-shadow: 0 15px 30px rgba(138, 43, 226, 0.2);
+  box-shadow: var(--shadow-brand-glow);
   position: relative;
   cursor: pointer;
   overflow: hidden;
@@ -432,13 +436,13 @@ const formatWebRating = (rating) => {
   height: 100%;
   object-fit: cover;
   border-radius: 50%;
-  border: 4px solid white;
+  border: 4px solid var(--color-brand-primary-soft);
 }
 
 .sidebar-initial {
   width: 100%;
   height: 100%;
-  background: #f8fafc;
+  background: var(--color-surface-secondary);
   color: var(--primary-color);
   border-radius: 50%;
   display: flex;
@@ -451,13 +455,13 @@ const formatWebRating = (rating) => {
 .image-edit-overlay {
   position: absolute;
   inset: 6px;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-background-overlay-soft);
   border-radius: 50%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--color-text-on-brand);
   opacity: 0;
   transition: opacity 0.3s;
   font-size: 0.8rem;
@@ -471,7 +475,7 @@ const formatWebRating = (rating) => {
 .image-loading-overlay {
   position: absolute;
   inset: 6px;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-text-on-image-secondary);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -532,16 +536,16 @@ const formatWebRating = (rating) => {
 }
 
 .bio-content {
-  background: #f8fafc;
+  background: var(--color-surface-primary);
   padding: 10px 0;
   border-radius: 16px;
-  border: 1px solid #edf2f7;
+  /* border: 1px solid var(--color-border-subtle); */
 }
 
 .bio-text {
   font-size: 0.875rem;
   line-height: 1.6;
-  color: #4a5568;
+  color: var(--color-text-muted);
   margin: 0 0 1rem 0;
 }
 
@@ -603,19 +607,19 @@ const formatWebRating = (rating) => {
   background: transparent;
   border-radius: 16px;
   padding: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--color-border-on-image);
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
-  color: white;
+  color: var(--color-text-on-brand);
   z-index: 1;
 }
 
 .book-card-horizontal:hover {
   transform: translateY(-4px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-border-on-image-strong);
 }
 
 .book-card-bg-container {
@@ -638,7 +642,7 @@ const formatWebRating = (rating) => {
 .book-bg-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(15, 23, 42, 0.5) 100%);
+  background: var(--gradient-image-card-overlay);
 }
 
 .book-cover {
@@ -646,14 +650,14 @@ const formatWebRating = (rating) => {
   aspect-ratio: 2/3;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-cover);
   flex-shrink: 0;
   position: relative;
   transition: all 0.3s ease;
 }
 
 .book-card-horizontal:hover .book-cover {
-  box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-cover-hover);
 }
 
 .book-cover img {
@@ -670,7 +674,7 @@ const formatWebRating = (rating) => {
 .cover-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(15, 23, 42, 0.4) 0%, rgba(15, 23, 42, 0.1) 50%, rgba(15, 23, 42, 0.8) 100%);
+  background: var(--gradient-cover-action-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -684,13 +688,13 @@ const formatWebRating = (rating) => {
 }
 
 .play-btn {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--color-surface-on-image-hover);
   backdrop-filter: blur(4px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--color-border-on-image-strong);
   border-radius: 50%;
   width: 44px;
   height: 44px;
-  color: white;
+  color: var(--color-text-on-brand);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -700,8 +704,8 @@ const formatWebRating = (rating) => {
 
 .play-btn:hover {
   transform: scale(1.1);
-  background: #8A2BE2;
-  border-color: #8A2BE2;
+  background: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
 }
 
 .book-info-minimal {
@@ -716,19 +720,19 @@ const formatWebRating = (rating) => {
 .book-title {
   font-size: 1.15rem;
   font-weight: 500;
-  color: #ffffff;
+  color: var(--color-surface-primary);
   margin: 0 0 0.25rem 0;
   line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  text-shadow: var(--shadow-text-on-image);
 }
 
 .book-series-text {
   font-size: 0.8rem;
-  color: #E6E6FA;
+  color: var(--color-brand-lavender);
   margin: 0 0 0.25rem 0;
   white-space: nowrap;
   overflow: hidden;
@@ -741,8 +745,8 @@ const formatWebRating = (rating) => {
   align-items: center;
   gap: 0.25rem;
   font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-on-image-muted);
+  background: var(--color-border-on-image);
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
   margin-bottom: 0.75rem;
@@ -754,7 +758,7 @@ const formatWebRating = (rating) => {
   gap: 1rem;
   margin-top: auto;
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--color-surface-glass);
 }
 
 .meta-item-simple {
@@ -764,18 +768,18 @@ const formatWebRating = (rating) => {
 }
 
 .meta-item-simple i {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--color-text-on-image-subtle);
 }
 
 .star-icon {
-  color: #fbbf24 !important;
+  color: var(--color-status-star) !important;
 }
 
 /* Modal Styles */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--color-background-overlay-faint);
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
@@ -784,13 +788,13 @@ const formatWebRating = (rating) => {
 }
 
 .choice-modal {
-  background: white;
+  background: var(--color-surface-primary);
   padding: 2.5rem;
   border-radius: 24px;
   width: 90%;
   max-width: 450px;
   text-align: center;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-modal);
 }
 
 .choice-modal h3 {
@@ -817,8 +821,8 @@ const formatWebRating = (rating) => {
   align-items: center;
   gap: 0.75rem;
   padding: 1.5rem 1rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 16px;
   cursor: pointer;
   transition: all 0.2s;
@@ -826,9 +830,9 @@ const formatWebRating = (rating) => {
 
 .choice-btn:hover {
   border-color: var(--primary-color);
-  background: white;
+  background: var(--color-surface-primary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(138, 43, 226, 0.1);
+  box-shadow: 0 4px 12px var(--color-brand-primary-faint);
 }
 
 .choice-btn i {
@@ -873,7 +877,7 @@ const formatWebRating = (rating) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--color-surface-glass);
   backdrop-filter: blur(4px);
   padding: 2.5rem;
   z-index: 2000;
@@ -881,21 +885,16 @@ const formatWebRating = (rating) => {
 
 .mini-skeleton,
 .bio-skeleton {
-  position: relative;
-  overflow: hidden;
   display: block;
-  background: linear-gradient(135deg, #ece9e3, #f8fafc);
-  border: 1px solid rgba(214, 210, 202, 0.72);
-}
-
-.mini-skeleton::after,
-.bio-skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-120%);
-  background: linear-gradient(100deg, transparent 25%, rgba(255, 255, 255, 0.42) 48%, transparent 72%);
-  animation: inline-skeleton-shimmer 2.4s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-color, var(--color-skeleton-base)) 25%,
+    var(--skeleton-shimmer, var(--color-skeleton-shimmer)) 37%,
+    var(--skeleton-color, var(--color-skeleton-base)) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
 }
 
 .mini-skeleton.circle {
@@ -921,9 +920,13 @@ const formatWebRating = (rating) => {
   width: 52%;
 }
 
-@keyframes inline-skeleton-shimmer {
-  0% { transform: translateX(-120%); }
-  52%, 100% { transform: translateX(120%); }
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 @media (max-width: 1024px) {
@@ -945,7 +948,7 @@ const formatWebRating = (rating) => {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--color-background-overlay-faint);
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
@@ -954,7 +957,7 @@ const formatWebRating = (rating) => {
 }
 
 .picker-modal {
-  background: white;
+  background: var(--color-surface-primary);
   padding: 2.5rem;
   border-radius: 24px;
   width: 90%;
@@ -962,9 +965,9 @@ const formatWebRating = (rating) => {
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-modal);
   animation: modalSlideUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
-  color: #111827;
+  color: var(--color-text-primary);
 }
 
 @keyframes modalSlideUp {
@@ -980,12 +983,12 @@ const formatWebRating = (rating) => {
 .picker-header h3 {
   font-size: 1.75rem;
   font-weight: 400;
-  color: #111827;
+  color: var(--color-text-primary);
   margin-bottom: 0.5rem;
 }
 
 .picker-header p {
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .picker-loader {
@@ -994,7 +997,7 @@ const formatWebRating = (rating) => {
 }
 
 .picker-loader span {
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-size: 1rem;
 }
 
@@ -1014,17 +1017,17 @@ const formatWebRating = (rating) => {
 }
 
 .picker-grid::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--color-surface-tertiary);
   border-radius: 10px;
 }
 
 .picker-grid::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--color-border-strong);
   border-radius: 10px;
 }
 
 .picker-grid::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--color-text-subtle);
 }
 
 .picker-item {
@@ -1035,14 +1038,14 @@ const formatWebRating = (rating) => {
   border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-control-subtle);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  background: #f8fafc;
+  background: var(--color-surface-secondary);
 }
 
 .picker-item:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 20px rgba(138, 43, 226, 0.25);
+  box-shadow: var(--shadow-brand-button-hover);
 }
 
 .picker-item img {
@@ -1058,11 +1061,11 @@ const formatWebRating = (rating) => {
 .picker-item-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(138, 43, 226, 0.4);
+  background: var(--color-brand-primary-muted);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--color-text-on-brand);
   font-size: 2.5rem;
   opacity: 0;
   transition: opacity 0.3s;
@@ -1076,13 +1079,13 @@ const formatWebRating = (rating) => {
   display: flex;
   justify-content: center;
   padding-top: 1.5rem;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--color-surface-tertiary);
 }
 
 .modal-close-btn {
   background: none;
   border: none;
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-size: 1rem;
   font-weight: 500;
   cursor: pointer;

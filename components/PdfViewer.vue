@@ -336,15 +336,15 @@ watch(() => props.textContent, updateHighlights)
 .pdf-page-wrap {
   position: relative;
   flex: 0 0 auto;
-  background: #ffffff;
+  background: var(--color-surface-primary);
   border-radius: 3px;
   overflow: hidden;
-  box-shadow: 0 2px 24px rgba(0, 0, 0, 0.13);
+  box-shadow: var(--shadow-reader-page);
 }
 
 .pdf-canvas {
   display: block;
-  background: #ffffff;
+  background: var(--color-surface-primary);
 }
 
 .pdf-highlight-layer {
@@ -355,9 +355,9 @@ watch(() => props.textContent, updateHighlights)
 
 .pdf-highlight {
   position: absolute;
-  background: rgba(255, 213, 79, 0.42);
+  background: var(--color-reader-highlight);
   border-radius: 2px;
-  box-shadow: 0 0 0 1px rgba(236, 179, 0, 0.2);
+  box-shadow: 0 0 0 1px var(--color-reader-highlight-border);
   mix-blend-mode: multiply;
 }
 
@@ -368,7 +368,7 @@ watch(() => props.textContent, updateHighlights)
   align-items: center;
   gap: 1rem;
   padding: 4rem 0;
-  color: #6b7280;
+  color: var(--color-text-muted);
   text-align: center;
 }
 

@@ -66,12 +66,12 @@ const getGenreIcon = (genre) => {
 
 const getGenreStyle = (genre) => {
   const gradients = [
-    "linear-gradient(135deg, #8A2BE2 0%, #3a6073 100%)",
-    "linear-gradient(135deg, #74ebd5 0%, #9face6 100%)",
-    "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-    "linear-gradient(135deg, #5ee7df 0%, #b490ca 100%)",
-    "linear-gradient(135deg, #c31432 0%, #240b36 100%)",
-    "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)"
+    "var(--gradient-genre-aurora)",
+    "var(--gradient-genre-seafoam)",
+    "var(--gradient-genre-rose)",
+    "var(--gradient-genre-mint)",
+    "var(--gradient-genre-noir)",
+    "var(--gradient-genre-forest)"
   ];
   
   // Use a hash of the genre name to pick a stable gradient
@@ -100,12 +100,12 @@ const getGenreStyle = (genre) => {
 .genres-title {
   font-size: 1.5rem;
   font-weight: 400;
-  color: #8A2BE2;
+  color: var(--color-brand-primary);
   margin: 0;
 }
 
 .genres-count {
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   font-weight: normal;
 }
 
@@ -126,12 +126,12 @@ const getGenreStyle = (genre) => {
   overflow: hidden;
   cursor: pointer;
   transition: all 0.3s ease;
-  color: white;
+  color: var(--color-text-on-brand);
 }
 
 .genre-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .genre-icon {
@@ -162,7 +162,7 @@ const getGenreStyle = (genre) => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 100%);
+  background: linear-gradient(to top, var(--color-background-overlay-faint) 0%, transparent 100%);
   z-index: 1;
 }
 
@@ -171,8 +171,8 @@ const getGenreStyle = (genre) => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.875rem 1.5rem;
-  background: linear-gradient(135deg, #8A2BE2 0%, #6A0DAD 100%);
-  color: white;
+  background: var(--gradient-brand-primary);
+  color: var(--color-text-on-brand);
   border-radius: 0.5rem;
   font-weight: 400;
   text-decoration: none;
@@ -181,6 +181,6 @@ const getGenreStyle = (genre) => {
 
 .add-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 6px -1px rgba(138, 43, 226, 0.4);
+  box-shadow: 0 4px 6px -1px var(--shadow-brand-glow);
 }
 </style>

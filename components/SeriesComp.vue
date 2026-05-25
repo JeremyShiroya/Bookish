@@ -91,12 +91,12 @@ const getStackStyle = (index) => {
 .series-title {
   font-size: 1.5rem;
   font-weight: 400;
-  color: #8A2BE2;
+  color: var(--color-brand-primary);
   margin: 0;
 }
 
 .series-count {
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   font-weight: normal;
   font-size: 1.25rem;
 }
@@ -135,8 +135,8 @@ const getStackStyle = (index) => {
   height: 100%;
   border-radius: 0.75rem;
   overflow: hidden;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  background: #f3f4f6;
+  box-shadow: var(--shadow-card-hover);
+  background: var(--color-surface-muted);
   transition: all 0.4s ease;
 }
 
@@ -156,8 +156,8 @@ const getStackStyle = (index) => {
 }
 
 .placeholder-cover {
-  background: #f9fafb;
-  border: 2px dashed #d1d5db;
+  background: var(--color-surface-secondary);
+  border: 2px dashed var(--color-border-strong);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -165,7 +165,7 @@ const getStackStyle = (index) => {
 }
 
 .placeholder-content {
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   font-size: 2.5rem;
   opacity: 0.5;
 }
@@ -177,17 +177,17 @@ const getStackStyle = (index) => {
 .series-name {
   font-size: 1.25rem;
   font-weight: 400;
-  color: #233447;
+  color: var(--color-text-secondary);
   margin: 0 0 0.25rem 0;
 }
 
 .series-card:hover .series-name {
-  color: #8A2BE2;
+  color: var(--color-brand-primary);
 }
 
 .series-author {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin: 0 0 1rem 0;
 }
 
@@ -198,8 +198,8 @@ const getStackStyle = (index) => {
 .book-count {
   font-size: 0.75rem;
   font-weight: 400;
-  color: #8A2BE2;
-  background: #F8F8FF;
+  color: var(--color-brand-primary);
+  background: var(--color-surface-active);
   padding: 0.25rem 0.75rem;
   border-radius: 1rem;
   display: flex;
@@ -212,8 +212,8 @@ const getStackStyle = (index) => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.875rem 1.5rem;
-  background: linear-gradient(135deg, #8A2BE2 0%, #6A0DAD 100%);
-  color: white;
+  background: var(--gradient-brand-primary);
+  color: var(--color-text-on-brand);
   border-radius: 0.5rem;
   font-weight: 400;
   text-decoration: none;
@@ -222,6 +222,6 @@ const getStackStyle = (index) => {
 
 .add-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 6px -1px rgba(138, 43, 226, 0.4);
+  box-shadow: 0 4px 6px -1px var(--shadow-brand-glow);
 }
 </style>

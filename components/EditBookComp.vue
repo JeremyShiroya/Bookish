@@ -47,11 +47,22 @@
         </div>
       </div>
 
+      <CoverImageModal
+        :visible="showCoverModal"
+        :mode="coverModalMode"
+        :loading="isSearchingCovers"
+        :images="coverOptions"
+        @close="closeCoverModal"
+        @upload="triggerCoverInput"
+        @search="searchBookCovers"
+        @select="selectBookCover"
+      />
+
       <form @submit.prevent="handleUpdateBook" class="add-form">
         <!-- Media Section -->
         <div class="media-column">
           <!-- Cover Upload -->
-          <div class="cover-container" @click="triggerCoverInput">
+          <div class="cover-container" @click="openCoverModal">
             <img v-if="coverPreview || editBook.cover" :src="coverPreview || editBook.cover" alt="Book Cover" class="cover-image" />
             <div v-else class="cover-placeholder">
               <i class="ri-image-add-line"></i>
@@ -241,6 +252,8 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
+import { useCoverImageCache } from '~/composables/useCoverImageCache'
+import CoverImageModal from './CoverImageModal.vue'
 
 const props = defineProps({
   bookId: {
@@ -252,6 +265,7 @@ const props = defineProps({
 const router = useRouter()
 const { fetchBookById, updateBook, books } = useBooks()
 const { addToast } = useToast()
+const { cacheCoverImage } = useCoverImageCache()
 
 const editBook = ref({
   title: '',
@@ -278,8 +292,25 @@ const coverInput = ref(null)
 const showMetadataModal = ref(false)
 const isFetchingMetadata = ref(false)
 const metadataResults = ref([])
+const showCoverModal = ref(false)
+const coverModalMode = ref('choice')
+const isSearchingCovers = ref(false)
+const coverOptions = ref([])
 
-const triggerCoverInput = () => coverInput.value.click()
+const openCoverModal = () => {
+  coverModalMode.value = 'choice'
+  showCoverModal.value = true
+}
+
+const closeCoverModal = () => {
+  showCoverModal.value = false
+  coverModalMode.value = 'choice'
+}
+
+const triggerCoverInput = () => {
+  closeCoverModal()
+  coverInput.value?.click()
+}
 
 const goBack = () => {
   router.push('/books')
@@ -321,6 +352,42 @@ const handleCoverChange = (event) => {
   }
 }
 
+const searchBookCovers = async () => {
+  if (!editBook.value.title) {
+    addToast('Enter a title before searching for covers.', 'error')
+    return
+  }
+
+  coverModalMode.value = 'picker'
+  isSearchingCovers.value = true
+  coverOptions.value = []
+
+  try {
+    const query = new URLSearchParams()
+    query.append('title', editBook.value.title)
+    if (editBook.value.author) query.append('author', editBook.value.author)
+
+    const response = await fetch(`/api/books/search-covers?${query.toString()}`)
+    const data = await response.json()
+    coverOptions.value = data.images || []
+    if (!coverOptions.value.length) {
+      addToast('No cover images found on the web.', 'error')
+    }
+  } catch (error) {
+    console.error('Failed to search covers:', error)
+    addToast('Failed to search for cover images.', 'error')
+  } finally {
+    isSearchingCovers.value = false
+  }
+}
+
+const selectBookCover = async (imageUrl) => {
+  const cachedCover = await cacheCoverImage(imageUrl)
+  editBook.value.cover = cachedCover
+  coverPreview.value = cachedCover
+  closeCoverModal()
+}
+
 const fetchMetadata = async () => {
   if (!editBook.value.title) return;
   
@@ -350,7 +417,7 @@ const fetchMetadata = async () => {
   }
 }
 
-const selectMetadata = (result) => {
+const selectMetadata = async (result) => {
   editBook.value.title = result.title || editBook.value.title;
   editBook.value.author = result.author || editBook.value.author;
   editBook.value.blurb = result.blurb || editBook.value.blurb;
@@ -361,8 +428,9 @@ const selectMetadata = (result) => {
   editBook.value.genre = result.genre || editBook.value.genre;
   
   if (result.cover) {
-    editBook.value.cover = result.cover;
-    coverPreview.value = result.cover;
+    const cachedCover = await cacheCoverImage(result.cover);
+    editBook.value.cover = cachedCover;
+    coverPreview.value = cachedCover;
   }
   
   showMetadataModal.value = false;
@@ -373,9 +441,11 @@ const handleUpdateBook = async () => {
   if (isUpdating.value) return
   
   isUpdating.value = true;
+  const cachedCover = await cacheCoverImage(editBook.value.cover);
 
   const bookToUpdate = {
-    ...editBook.value
+    ...editBook.value,
+    cover: cachedCover || editBook.value.cover,
   }
   
   if (!bookToUpdate.series || bookToUpdate.series.trim() === '') {
@@ -412,30 +482,30 @@ const handleUpdateBook = async () => {
 .page-header h1 {
   font-size: 1.5rem;
   font-weight: 400;
-  color: #0f172a;
+  color: var(--color-text-primary);
   margin: 0 0 0.5rem 0;
   letter-spacing: -0.02em;
 }
 
 .subtitle {
   font-size: 1rem;
-  color: #64748b;
+  color: var(--color-text-muted);
   margin: 0;
 }
 
 .btn-cancel {
   padding: 0.75rem 1.5rem;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-weight: 400;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn-cancel:hover {
-  background: #f8fafc;
+  background: var(--color-surface-secondary);
 }
 
 .loading-state {
@@ -455,11 +525,11 @@ const handleUpdateBook = async () => {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 3rem;
-  background: #ffffff;
+  background: var(--color-surface-primary);
   padding: 2.5rem;
   border-radius: 20px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: var(--shadow-form-shell);
 }
 
 .media-column {
@@ -472,8 +542,8 @@ const handleUpdateBook = async () => {
   width: 100%;
   aspect-ratio: 2 / 3;
   border-radius: 12px;
-  background: #f8fafc;
-  border: 2px dashed #e2e8f0;
+  background: var(--color-surface-secondary);
+  border: 2px dashed var(--color-border-subtle);
   position: relative;
   overflow: hidden;
   cursor: pointer;
@@ -484,8 +554,8 @@ const handleUpdateBook = async () => {
 }
 
 .cover-container:hover {
-  border-color: #8A2BE2;
-  background: #f3e8ff;
+  border-color: var(--color-brand-primary);
+  background: var(--color-surface-active);
 }
 
 .cover-placeholder {
@@ -493,7 +563,7 @@ const handleUpdateBook = async () => {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .cover-placeholder i {
@@ -514,12 +584,12 @@ const handleUpdateBook = async () => {
 .cover-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--color-background-overlay-strong);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--color-text-on-brand);
   opacity: 0;
   transition: opacity 0.2s;
   gap: 0.5rem;
@@ -535,8 +605,8 @@ const handleUpdateBook = async () => {
 
 .info-card {
   padding: 1.25rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -553,13 +623,13 @@ const handleUpdateBook = async () => {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #94a3b8;
+  color: var(--color-text-subtle);
   font-weight: 400;
 }
 
 .info-value {
   font-size: 0.95rem;
-  color: #0f172a;
+  color: var(--color-text-primary);
 }
 
 .details-column {
@@ -573,8 +643,8 @@ const handleUpdateBook = async () => {
   align-items: center;
   justify-content: space-between;
   padding: 1.25rem;
-  background: linear-gradient(to right, #f3e8ff, #ffffff);
-  border: 1px solid #8A2BE2;
+  background: var(--gradient-brand-soft);
+  border: 1px solid var(--color-brand-primary);
   border-radius: 12px;
   margin-bottom: 0.5rem;
 }
@@ -587,7 +657,7 @@ const handleUpdateBook = async () => {
 
 .fetch-info i {
   font-size: 2rem;
-  color: #8A2BE2;
+  color: var(--color-brand-primary);
 }
 
 .web-review-label {
@@ -609,30 +679,30 @@ const handleUpdateBook = async () => {
 .fetch-info strong {
   display: block;
   font-size: 1rem;
-  color: #0f172a;
+  color: var(--color-text-primary);
 }
 
 .fetch-info p {
   margin: 0;
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .btn-fetch {
   padding: 0.75rem 1.5rem;
-  background: #8A2BE2;
-  color: white;
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
   border: none;
   border-radius: 8px;
   font-weight: 400;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 6px -1px rgba(138, 43, 226, 0.3);
+  box-shadow: var(--shadow-brand-button);
 }
 
 .btn-fetch:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 10px -1px rgba(138, 43, 226, 0.3);
+  box-shadow: var(--shadow-brand-button-hover);
 }
 
 .form-row {
@@ -650,24 +720,24 @@ const handleUpdateBook = async () => {
 .form-group label {
   font-size: 0.9rem;
   font-weight: 400;
-  color: #0f172a;
+  color: var(--color-text-primary);
   display: flex;
   align-items: center;
   gap: 0.25rem;
 }
 
 .required {
-  color: #ef4444;
+  color: var(--color-status-danger-bright);
 }
 
 .form-input {
   width: 100%;
   padding: 0.85rem 1rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
   font-size: 0.95rem;
-  color: #0f172a;
+  color: var(--color-text-primary);
   transition: all 0.2s;
   font-family: inherit;
 }
@@ -679,9 +749,9 @@ const handleUpdateBook = async () => {
 
 .form-input:focus {
   outline: none;
-  background: #ffffff;
-  border-color: #8A2BE2;
-  box-shadow: 0 0 0 3px #f3e8ff;
+  background: var(--color-surface-primary);
+  border-color: var(--color-brand-primary);
+  box-shadow: var(--shadow-focus-ring);
 }
 
 .select-wrapper {
@@ -699,7 +769,7 @@ const handleUpdateBook = async () => {
   right: 1rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #64748b;
+  color: var(--color-text-muted);
   pointer-events: none;
 }
 
@@ -717,33 +787,33 @@ const handleUpdateBook = async () => {
 
 .rating-star {
   font-size: 1.75rem;
-  color: #d1d5db;
+  color: var(--color-border-strong);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .rating-star:hover,
 .rating-star.active {
-  color: #fbbf24;
+  color: var(--color-status-star);
   transform: scale(1.1);
 }
 
 .rating-display {
   font-size: 1.1rem;
-  color: #475569;
+  color: var(--color-text-secondary);
   font-weight: 400;
-  background: #f1f5f9;
+  background: var(--color-surface-tertiary);
   padding: 0.25rem 0.75rem;
   border-radius: 20px;
 }
 
 .readonly-review {
   padding: 1rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
   font-size: 0.95rem;
-  color: #334155;
+  color: var(--color-text-secondary);
   line-height: 1.5;
 }
 
@@ -752,7 +822,7 @@ const handleUpdateBook = async () => {
   justify-content: flex-end;
   margin-top: 1.5rem;
   padding-top: 2rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .btn-primary {
@@ -760,20 +830,20 @@ const handleUpdateBook = async () => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.85rem 2rem;
-  background: linear-gradient(135deg, #8A2BE2 0%, #6A0DAD 100%);
+  background: var(--gradient-brand-primary);
   border: none;
   border-radius: 10px;
-  color: white;
+  color: var(--color-text-on-brand);
   font-weight: 400;
   font-size: 1rem;
   cursor: pointer;
-  box-shadow: 0 4px 6px -1px rgba(138, 43, 226, 0.3);
+  box-shadow: var(--shadow-brand-button);
   transition: all 0.2s;
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 12px -1px rgba(138, 43, 226, 0.3);
+  box-shadow: var(--shadow-brand-button-hover);
 }
 
 .btn-primary:disabled {
@@ -788,7 +858,7 @@ const handleUpdateBook = async () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--color-background-overlay-strong);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -797,24 +867,24 @@ const handleUpdateBook = async () => {
 }
 
 .metadata-modal-container {
-  background: white;
+  background: var(--color-surface-primary);
   border-radius: 20px;
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
   overflow-y: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-modal);
 }
 
 .metadata-modal-header {
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--color-surface-tertiary);
   display: flex;
   justify-content: space-between;
   align-items: center;
   position: sticky;
   top: 0;
-  background: white;
+  background: var(--color-surface-primary);
   z-index: 1;
 }
 
@@ -829,7 +899,7 @@ const handleUpdateBook = async () => {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .metadata-results {
@@ -843,15 +913,15 @@ const handleUpdateBook = async () => {
   display: flex;
   gap: 1.5rem;
   padding: 1rem;
-  border: 1px solid #f1f5f9;
+  border: 1px solid var(--color-surface-tertiary);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .metadata-card:hover {
-  background: #f8fafc;
-  border-color: #8A2BE2;
+  background: var(--color-surface-secondary);
+  border-color: var(--color-brand-primary);
 }
 
 .metadata-cover {
@@ -867,19 +937,19 @@ const handleUpdateBook = async () => {
 }
 
 .metadata-author {
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 0.9rem;
   margin: 0 0 0.25rem 0;
 }
 
 .metadata-year {
   font-size: 0.85rem;
-  color: #94a3b8;
+  color: var(--color-text-subtle);
 }
 
 .metadata-loading, .metadata-empty {
   padding: 1.5rem;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 768px) {

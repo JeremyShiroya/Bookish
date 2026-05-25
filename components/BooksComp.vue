@@ -186,12 +186,26 @@
 
     <!-- Loading State -->
     <div v-if="loading" class="books-loading">
-      <SkeletonLoader variant="books-grid" :count="6" />
+      <SkeletonLoader variant="books-grid" :count="12" />
     </div>
 
     <!-- Books Content -->
     <div v-else class="books-content">
-      <div v-if="books.length > 0">
+      <EmptyState
+        v-if="error && books.length === 0"
+        title="Library could not load"
+        :description="error"
+        icon="ri-error-warning-line"
+      >
+        <template #action>
+          <button class="add-book-btn" @click="retryLoadLibrary">
+            <i class="ri-refresh-line"></i>
+            Retry
+          </button>
+        </template>
+      </EmptyState>
+
+      <div v-else-if="books.length > 0">
         <!-- Grid View -->
         <div v-if="viewMode === 'grid'" class="books-grid">
           <div
@@ -342,12 +356,14 @@ import DeleteConfirmModal from "./DeleteConfirmModal.vue";
 
 import { useBooks } from "~/composables/useBooks";
 import { useTTS } from "~/composables/useTTS";
+import { useBookishSettings } from "~/composables/useBookishSettings";
 
 // Reactive data
 import EmptyState from "./EmptyState.vue";
 
-const { books, loading, updateBook, deleteBook: removeBookFromStore, addBook, toggleFavourite, fetchAllData } = useBooks();
+const { books, loading, error, updateBook, deleteBook: removeBookFromStore, addBook, toggleFavourite, fetchAllData } = useBooks();
 const { play: playTTS, ttsBook, ttsStatus } = useTTS()
+const { settings, updateSettings } = useBookishSettings();
 
 const isBookActive = (book) =>
   ttsBook.value?.id === book.id && ttsStatus.value !== 'idle'
@@ -362,11 +378,11 @@ const router = useRouter();
 const readingStatuses = ["Unread", "Reading", "Completed"];
 
 // Filter states
-const sortBy = ref("name");
-const sortDirection = ref("asc");
+const sortBy = ref(settings.value.librarySort);
+const sortDirection = ref(settings.value.librarySort === "rating" ? "desc" : "asc");
 const selectedStatus = ref("all");
 const selectedRating = ref("all");
-const viewMode = ref("grid");
+const viewMode = ref(settings.value.libraryView);
 
 // Dropdown states
 const activeDropdown = ref(null);
@@ -422,6 +438,7 @@ const toggleActionsMenu = (bookId) => {
 
 const setSortBy = (value) => {
   sortBy.value = value;
+  updateSettings({ librarySort: value });
   // When switching to rating sort, default to Good - Bad (desc)
   if (value === "rating" && sortDirection.value === "asc") {
     sortDirection.value = "desc";
@@ -446,9 +463,12 @@ const setRating = (value) => {
 
 const setViewMode = (mode) => {
   viewMode.value = mode;
+  updateSettings({ libraryView: mode });
 };
 
-
+const retryLoadLibrary = () => {
+  fetchAllData(true);
+};
 
 
 
@@ -468,12 +488,20 @@ const resolveBookCover = (book) => {
 }
 
 const generateCoverPlaceholder = (title) => {
-  const colors = ['#8A2BE2', '#6A0DAD', '#9370DB', '#BA55D3', '#DDA0DD']
+  const colors = getThemeCssVars([
+    { name: '--color-book-cover-placeholder-one', fallback: '#8A2BE2' },
+    { name: '--color-book-cover-placeholder-two', fallback: '#6A0DAD' },
+    { name: '--color-book-cover-placeholder-three', fallback: '#9370DB' },
+    { name: '--color-book-cover-placeholder-four', fallback: '#BA55D3' },
+    { name: '--color-book-cover-placeholder-five', fallback: '#DDA0DD' },
+  ])
   const hash = [...title].reduce((acc, c) => acc + c.charCodeAt(0), 0)
   const color = colors[hash % colors.length]
   const initial = title.trim()[0]?.toUpperCase() || '?'
-  const displayTitle = title.length > 18 ? title.substring(0, 18) + '…' : title
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="130" font-family="serif" font-size="100" fill="rgba(255,255,255,0.25)" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="rgba(255,255,255,0.65)" text-anchor="middle">${displayTitle}</text></svg>`
+  const displayTitle = title.length > 18 ? `${title.substring(0, 18)}...` : title
+  const softText = getThemeCssVar('--color-book-cover-placeholder-text-soft', 'rgba(255,255,255,0.25)')
+  const strongText = getThemeCssVar('--color-book-cover-placeholder-text-strong', 'rgba(255,255,255,0.65)')
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="130" font-family="serif" font-size="100" fill="${softText}" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="${strongText}" text-anchor="middle">${displayTitle}</text></svg>`
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
@@ -529,12 +557,12 @@ onUnmounted(() => {
 .books-title {
   font-size: 1.5rem;
   font-weight: 400;;
-  color: #000;
+  color: var(--color-brand-primary);
   margin: 0 0 1.5rem 0;
 }
 
 .books-count {
-  color: #999;
+  color: var(--color-text-subtle);
   font-weight: 400;;
 }
 
@@ -561,18 +589,18 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
-  background: white;
-  color: #6b7280;
+  background: var(--color-surface-primary);
+  color: var(--color-text-muted);
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .filter-button:hover {
-  border-color: #76aeef;
-  background: #f9fafb;
+  border-color: var(--color-brand-primary);
+  background: var(--color-surface-secondary);
 }
 
 .add-book-btn {
@@ -582,19 +610,19 @@ onUnmounted(() => {
   padding: 0.5rem 1.25rem;
   border: none;
   border-radius: 10px;
-  background: linear-gradient(135deg, #8A2BE2 0%, #6A0DAD 100%);
-  color: white;
+  background:var(--color-brand-primary);
+  color: var(--color-text-on-brand);
   font-size: 0.875rem;
   font-weight: 400;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 10px rgba(138, 43, 226, 0.2);
+  box-shadow: var(--shadow-brand-glow);
 }
 
 .add-book-btn:hover {
-  background: linear-gradient(135deg, #6A0DAD 0%, #4a6f85 100%);
+  background:var(--color-brand-primary-hover);
   transform: translateY(-2px);
-  box-shadow: 0 6px 15px rgba(138, 43, 226, 0.3);
+  box-shadow: var(--shadow-brand-button-hover);
 }
 
 .add-book-btn i {
@@ -605,10 +633,10 @@ onUnmounted(() => {
   position: absolute;
   top: 100%;
   left: 0;
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-card-hover);
   z-index: 50;
   min-width: 200px;
   margin-top: 0.25rem;
@@ -621,7 +649,7 @@ onUnmounted(() => {
 .dropdown-section h4 {
   font-size: 0.75rem;
   font-weight: 400;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin: 0 0 0.5rem 0;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -638,12 +666,12 @@ onUnmounted(() => {
 }
 
 .dropdown-option:hover {
-  background: #f3f4f6;
+  background: var(--color-surface-muted);
 }
 
 .dropdown-option.active {
-  background: #F8F8FF;
-  color: #2563eb;
+  background: var(--color-surface-active);
+  color: var(--color-brand-primary);
 }
 
 .dropdown-option i {
@@ -653,7 +681,7 @@ onUnmounted(() => {
 
 .dropdown-divider {
   height: 1px;
-  background: #e5e7eb;
+  background: var(--color-border-subtle);
   margin: 0.5rem 0;
 }
 
@@ -665,33 +693,33 @@ onUnmounted(() => {
 
 .view-label {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .toggle-buttons {
   display: flex;
-  border: 1px solid #e5e7eb;
-  border-radius: 20px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
   overflow: hidden;
 }
 
 .toggle-button {
   padding: 0.5rem 1rem;
   border: none;
-  background: white;
-  color: #6b7280;
+  background: var(--color-surface-primary);
+  color: var(--color-text-muted);
   font-size: 18px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .toggle-button:hover {
-  background: #f3f4f6;
+  background: var(--color-surface-muted);
 }
 
 .toggle-button.active {
-  background: #E6E6FA;
-  color: #233447;
+  background: var(--color-brand-lavender);
+  color: var(--color-text-secondary);
 }
 
 .books-grid {
@@ -708,21 +736,21 @@ onUnmounted(() => {
   background: transparent;
   border-radius: 16px;
   padding: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--color-border-on-image);
   cursor: pointer;
   width: 100%;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-card-subtle);
   position: relative;
   overflow: hidden;
-  color: white;
+  color: var(--color-text-on-brand);
   z-index: 1;
 }
 
 .book-card.horizontal:hover {
   transform: translateY(-4px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-border-on-image-strong);
 }
 
 .book-card-bg-container {
@@ -754,7 +782,7 @@ onUnmounted(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(15, 23, 42, 0.5) 100%);
+  background: var(--gradient-image-card-overlay);
 }
 
 .book-cover {
@@ -762,21 +790,21 @@ onUnmounted(() => {
   aspect-ratio: 2/3;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-cover);
   flex-shrink: 0;
   transition: all 0.3s ease;
   position: relative;
 }
 
 .book-card.horizontal:hover .book-cover {
-  box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-cover-hover);
 }
 
 /* Overlay & Icons Styles */
 .cover-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(15, 23, 42, 0.4) 0%, rgba(15, 23, 42, 0.1) 50%, rgba(15, 23, 42, 0.8) 100%);
+  background: var(--gradient-cover-action-overlay);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -795,9 +823,9 @@ onUnmounted(() => {
 }
 
 .play-btn {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--color-surface-on-image-hover);
   backdrop-filter: blur(4px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--color-border-on-image-strong);
   border-radius: 50%;
   width: 44px;
   height: 44px;
@@ -809,20 +837,20 @@ onUnmounted(() => {
 }
 
 .play-btn i {
-  color: #fff;
+  color: var(--color-text-on-brand);
   font-size: 20px;
   margin-left: 2px; /* Optical centering */
 }
 
 .play-btn:hover {
   transform: scale(1.1);
-  background: #8A2BE2;
-  border-color: #8A2BE2;
+  background: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
 }
 
 .play-btn.active {
-  background: #8A2BE2;
-  border-color: #8A2BE2;
+  background: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
   opacity: 1;
 }
 
@@ -849,19 +877,19 @@ onUnmounted(() => {
 .book-title {
   font-size: 1.15rem;
   font-weight: 500;
-  color: #ffffff;
+  color: var(--color-surface-primary);
   margin: 0 0 0.25rem 0;
   line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  text-shadow: var(--shadow-text-on-image);
 }
 
 .book-author {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--color-text-on-image-secondary);
   margin: 0 0 0.25rem 0;
   white-space: nowrap;
   overflow: hidden;
@@ -870,7 +898,7 @@ onUnmounted(() => {
 
 .book-series {
   font-size: 0.8rem;
-  color: #E6E6FA;
+  color: var(--color-brand-lavender);
   margin: 0 0 0.25rem 0;
   white-space: nowrap;
   overflow: hidden;
@@ -882,8 +910,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.25rem;
   font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-on-image-muted);
+  background: var(--color-border-on-image);
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
   margin-bottom: 0.75rem;
@@ -895,7 +923,7 @@ onUnmounted(() => {
   gap: 1rem;
   margin-top: auto;
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--color-surface-glass);
 }
 
 .meta-item {
@@ -905,7 +933,7 @@ onUnmounted(() => {
 }
 
 .meta-item i {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--color-text-on-image-subtle);
 }
 
 .goodreads-svg {
@@ -922,23 +950,23 @@ onUnmounted(() => {
 }
 
 .meta-item .star-icon {
-  color: #fbbf24;
+  color: var(--color-status-star);
 }
 
 .progress-meta i {
-  color: #E6E6FA;
+  color: var(--color-brand-lavender);
 }
 
 .book-actions {
   display: flex;
   gap: 0.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--color-border-on-image);
   padding-top: 0.75rem;
 }
 
 .action-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-border-on-image);
+  border: 1px solid var(--color-border-on-image);
   border-radius: 8px;
   width: 34px;
   height: 34px;
@@ -946,29 +974,29 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--color-text-on-image-secondary);
   transition: all 0.2s ease;
 }
 
 .action-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.4);
+  background: var(--color-surface-on-image-hover);
+  color: var(--color-surface-primary);
+  border-color: var(--color-border-on-image-strong);
 }
 
 .action-btn i.active,
 .action-btn i.ri-heart-fill {
-  color: #ef4444;
+  color: var(--color-status-danger-bright);
 }
 
 .action-btn:hover i.active {
-  color: #dc2626;
+  color: var(--color-status-danger);
 }
 
 .action-btn.delete:hover {
-  background: #fef2f2;
-  color: #ef4444;
-  border-color: #fecaca;
+  background: var(--color-status-danger-soft);
+  color: var(--color-status-danger-bright);
+  border-color: var(--color-status-danger-border);
 }
 
 .books-list {
@@ -982,14 +1010,14 @@ onUnmounted(() => {
   align-items: center;
   gap: 1.25rem;
   padding: 0.75rem 1rem;
-  background: #fafafa;
+  background: var(--color-surface-secondary);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .list-row:hover {
-  background: #f0f4f8;
+  background: var(--color-surface-tertiary);
   transform: translateX(4px);
 }
 
@@ -1009,7 +1037,7 @@ onUnmounted(() => {
 .list-title {
   font-size: 0.9rem;
   font-weight: 400;
-  color: #1f2937;
+  color: var(--color-text-primary);
   margin: 0 0 0.15rem 0;
   white-space: nowrap;
   overflow: hidden;
@@ -1018,7 +1046,7 @@ onUnmounted(() => {
 
 .list-author {
   font-size: 0.78rem;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -1032,7 +1060,7 @@ onUnmounted(() => {
 
 .list-series {
   font-size: 0.8rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1049,21 +1077,21 @@ onUnmounted(() => {
 .list-progress-bar {
   flex: 1;
   height: 6px;
-  background: #e5e7eb;
+  background: var(--color-border-subtle);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .list-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #8A2BE2, #B19CD9);
+  background: var(--gradient-library-progress);
   border-radius: 3px;
   transition: width 0.3s ease;
 }
 
 .list-progress-text {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
   min-width: 32px;
   text-align: right;
 }
@@ -1075,19 +1103,19 @@ onUnmounted(() => {
   width: 50px;
   flex-shrink: 0;
   font-size: 0.85rem;
-  color: #374151;
+  color: var(--color-text-secondary);
 }
 
 .list-star {
-  color: #fbbf24;
+  color: var(--color-status-star);
   font-size: 0.9rem;
 }
 
 .list-format {
   font-size: 0.7rem;
   font-weight: 400;
-  color: #8A2BE2;
-  background: rgba(138, 43, 226, 0.1);
+  color: var(--color-brand-primary);
+  background: var(--color-brand-primary-faint);
   padding: 0.2rem 0.6rem;
   border-radius: 4px;
   width: 50px;
@@ -1113,7 +1141,7 @@ onUnmounted(() => {
   height: 32px;
   border: none;
   background: transparent;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   cursor: pointer;
   border-radius: 8px;
   font-size: 0.95rem;
@@ -1124,17 +1152,17 @@ onUnmounted(() => {
 }
 
 .list-action-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--color-border-subtle);
+  color: var(--color-text-secondary);
 }
 
 .list-action-btn.active {
-  color: #ef4444;
+  color: var(--color-status-danger-bright);
 }
 
 .list-action-btn.delete:hover {
-  background: #fef2f2;
-  color: #dc2626;
+  background: var(--color-status-danger-soft);
+  color: var(--color-status-danger);
 }
 
 @media (max-width: 768px) {

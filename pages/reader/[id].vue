@@ -149,12 +149,14 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useBooks } from '~/composables/useBooks'
 import { stripHtml, splitToChunks, useTTS } from '~/composables/useTTS'
 import { useBookStorage } from '~/composables/useBookStorage'
+import { useBookishSettings } from '~/composables/useBookishSettings'
 import { extractPdfTocFromSource } from '~/composables/usePdfExtractor'
 
 const route = useRoute()
 const router = useRouter()
 const { books, fetchBookById, updateBook } = useBooks()
 const { getBookContent, saveBookContent } = useBookStorage()
+const { settings, updateSettings } = useBookishSettings()
 const { ttsBook, ttsChunkIdx, ttsCurrentChunk, ttsStatus } = useTTS()
 
 const MIN_ZOOM = 0.5
@@ -174,8 +176,8 @@ const pdfTocChecked = ref(false)
 const tocLoading = ref(false)
 const pdfSource = ref(null)
 
-const zoomLevel = ref(1.0)
-const readerTheme = ref('light')
+const zoomLevel = ref(settings.value.readerZoom)
+const readerTheme = ref(settings.value.readerTheme)
 const tocOpen = ref(false)
 const currentChapterIdx = ref(0)
 const currentPdfPage = ref(1)
@@ -345,6 +347,7 @@ function observeChapters() {
 const zoomIn = async () => {
   if (zoomLevel.value >= MAX_ZOOM) return
   zoomLevel.value = Math.round((zoomLevel.value + 0.1) * 10) / 10
+  updateSettings({ readerZoom: zoomLevel.value })
   await nextTick()
   updateBookEdge()
 }
@@ -352,12 +355,14 @@ const zoomIn = async () => {
 const zoomOut = async () => {
   if (zoomLevel.value <= MIN_ZOOM) return
   zoomLevel.value = Math.round((zoomLevel.value - 0.1) * 10) / 10
+  updateSettings({ readerZoom: zoomLevel.value })
   await nextTick()
   updateBookEdge()
 }
 
 const toggleTheme = () => {
   readerTheme.value = readerTheme.value === 'light' ? 'dark' : 'light'
+  updateSettings({ readerTheme: readerTheme.value })
 }
 
 function onKeydown(event) {
@@ -706,33 +711,33 @@ onUnmounted(async () => {
 
 <style scoped>
 .reader-page.light {
-  --bg: #eceae4;
-  --page-bg: #ffffff;
-  --page-shadow: 0 2px 24px rgba(0, 0, 0, 0.13);
-  --topbar-bg: #ffffff;
-  --topbar-border: #e0ddd7;
-  --text: #1a1a1a;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --btn-hover: #f3f4f6;
-  --sidebar-bg: #ffffff;
-  --toc-active: #f3f0ff;
-  --toc-color: #8A2BE2;
+  --bg: var(--color-reader-light-background);
+  --page-bg: var(--color-reader-light-page);
+  --page-shadow: var(--shadow-reader-page);
+  --topbar-bg: var(--color-reader-light-toolbar);
+  --topbar-border: var(--color-reader-light-border);
+  --text: var(--color-reader-light-text);
+  --muted: var(--color-reader-light-muted);
+  --border: var(--color-border-subtle);
+  --btn-hover: var(--color-reader-light-button-hover);
+  --sidebar-bg: var(--color-reader-light-toolbar);
+  --toc-active: var(--color-reader-light-toc-active);
+  --toc-color: var(--color-brand-primary);
 }
 
 .reader-page.dark {
-  --bg: #18171c;
-  --page-bg: #27262d;
-  --page-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
-  --topbar-bg: #1e1d24;
-  --topbar-border: #3a3940;
-  --text: #e4e4e7;
-  --muted: #a1a1aa;
-  --border: #3a3940;
-  --btn-hover: #2e2d36;
-  --sidebar-bg: #1e1d24;
-  --toc-active: #2d1f42;
-  --toc-color: #a855f7;
+  --bg: var(--color-reader-dark-background);
+  --page-bg: var(--color-reader-dark-page);
+  --page-shadow: var(--shadow-reader-page);
+  --topbar-bg: var(--color-reader-dark-toolbar);
+  --topbar-border: var(--color-reader-dark-border);
+  --text: var(--color-reader-dark-text);
+  --muted: var(--color-reader-dark-muted);
+  --border: var(--color-reader-dark-border);
+  --btn-hover: var(--color-reader-dark-button-hover);
+  --sidebar-bg: var(--color-reader-dark-toolbar);
+  --toc-active: var(--color-reader-dark-toc-active);
+  --toc-color: var(--color-brand-primary);
 }
 
 .reader-page {
@@ -758,7 +763,7 @@ onUnmounted(async () => {
   height: 48px;
   background: var(--topbar-bg);
   border-bottom: 1px solid var(--topbar-border);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-card-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -871,7 +876,7 @@ onUnmounted(async () => {
     transform 0.24s ease,
     opacity 0.16s ease,
     visibility 0s linear 0.24s;
-  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-card-raised);
 }
 
 .toc-sidebar.open {
@@ -991,7 +996,7 @@ onUnmounted(async () => {
 }
 
 .cover-artwork {
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-cover);
   border-radius: 3px;
   overflow: hidden;
   max-width: 300px;
@@ -1041,9 +1046,9 @@ onUnmounted(async () => {
 }
 
 .chapter-content :deep(.tts-active) {
-  background: rgba(255, 213, 79, 0.48);
+  background: var(--color-reader-highlight);
   border-radius: 3px;
-  box-shadow: 0 0 0 1px rgba(236, 179, 0, 0.2);
+  box-shadow: 0 0 0 1px var(--color-reader-highlight-border);
   transition: background 0.2s;
 }
 
@@ -1124,12 +1129,12 @@ onUnmounted(async () => {
 
 .state-error i {
   font-size: 3rem;
-  color: #ef4444;
+  color: var(--color-status-danger-bright);
 }
 
 .btn-primary {
-  background: #8A2BE2;
-  color: #fff;
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
   border: none;
   padding: 0.6rem 1.25rem;
   border-radius: 8px;
@@ -1139,7 +1144,7 @@ onUnmounted(async () => {
 }
 
 .btn-primary:hover {
-  background: #7B1FD9;
+  background: var(--color-brand-primary-hover);
 }
 
 @media (max-width: 768px) {

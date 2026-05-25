@@ -20,7 +20,7 @@
         >
           <i
             :class="ttsBook.isFavourite ? 'ri-heart-fill' : 'ri-heart-line'"
-            :style="{ color: ttsBook.isFavourite ? '#ef4444' : '' }"
+            :style="{ color: ttsBook.isFavourite ? 'var(--color-status-danger)' : '' }"
           ></i>
         </button>
       </template>
@@ -212,12 +212,20 @@ const toggleMute = () => {
 }
 
 const generateCoverPlaceholder = (title) => {
-  const colors = ['#8A2BE2', '#6A0DAD', '#9370DB', '#BA55D3', '#DDA0DD']
+  const colors = getThemeCssVars([
+    { name: '--color-book-cover-placeholder-one', fallback: '#8A2BE2' },
+    { name: '--color-book-cover-placeholder-two', fallback: '#6A0DAD' },
+    { name: '--color-book-cover-placeholder-three', fallback: '#9370DB' },
+    { name: '--color-book-cover-placeholder-four', fallback: '#BA55D3' },
+    { name: '--color-book-cover-placeholder-five', fallback: '#DDA0DD' },
+  ])
   const hash = [...title].reduce((acc, c) => acc + c.charCodeAt(0), 0)
   const color = colors[hash % colors.length]
   const initial = title.trim()[0]?.toUpperCase() || '?'
   const displayTitle = title.length > 18 ? `${title.substring(0, 18)}...` : title
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="130" font-family="serif" font-size="100" fill="rgba(255,255,255,0.25)" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="rgba(255,255,255,0.65)" text-anchor="middle">${displayTitle}</text></svg>`
+  const softText = getThemeCssVar('--color-book-cover-placeholder-text-soft', 'rgba(255,255,255,0.25)')
+  const strongText = getThemeCssVar('--color-book-cover-placeholder-text-strong', 'rgba(255,255,255,0.65)')
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="130" font-family="serif" font-size="100" fill="${softText}" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="${strongText}" text-anchor="middle">${displayTitle}</text></svg>`
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
@@ -239,14 +247,14 @@ const coverFallback = (event, title) => {
   width: 100%;
   box-sizing: border-box;
   height: 90px;
-  background: #ffffff;
-  border-top: 1px solid #e5e7eb;
+  background: var(--color-surface-primary);
+  border-top: 1px solid var(--color-border-subtle);
   padding: 0 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   z-index: 1000;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-card-subtle);
   overflow: hidden;
 }
 
@@ -255,7 +263,7 @@ const coverFallback = (event, title) => {
   background: transparent;
   border: none;
   cursor: pointer;
-  color: #8A2BE2;
+  color: var(--color-brand-primary);
   width: 34px;
   height: 34px;
   padding: 0;
@@ -267,7 +275,7 @@ const coverFallback = (event, title) => {
 }
 
 .icon-btn {
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-size: 1.1rem;
 }
 
@@ -281,8 +289,8 @@ const coverFallback = (event, title) => {
 
 .icon-btn:hover:not(:disabled),
 .transport-btn:hover:not(:disabled) {
-  color: #6A0DAD;
-  background: #f3f0ff;
+  color: var(--color-brand-primary-hover);
+  background: var(--color-brand-primary-soft);
 }
 
 .transport-btn:hover:not(:disabled) {
@@ -310,7 +318,7 @@ const coverFallback = (event, title) => {
   border-radius: 4px;
   overflow: hidden;
   flex-shrink: 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-control-subtle);
 }
 
 .album-art img {
@@ -327,7 +335,7 @@ const coverFallback = (event, title) => {
 .track-title {
   font-size: 0.875rem;
   font-weight: 400;
-  color: #111827;
+  color: var(--color-text-primary);
   margin: 0 0 2px;
   white-space: nowrap;
   overflow: hidden;
@@ -336,7 +344,7 @@ const coverFallback = (event, title) => {
 
 .artist-name {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -347,7 +355,7 @@ const coverFallback = (event, title) => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   font-size: 0.875rem;
 }
 
@@ -356,7 +364,7 @@ const coverFallback = (event, title) => {
 }
 
 .like-btn:hover:not(:disabled) {
-  color: #ef4444 !important;
+  color: var(--color-status-danger) !important;
 }
 
 .player-controls {
@@ -378,7 +386,7 @@ const coverFallback = (event, title) => {
 
 .play-btn {
   background: transparent;
-  color: #6A0DAD;
+  color: var(--color-brand-primary-hover);
   border: none;
   border-radius: 50%;
   width: 44px;
@@ -393,8 +401,8 @@ const coverFallback = (event, title) => {
 }
 
 .play-btn:hover:not(:disabled) {
-  background: #f3f0ff;
-  color: #4c0887;
+  background: var(--color-brand-primary-soft);
+  color: var(--color-brand-primary-hover);
   transform: scale(1.04);
 }
 
@@ -428,11 +436,11 @@ const coverFallback = (event, title) => {
 
 .voice-select {
   font-size: 0.7rem;
-  color: #6b7280;
-  border: 1px solid #e5e7eb;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 4px;
   padding: 3px 4px;
-  background: white;
+  background: var(--color-surface-primary);
   cursor: pointer;
   max-width: 100px;
   white-space: nowrap;
@@ -455,7 +463,7 @@ const coverFallback = (event, title) => {
   position: relative;
   width: 70px;
   height: 4px;
-  background: #e5e7eb;
+  background: var(--color-border-subtle);
   border-radius: 2px;
   cursor: pointer;
 }
@@ -477,13 +485,13 @@ const coverFallback = (event, title) => {
   top: 0;
   left: 0;
   height: 100%;
-  background: #8A2BE2;
+  background: var(--color-brand-primary);
   border-radius: 2px;
   pointer-events: none;
 }
 
 .volume-slider-wrapper:hover .volume-fill {
-  background: #6A0DAD;
+  background: var(--color-brand-primary-hover);
 }
 
 .spinner {

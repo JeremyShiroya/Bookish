@@ -1,619 +1,993 @@
 <template>
-  <div class="settings-wrapper">
-    <!-- Settings Sidebar -->
-    <aside class="settings-sidebar">
-      <div class="sidebar-header">
-        <h1 class="main-title">Settings</h1>
+  <main class="settings-page">
+    <section class="settings-hero" aria-labelledby="settings-title">
+      <div>
+        <span class="eyebrow">Bookish Settings</span>
+        <h1 id="settings-title">Tune Bookish for your reading flow.</h1>
+        <p>Reader defaults, library sorting, audiobook playback, metadata, and local storage in one place.</p>
       </div>
-      <nav class="settings-nav">
-        <a 
-          v-for="section in sections" 
-          :key="section.id"
-          :href="'#' + section.id"
-          class="nav-link"
-          :class="{ active: activeSection === section.id }"
-          @click.prevent="scrollToSection(section.id)"
+      <div class="hero-covers" aria-hidden="true">
+        <div
+          v-for="(book, index) in coverPreviewBooks"
+          :key="book.id"
+          class="hero-cover"
+          :style="coverStyle(index)"
         >
-          <i :class="section.icon"></i>
-          <span>{{ section.title }}</span>
-        </a>
-      </nav>
-    </aside>
+          <img :src="resolveBookCover(book)" :alt="book.title" @error="(event) => coverFallback(event, book.title)" />
+        </div>
+        <div v-if="!coverPreviewBooks.length" class="hero-cover placeholder-cover">
+          <i class="ri-book-open-line"></i>
+        </div>
+      </div>
+    </section>
 
-    <!-- Settings Content -->
-    <div class="settings-content" ref="contentArea" @scroll="handleScroll">
-      
-      <!-- Profile Section -->
-      <section id="profile" class="settings-card">
-        <div class="card-header">
-          <div class="header-icon profile-icon">
-            <i class="ri-user-smile-line"></i>
-          </div>
-          <div class="header-text">
-            <h2>Profile</h2>
-            <p>Manage your account presence and personal info.</p>
+    <section class="stats-grid" aria-label="Library snapshot">
+      <div v-for="stat in libraryStats" :key="stat.label" class="stat-item">
+        <i :class="stat.icon"></i>
+        <div>
+          <strong>{{ stat.value }}</strong>
+          <span>{{ stat.label }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-grid" aria-label="Settings controls">
+      <article id="reading" class="settings-panel">
+        <div class="panel-heading">
+          <i class="ri-book-read-line"></i>
+          <div>
+            <h2>Reading</h2>
+            <p>Defaults for EPUB and PDF sessions.</p>
           </div>
         </div>
-        
-        <div class="profile-preview">
-          <div class="avatar-large">
-            <div class="avatar-inner">J</div>
-            <button class="change-avatar">
-              <i class="ri-camera-line"></i>
+
+        <div class="setting-row">
+          <div class="setting-copy">
+            <h3>App theme</h3>
+            <p>Switch Bookish between light and dark mode.</p>
+          </div>
+          <div class="segmented-control" aria-label="App theme">
+            <button
+              v-for="theme in readerThemes"
+              :key="theme.value"
+              :class="{ active: settings.readerTheme === theme.value }"
+              @click="setReaderTheme(theme.value)"
+            >
+              <i :class="theme.icon"></i>
+              <span>{{ theme.label }}</span>
             </button>
           </div>
-          <div class="profile-info">
-            <div class="field-group">
-              <label>Full Name</label>
-              <div class="field-row">
-                <input type="text" value="Jeremy" readonly />
-                <button class="field-edit"><i class="ri-pencil-line"></i></button>
-              </div>
-            </div>
-            <div class="field-group">
-              <label>Email Address</label>
-              <div class="field-row">
-                <input type="email" value="jeremy@example.com" readonly />
-                <button class="field-edit"><i class="ri-lock-line"></i></button>
-              </div>
-            </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-copy">
+            <h3>Default zoom</h3>
+            <p>{{ Math.round(settings.readerZoom * 100) }}% when opening a book.</p>
+          </div>
+          <div class="range-control">
+            <i class="ri-subtract-line"></i>
+            <input
+              type="range"
+              min="0.5"
+              max="2.5"
+              step="0.1"
+              :value="settings.readerZoom"
+              @input="setReaderZoom($event.target.value)"
+            />
+            <i class="ri-add-line"></i>
           </div>
         </div>
-      </section>
+      </article>
 
-      <!-- Appearance Section -->
-      <section id="appearance" class="settings-card">
-        <div class="card-header">
-          <div class="header-icon theme-icon">
-            <i class="ri-palette-line"></i>
-          </div>
-          <div class="header-text">
-            <h2>Appearance</h2>
-            <p>Make the library feel like your own.</p>
+      <article id="audio" class="settings-panel">
+        <div class="panel-heading">
+          <i class="ri-headphone-line"></i>
+          <div>
+            <h2>Audio</h2>
+            <p>Read-aloud defaults for the player bar.</p>
           </div>
         </div>
 
         <div class="setting-row">
-          <div class="setting-label">
-            <h3>App Theme</h3>
-            <p>Switch between light, purple, and dark modes.</p>
+          <div class="setting-copy">
+            <h3>Narrator voice</h3>
+            <p>{{ currentVoiceName }}</p>
           </div>
-          <div class="theme-grid">
-            <div v-for="theme in themes" :key="theme.name" class="theme-option" :class="{ selected: currentTheme === theme.name }" @click="currentTheme = theme.name">
-              <div class="theme-stack" :style="{ background: theme.bg }">
-                <div class="stack-sidebar" :style="{ background: theme.side }"></div>
-                <div class="stack-item" :style="{ background: theme.accent }"></div>
-              </div>
-              <span>{{ theme.name }}</span>
-            </div>
+          <div class="select-wrap">
+            <select :value="settings.ttsVoice" @change="setAudioVoice($event.target.value)">
+              <option v-for="voice in ttsVoices" :key="voice.id" :value="voice.id">
+                {{ voice.name }}
+              </option>
+            </select>
+            <i class="ri-arrow-down-s-line"></i>
           </div>
         </div>
 
         <div class="setting-row">
-          <div class="setting-label">
-            <h3>Reading Interface</h3>
-            <p>Adjust the font and sizing for the reader.</p>
+          <div class="setting-copy">
+            <h3>Playback speed</h3>
+            <p>{{ settings.ttsSpeed }}x default speed.</p>
           </div>
-          <div class="font-controls">
-            <button class="font-btn">Aa</button>
-            <div class="range-slider">
-              <input type="range" min="12" max="24" value="16" />
-            </div>
-            <button class="font-btn large">Aa</button>
+          <div class="chip-group" aria-label="Playback speed">
+            <button
+              v-for="speed in speedOptions"
+              :key="speed"
+              :class="{ active: settings.ttsSpeed === speed }"
+              @click="setAudioSpeed(speed)"
+            >
+              {{ speed === 1 ? '1x' : `${speed}x` }}
+            </button>
           </div>
         </div>
-      </section>
 
-      <!-- Library Section -->
-      <section id="library" class="settings-card">
-        <div class="card-header">
-          <div class="header-icon library-icon">
-            <i class="ri-book-read-line"></i>
+        <div class="setting-row">
+          <div class="setting-copy">
+            <h3>Volume</h3>
+            <p>{{ Math.round(settings.ttsVolume * 100) }}% player volume.</p>
           </div>
-          <div class="header-text">
+          <div class="range-control">
+            <i class="ri-volume-down-line"></i>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              :value="settings.ttsVolume"
+              @input="setAudioVolume($event.target.value)"
+            />
+            <i class="ri-volume-up-line"></i>
+          </div>
+        </div>
+      </article>
+
+      <article id="library" class="settings-panel">
+        <div class="panel-heading">
+          <i class="ri-archive-line"></i>
+          <div>
             <h2>Library</h2>
-            <p>Control your data and sync preferences.</p>
+            <p>How the Books page opens by default.</p>
           </div>
         </div>
 
         <div class="setting-row">
-          <div class="setting-label">
-            <div class="label-with-icon">
-              <i class="ri-refresh-line"></i>
-              <h3>Auto-Sync</h3>
-            </div>
-            <p>Sync your progress across all devices instantly.</p>
+          <div class="setting-copy">
+            <h3>Default view</h3>
+            <p>{{ settings.libraryView === 'grid' ? 'Cover-rich grid' : 'Compact table' }}</p>
           </div>
-          <label class="premium-switch">
-            <input type="checkbox" checked />
-            <span class="p-slider"></span>
-          </label>
+          <div class="segmented-control" aria-label="Library view">
+            <button :class="{ active: settings.libraryView === 'grid' }" @click="setLibraryView('grid')">
+              <i class="ri-apps-2-line"></i>
+              <span>Grid</span>
+            </button>
+            <button :class="{ active: settings.libraryView === 'table' }" @click="setLibraryView('table')">
+              <i class="ri-list-unordered"></i>
+              <span>Table</span>
+            </button>
+          </div>
         </div>
 
         <div class="setting-row">
-          <div class="setting-label">
-            <div class="label-with-icon">
-              <i class="ri-download-cloud-line"></i>
-              <h3>Offline Storage</h3>
-            </div>
-            <p>Always keep your recent books available offline.</p>
+          <div class="setting-copy">
+            <h3>Default sort</h3>
+            <p>{{ settings.librarySort === 'name' ? 'Alphabetical by title' : 'Highest rating first' }}</p>
           </div>
-          <label class="premium-switch">
-            <input type="checkbox" />
-            <span class="p-slider"></span>
+          <div class="chip-group" aria-label="Library sort">
+            <button :class="{ active: settings.librarySort === 'name' }" @click="setLibrarySort('name')">
+              Name
+            </button>
+            <button :class="{ active: settings.librarySort === 'rating' }" @click="setLibrarySort('rating')">
+              Rating
+            </button>
+          </div>
+        </div>
+
+        <div class="format-strip" v-if="formatStats.length">
+          <div v-for="format in formatStats" :key="format.name" class="format-pill">
+            <span>{{ format.name }}</span>
+            <strong>{{ format.count }}</strong>
+          </div>
+        </div>
+      </article>
+
+      <article id="metadata" class="settings-panel">
+        <div class="panel-heading">
+          <i class="ri-file-search-line"></i>
+          <div>
+            <h2>Metadata</h2>
+            <p>Covers, blurbs, authors, series, genres, and web ratings.</p>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-copy">
+            <h3>Auto-fill preference</h3>
+            <p>{{ settings.metadataAutoFill ? 'Prefer fetched metadata while adding books.' : 'Keep metadata fetches manual.' }}</p>
+          </div>
+          <label class="switch-control">
+            <input
+              type="checkbox"
+              :checked="settings.metadataAutoFill"
+              @change="setMetadataAutoFill($event.target.checked)"
+            />
+            <span></span>
           </label>
         </div>
-      </section>
 
-      <!-- About Section -->
-      <section id="about" class="settings-card about-card">
-        <div class="about-logo">
-          <img src="/Images/Logo.png" alt="Logo" />
-          <h1>Bookish</h1>
-          <p>Version 1.2.0 • Build 42</p>
+        <div class="metadata-snapshot">
+          <div>
+            <strong>{{ booksWithCovers }}</strong>
+            <span>books with covers</span>
+          </div>
+          <div>
+            <strong>{{ booksWithWebReviews }}</strong>
+            <span>web ratings saved</span>
+          </div>
+          <div>
+            <strong>{{ genres.length }}</strong>
+            <span>genres indexed</span>
+          </div>
         </div>
-        <div class="about-links">
-          <a href="#">Support Center</a>
-          <a href="#">Release Notes</a>
-          <a href="#">Privacy Policy</a>
-        </div>
-        <p class="copyright">© 2026 Bookish. Made with ❤️ for readers.</p>
-      </section>
+      </article>
 
-    </div>
-  </div>
+      <article id="storage" class="settings-panel">
+        <div class="panel-heading">
+          <i class="ri-database-2-line"></i>
+          <div>
+            <h2>Storage</h2>
+            <p>Read-only status for locally stored book content.</p>
+          </div>
+        </div>
+
+        <div class="storage-grid">
+          <div class="storage-metric">
+            <span>Readable records</span>
+            <strong>{{ storageSummary.contentCount }}</strong>
+          </div>
+          <div class="storage-metric">
+            <span>PDF sources</span>
+            <strong>{{ storageSummary.sourceCount }}</strong>
+          </div>
+          <div class="storage-metric">
+            <span>Estimated size</span>
+            <strong>{{ formattedStorageSize }}</strong>
+          </div>
+        </div>
+
+        <div class="storage-status-line" :class="{ warning: !storageSummary.available }">
+          <i :class="storageSummary.available ? 'ri-shield-check-line' : 'ri-error-warning-line'"></i>
+          <span>{{ storageMessage }}</span>
+          <button class="icon-action" title="Refresh storage status" @click="refreshStorageSummary">
+            <i :class="storageLoading ? 'ri-loader-4-line spin' : 'ri-refresh-line'"></i>
+          </button>
+        </div>
+      </article>
+    </section>
+
+    <section class="about-section" aria-labelledby="about-title">
+      <img src="/Images/Logo.png" alt="Bookish" class="about-logo" />
+      <h2 id="about-title">Bookish</h2>
+      <p>Version 1.2.0 • Build 42</p>
+      <nav class="about-links" aria-label="Bookish links">
+        <a href="#">Support Center</a>
+        <a href="#">Release Notes</a>
+        <a href="#">Privacy Policy</a>
+      </nav>
+      <small>© 2026 Bookish. Made with <i class="ri-heart-fill heart-icon"></i> for readers.</small>
+    </section>
+  </main>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { computed, onMounted, ref } from 'vue'
+import { useBooks } from '~/composables/useBooks'
+import { useBookishSettings } from '~/composables/useBookishSettings'
+import { useBookStorage } from '~/composables/useBookStorage'
+import { useTTS } from '~/composables/useTTS'
 
-const activeSection = ref("profile");
-const currentTheme = ref("purple");
-const contentArea = ref(null);
+const { books, authors, collections, genres, recentlyAddedBooks } = useBooks()
+const { settings, updateSettings } = useBookishSettings()
+const { getStorageSummary } = useBookStorage()
+const { ttsVoices, setSpeed, setVolume, setVoice } = useTTS()
 
-const sections = [
-  { id: "profile", title: "Profile", icon: "ri-user-line" },
-  { id: "appearance", title: "Appearance", icon: "ri-palette-line" },
-  { id: "library", title: "Library", icon: "ri-book-read-line" },
-  { id: "about", title: "About", icon: "ri-information-line" }
-];
+const storageLoading = ref(false)
+const storageSummary = ref({
+  available: true,
+  contentCount: 0,
+  sourceCount: 0,
+  totalBytes: 0,
+  error: null,
+})
 
-const themes = [
-  { name: "Light", bg: "#f9fafb", side: "#ffffff", accent: "#3b82f6" },
-  { name: "purple", bg: "#F8F8FF", side: "#E6E6FA", accent: "#8A2BE2" },
-  { name: "Dark", bg: "#1f2937", side: "#111827", accent: "#60a5fa" }
-];
+const readerThemes = [
+  { value: 'light', label: 'Light', icon: 'ri-sun-line' },
+  { value: 'dark', label: 'Dark', icon: 'ri-moon-line' },
+]
 
-const scrollToSection = (id) => {
-  activeSection.value = id;
-  const el = document.getElementById(id);
-  if (el) {
-    el.scrollIntoView({ behavior: "smooth" });
+const speedOptions = [0.75, 1, 1.25, 1.5, 2]
+
+const coverPreviewBooks = computed(() => recentlyAddedBooks.value.slice(0, 3))
+
+const statusCounts = computed(() => {
+  return books.value.reduce((counts, book) => {
+    const status = book.status || 'Unread'
+    counts[status] = (counts[status] || 0) + 1
+    return counts
+  }, {})
+})
+
+const booksWithCovers = computed(() => books.value.filter(book => !!book.cover).length)
+const booksWithWebReviews = computed(() => books.value.filter(book => !!book.webReview).length)
+
+const libraryStats = computed(() => [
+  { label: 'Books', value: books.value.length, icon: 'ri-book-open-line' },
+  { label: 'Authors', value: authors.value.length, icon: 'ri-group-line' },
+  { label: 'Collections', value: collections.value.length, icon: 'ri-archive-line' },
+  { label: 'Reading', value: statusCounts.value.Reading || 0, icon: 'ri-bookmark-3-line' },
+  { label: 'Finished', value: statusCounts.value.Completed || statusCounts.value.Read || 0, icon: 'ri-checkbox-circle-line' },
+])
+
+const formatStats = computed(() => {
+  const counts = books.value.reduce((result, book) => {
+    const format = (book.format || 'unknown').toUpperCase()
+    result[format] = (result[format] || 0) + 1
+    return result
+  }, {})
+
+  return Object.entries(counts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+})
+
+const currentVoiceName = computed(() => {
+  return ttsVoices.value.find(voice => voice.id === settings.value.ttsVoice)?.name || 'Default narrator'
+})
+
+const formattedStorageSize = computed(() => formatBytes(storageSummary.value.totalBytes))
+
+const storageMessage = computed(() => {
+  if (!storageSummary.value.available) {
+    return storageSummary.value.error || 'Bookish cannot inspect local storage right now.'
   }
-};
 
-const handleScroll = () => {
-  const scrollPos = contentArea.value.scrollTop;
-  sections.forEach(s => {
-    const el = document.getElementById(s.id);
-    if (el && el.offsetTop - 100 <= scrollPos) {
-      activeSection.value = s.id;
-    }
-  });
-};
+  if (storageSummary.value.contentCount === 0 && storageSummary.value.sourceCount === 0) {
+    return 'No locally cached reading content yet.'
+  }
+
+  return 'Local reading content is available for the reader and player.'
+})
+
+const refreshStorageSummary = async () => {
+  storageLoading.value = true
+  try {
+    storageSummary.value = await getStorageSummary()
+  } finally {
+    storageLoading.value = false
+  }
+}
+
+const setReaderTheme = (readerTheme) => updateSettings({ readerTheme })
+const setReaderZoom = (value) => updateSettings({ readerZoom: Number(value) })
+
+const setAudioVoice = (ttsVoice) => {
+  updateSettings({ ttsVoice })
+  setVoice(ttsVoice)
+}
+
+const setAudioSpeed = (ttsSpeed) => {
+  updateSettings({ ttsSpeed })
+  setSpeed(ttsSpeed)
+}
+
+const setAudioVolume = (value) => {
+  const ttsVolume = Number(value)
+  updateSettings({ ttsVolume })
+  setVolume(ttsVolume)
+}
+
+const setLibraryView = (libraryView) => updateSettings({ libraryView })
+const setLibrarySort = (librarySort) => updateSettings({ librarySort })
+const setMetadataAutoFill = (metadataAutoFill) => updateSettings({ metadataAutoFill })
+
+const formatBytes = (bytes) => {
+  if (!bytes) return '0 B'
+
+  const units = ['B', 'KB', 'MB', 'GB']
+  let size = bytes
+  let unitIndex = 0
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex += 1
+  }
+
+  return `${size >= 10 || unitIndex === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[unitIndex]}`
+}
+
+const generateCoverPlaceholder = (title) => {
+  const colors = getThemeCssVars([
+    { name: '--color-book-cover-placeholder-one', fallback: '#8A2BE2' },
+    { name: '--color-book-cover-placeholder-two', fallback: '#6A0DAD' },
+    { name: '--color-book-cover-placeholder-three', fallback: '#2f7d62' },
+    { name: '--color-book-cover-placeholder-four', fallback: '#b45309' },
+    { name: '--color-brand-secondary', fallback: '#2563eb' },
+  ])
+  const hash = [...(title || 'Book')].reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  const color = colors[hash % colors.length]
+  const initial = title?.trim()?.[0]?.toUpperCase() || '?'
+  const displayTitle = title && title.length > 18 ? `${title.substring(0, 18)}...` : title || 'Book'
+  const softText = getThemeCssVar('--color-book-cover-placeholder-text-soft', 'rgba(255,255,255,0.24)')
+  const strongText = getThemeCssVar('--color-book-cover-placeholder-text-strong', 'rgba(255,255,255,0.75)')
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="126" font-family="serif" font-size="96" fill="${softText}" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="${strongText}" text-anchor="middle">${displayTitle}</text></svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
+const resolveBookCover = (book) => book.cover || generateCoverPlaceholder(book.title)
+
+const coverFallback = (event, title) => {
+  event.target.src = generateCoverPlaceholder(title)
+}
+
+const coverStyle = (index) => ({
+  transform: `translateX(${(index - 1) * -26}px) rotate(${(index - 1) * -7}deg)`,
+})
+
+onMounted(refreshStorageSummary)
 </script>
 
 <style scoped>
-.settings-wrapper {
+.settings-page {
+  width: 100%;
+  min-width: 0;
   display: flex;
-  height: calc(100vh - 120px); /* Height minus padding and player bar */
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings-hero,
+.settings-panel,
+.stat-item,
+.about-section {
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card-subtle);
+}
+
+.settings-hero {
+  min-height: 220px;
+  padding: 1.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  gap: 1.5rem;
+  align-items: center;
   overflow: hidden;
 }
 
-/* Sidebar Styling */
-.settings-sidebar {
-  width: 220px;
-  padding-right: 2rem;
-  border-right: 1px solid #e5e7eb;
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 0.6rem;
+  border-radius: 999px;
+  background: var(--color-brand-primary-soft);
+  color: var(--color-brand-primary-hover);
+  font-size: 0.74rem;
+  margin-bottom: 0.75rem;
 }
 
-.main-title {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: #233447;
-  margin-bottom: 2rem;
+.settings-hero h1,
+.panel-heading h2,
+.setting-copy h3,
+.about-section h2 {
+  color: var(--color-text-primary);
+  margin: 0;
 }
 
-.settings-nav {
+.settings-hero h1 {
+  max-width: 640px;
+  font-size: clamp(1.7rem, 3vw, 2.5rem);
+  line-height: 1.08;
+}
+
+.settings-hero p,
+.panel-heading p,
+.setting-copy p,
+.stat-item span,
+.metadata-snapshot span,
+.storage-metric span,
+.about-section p,
+.about-section small {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.settings-hero p {
+  max-width: 640px;
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.hero-covers {
+  min-height: 170px;
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
 }
 
-.nav-link {
+.hero-cover {
+  width: 92px;
+  aspect-ratio: 2 / 3;
+  border-radius: 7px;
+  overflow: hidden;
+  box-shadow: var(--shadow-card-raised);
+  margin-left: -16px;
+  background: var(--color-surface-secondary);
+}
+
+.hero-cover:first-child {
+  margin-left: 0;
+}
+
+.hero-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.placeholder-cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-brand-primary);
+  border: 1px dashed var(--color-border-strong);
+  box-shadow: none;
+}
+
+.placeholder-cover i {
+  font-size: 2rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.stat-item {
+  min-height: 78px;
+  padding: 0.9rem;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-radius: 0.75rem;
-  text-decoration: none;
-  color: #6b7280;
-  font-weight: 400;
-  transition: all 0.2s;
 }
 
-.nav-link:hover {
-  background: #f3f4f6;
-  color: #233447;
-}
-
-.nav-link.active {
-  background: #E6E6FA;
-  color: #233447;
-  box-shadow: 0 4px 6px -1px rgba(172, 211, 255, 0.4);
-}
-
-.nav-link i {
-  font-size: 1.25rem;
-}
-
-/* Content Area Styling */
-.settings-content {
-  flex: 1;
-  padding: 0 2rem;
-  overflow-y: auto;
-  scroll-behavior: smooth;
-}
-
-.settings-content::-webkit-scrollbar {
-  width: 6px;
-}
-
-.settings-content::-webkit-scrollbar-thumb {
-  background: #e5e7eb;
-  border-radius: 10px;
-}
-
-/* Card Styling */
-.settings-card {
-  background: white;
-  border-radius: 1.25rem;
-  padding: 2rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.03);
-  border: 1px solid #f3f4f6;
-  transition: transform 0.3s ease;
-}
-
-.settings-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-}
-
-.card-header {
-  display: flex;
-  gap: 1.25rem;
-  align-items: center;
-  margin-bottom: 2rem;
-}
-
-.header-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 1rem;
+.stat-item i,
+.panel-heading > i {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  background: var(--color-brand-primary-soft);
+  color: var(--color-brand-primary);
+  font-size: 1.2rem;
+  flex-shrink: 0;
 }
 
-.profile-icon { background: #fee2e2; color: #ef4444; }
-.theme-icon { background: #dcfce7; color: #22c55e; }
-.library-icon { background: #F8F8FF; color: #3b82f6; }
-
-.header-text h2 {
-  font-size: 1.25rem;
-  font-weight: 400;
-  color: #233447;
-  margin: 0;
-}
-
-.header-text p {
-  color: #9ca3af;
-  font-size: 0.875rem;
-  margin: 0;
-}
-
-/* Profile Section */
-.profile-preview {
-  display: flex;
-  gap: 3rem;
-  align-items: center;
-}
-
-.avatar-large {
-  position: relative;
-}
-
-.avatar-inner {
-  width: 90px;
-  height: 90px;
-  background: #E6E6FA;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2.5rem;
-  font-weight: 400;
-  color: white;
-  box-shadow: 0 10px 15px -3px rgba(172, 211, 255, 0.5);
-}
-
-.change-avatar {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: white;
-  border: 4px solid #f9fafb;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #6b7280;
-}
-
-.profile-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.field-group label {
-  font-size: 0.75rem;
-  font-weight: 400;
-  color: #9ca3af;
-  text-transform: uppercase;
-  margin-bottom: 0.5rem;
+.stat-item strong,
+.metadata-snapshot strong,
+.storage-metric strong {
   display: block;
+  color: var(--color-text-primary);
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
-.field-row {
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  min-width: 0;
+}
+
+.settings-panel {
+  padding: 1.25rem;
+  min-width: 0;
+}
+
+.panel-heading {
   display: flex;
   align-items: center;
-  background: #f9fafb;
-  border-radius: 0.75rem;
-  padding: 0 1rem;
+  gap: 0.85rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border-subtle);
+  min-width: 0;
 }
 
-.field-row input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  padding: 0.75rem 0;
-  font-weight: 400;
-  color: #233447;
+.panel-heading h2 {
+  font-size: 1.1rem;
+}
+
+.panel-heading > div,
+.setting-copy {
+  min-width: 0;
+}
+
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.setting-copy h3 {
+  font-size: 0.96rem;
+  margin-bottom: 0.2rem;
+}
+
+.segmented-control,
+.chip-group {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.segmented-control button,
+.chip-group button {
+  min-height: 36px;
+  border: 1px solid var(--color-border-card);
+  background: var(--color-surface-primary);
+  color: var(--color-text-muted);
+  border-radius: 8px;
+  padding: 0 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.segmented-control button.active,
+.chip-group button.active {
+  background: var(--color-brand-primary-soft);
+  border-color: var(--color-brand-primary);
+  color: var(--color-brand-primary-hover);
+}
+
+.range-control {
+  width: min(280px, 100%);
+  display: grid;
+  grid-template-columns: 20px minmax(120px, 1fr) 20px;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--color-text-muted);
+}
+
+.range-control input {
+  width: 100%;
+  accent-color: var(--color-brand-primary);
+}
+
+.select-wrap {
+  position: relative;
+  width: min(260px, 100%);
+  min-width: 0;
+}
+
+.select-wrap select {
+  width: 100%;
+  min-height: 38px;
+  appearance: none;
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  background: var(--color-surface-primary);
+  color: var(--color-text-primary);
+  padding: 0 2.25rem 0 0.8rem;
   font-family: inherit;
 }
 
-.field-edit {
-  background: transparent;
-  border: none;
-  color: #8A2BE2;
+.select-wrap i {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.format-strip,
+.metadata-snapshot,
+.storage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding-top: 1rem;
+}
+
+.format-pill,
+.metadata-snapshot > div,
+.storage-metric {
+  min-height: 64px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background: var(--color-surface-secondary);
+  padding: 0.8rem;
+}
+
+.format-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.format-pill span {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.format-pill strong {
+  color: var(--color-brand-primary-hover);
+}
+
+.switch-control {
+  position: relative;
+  width: 52px;
+  height: 30px;
+}
+
+.switch-control input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-control span {
+  position: absolute;
+  inset: 0;
+  background: var(--color-border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.switch-control span::before {
+  content: "";
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  left: 4px;
+  top: 4px;
+  border-radius: 50%;
+  background: var(--color-surface-primary);
+  box-shadow: var(--shadow-control-subtle);
+  transition: transform 0.16s ease;
+}
+
+.switch-control input:checked + span {
+  background: var(--color-brand-primary);
+}
+
+.switch-control input:checked + span::before {
+  transform: translateX(22px);
+}
+
+.storage-status-line {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  min-height: 42px;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: var(--color-surface-secondary);
+  color: var(--color-status-success);
+  font-size: 0.85rem;
+}
+
+.storage-status-line.warning {
+  color: var(--color-status-warning);
+}
+
+.icon-action {
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  background: var(--color-surface-primary);
+  color: var(--color-brand-primary-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 
-/* Setting Rows */
-.setting-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 2rem;
-  padding-top: 2rem;
-  border-top: 1px solid #f3f4f6;
-}
-
-.setting-label h3 {
-  font-size: 1rem;
-  font-weight: 400;
-  color: #233447;
-  margin: 0;
-}
-
-.setting-label p {
-  font-size: 0.875rem;
-  color: #9ca3af;
-  margin: 0.25rem 0 0 0;
-}
-
-.label-with-icon {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #8A2BE2;
-}
-
-/* Theme Options */
-.theme-grid {
-  display: flex;
-  gap: 1.5rem;
-}
-
-.theme-option {
+.about-section {
+  min-height: 240px;
+  padding: 2.2rem 1.5rem;
+  text-align: center;
+  background: linear-gradient(135deg, var(--color-surface-primary) 0%, var(--color-surface-secondary) 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  cursor: pointer;
+  justify-content: center;
+  gap: 0.55rem;
 }
 
-.theme-stack {
-  width: 80px;
-  height: 50px;
-  border-radius: 0.5rem;
-  position: relative;
-  overflow: hidden;
-  border: 2px solid transparent;
-  transition: all 0.2s;
+.about-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
 }
 
-.theme-option.selected .theme-stack {
-  border-color: #8A2BE2;
-  box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.2);
+.about-section h2 {
+  font-size: 1.45rem;
+  margin-top: 0.4rem;
 }
 
-.stack-sidebar {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  width: 25%;
-}
-
-.stack-item {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-}
-
-.theme-option span {
-  font-size: 0.75rem;
-  font-weight: 400;
-  color: #6b7280;
-}
-
-/* Custom Controls */
-.font-controls {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  background: #f9fafb;
-  padding: 0.75rem 1.5rem;
-  border-radius: 2rem;
-}
-
-.font-btn {
-  background: transparent;
-  border: none;
-  font-weight: 400;
-  color: #233447;
-  cursor: pointer;
-}
-
-.font-btn.large { font-size: 1.25rem; }
-
-.range-slider input {
-  width: 150px;
-}
-
-/* Premium Switch */
-.premium-switch {
-  position: relative;
-  width: 54px;
-  height: 28px;
-}
-
-.premium-switch input { opacity: 0; width: 0; height: 0; }
-
-.p-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: #e5e7eb;
-  transition: .4s;
-  border-radius: 34px;
-}
-
-.p-slider:before {
-  position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
-  left: 4px;
-  bottom: 4px;
-  background-color: white;
-  transition: .4s;
-  border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-input:checked + .p-slider { background-color: #8A2BE2; }
-input:checked + .p-slider:before { transform: translateX(26px); }
-
-/* About Card */
-.about-card {
-  text-align: center;
-  background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%);
-}
-
-.about-logo img {
-  width: 60px;
-  margin-bottom: 1rem;
-}
-
-.about-logo h1 {
-  font-size: 1.5rem;
-  color: #233447;
-  margin: 0;
-}
-
-.about-logo p {
-  color: #9ca3af;
-  font-size: 0.875rem;
-  margin: 0.5rem 0 2rem 0;
+.heart-icon{
+  color: red;
 }
 
 .about-links {
   display: flex;
   justify-content: center;
   gap: 2rem;
-  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 0.6rem;
 }
 
 .about-links a {
-  color: #8A2BE2;
-  font-weight: 400;
+  color: var(--color-text-primary);
   text-decoration: none;
-  font-size: 0.875rem;
+  font-size: 0.86rem;
 }
 
-.copyright {
-  font-size: 0.75rem;
-  color: #9ca3af;
+.about-links a:hover {
+  color: var(--color-brand-primary-hover);
 }
 
-@media (max-width: 900px) {
-  .settings-wrapper {
-    flex-direction: column;
-    height: auto;
+.spin {
+  display: inline-block;
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1180px) {
+  .stats-grid {
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
   }
-  .settings-sidebar {
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-hero {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+
+  .hero-covers {
+    justify-content: flex-start;
+    min-height: 140px;
+  }
+
+  .stats-grid,
+  .format-strip,
+  .metadata-snapshot,
+  .storage-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .setting-row {
+    grid-template-columns: 1fr;
+  }
+
+  .segmented-control,
+  .chip-group {
+    justify-content: flex-start;
+  }
+
+  .select-wrap,
+  .range-control {
     width: 100%;
-    padding: 0 0 2rem 0;
-    border-right: none;
-    border-bottom: 1px solid #e5e7eb;
-    margin-bottom: 2rem;
   }
-  .settings-nav {
-    flex-direction: row;
-    overflow-x: auto;
-    padding-bottom: 1rem;
+
+  .settings-panel {
+    padding: 1rem;
   }
-  .nav-link {
-    white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .settings-page {
+    gap: 0.75rem;
   }
-  .settings-content {
-    padding: 0;
+
+  .settings-hero,
+  .settings-panel,
+  .stat-item,
+  .about-section {
+    border-radius: 7px;
   }
-  .profile-preview {
-    flex-direction: column;
+
+  .settings-hero,
+  .settings-panel {
+    padding: 0.8rem;
+  }
+
+  .settings-hero h1 {
+    font-size: 1.4rem;
+  }
+
+  .stat-item {
+    min-height: 64px;
+    padding: 0.75rem;
+  }
+
+  .panel-heading {
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+
+  .setting-row {
+    gap: 0.75rem;
+  }
+
+  .segmented-control,
+  .chip-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .chip-group[aria-label="Playback speed"] {
+    grid-template-columns: 1fr;
+  }
+
+  .segmented-control button,
+  .chip-group button {
+    width: 100%;
+    min-width: 0;
+    padding: 0 0.5rem;
+  }
+
+  .range-control {
+    grid-template-columns: 16px minmax(0, 1fr) 16px;
+    gap: 0.35rem;
+  }
+
+  .storage-status-line {
+    align-items: flex-start;
+  }
+
+  .about-section {
+    min-height: 220px;
+    padding: 1.75rem 0.8rem;
+  }
+
+  .about-links {
+    gap: 0.8rem;
   }
 }
 </style>

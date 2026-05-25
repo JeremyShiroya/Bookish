@@ -1,5 +1,6 @@
 import { computed } from 'vue'
 import { useState } from '#app'
+import { useBookishSettings } from '~/composables/useBookishSettings'
 
 let _currentAudio = null
 let _prefetchAudio = null
@@ -206,14 +207,16 @@ export function findContentStart(chunks) {
 // ── Composable ─────────────────────────────────────────────────────────────
 
 export const useTTS = () => {
+  const { settings, updateSettings } = useBookishSettings()
+
   const ttsBook         = useState('tts:book',         () => null)
   const ttsStatus       = useState('tts:status',       () => 'idle')
   const ttsProgress     = useState('tts:progress',     () => 0)
   const ttsChunkIdx     = useState('tts:chunkIdx',     () => 0)
   const ttsTotalChunks  = useState('tts:totalChunks',  () => 0)
-  const ttsSpeed        = useState('tts:speed',        () => 1.0)
-  const ttsVolume       = useState('tts:volume',       () => 1.0)
-  const ttsVoiceId      = useState('tts:voice',        () => 'en-US-ChristopherNeural')
+  const ttsSpeed        = useState('tts:speed',        () => settings.value.ttsSpeed)
+  const ttsVolume       = useState('tts:volume',       () => settings.value.ttsVolume)
+  const ttsVoiceId      = useState('tts:voice',        () => settings.value.ttsVoice)
   const ttsVoices       = useState('tts:voices',       () => EDGE_VOICES)
   const ttsCurrentChunk = useState('tts:currentChunk', () => '')
   // Word-level highlight: index into the boundary array for the current chunk
@@ -479,7 +482,8 @@ export const useTTS = () => {
   }
 
   const setSpeed = (rate) => {
-    ttsSpeed.value = rate
+    const nextSettings = updateSettings({ ttsSpeed: Number(rate) })
+    ttsSpeed.value = nextSettings.ttsSpeed
     if (ttsStatus.value === 'playing') {
       _cancelAudio()
       _speakNextEdge()
@@ -490,12 +494,14 @@ export const useTTS = () => {
   }
 
   const setVolume = (vol) => {
-    ttsVolume.value = vol
-    if (_currentAudio) _currentAudio.volume = vol
+    const nextSettings = updateSettings({ ttsVolume: Number(vol) })
+    ttsVolume.value = nextSettings.ttsVolume
+    if (_currentAudio) _currentAudio.volume = ttsVolume.value
   }
 
   const setVoice = (voiceId) => {
-    ttsVoiceId.value = voiceId
+    const nextSettings = updateSettings({ ttsVoice: voiceId })
+    ttsVoiceId.value = nextSettings.ttsVoice
     if (ttsStatus.value === 'playing') {
       _cancelAudio()
       _speakNextEdge()

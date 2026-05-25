@@ -1,6 +1,40 @@
 import { ref, computed } from "vue";
 import { useState } from "#app";
 import { useBookStorage } from '~/composables/useBookStorage';
+import { isRemoteCoverUrl, useCoverImageCache } from '~/composables/useCoverImageCache';
+
+const coverCacheInFlight = new Set();
+const LIBRARY_FETCH_TIMEOUT_MS = 15000;
+
+const fetchWithTimeout = async (url, options = {}) => {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller?.abort();
+      reject(new Error(`Timed out loading ${url}`));
+    }, LIBRARY_FETCH_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([
+      $fetch(url, {
+        ...options,
+        ...(controller ? { signal: controller.signal } : {}),
+      }),
+      timeoutPromise,
+    ]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
+export const resolveLibraryDataResult = (result, fallback) => {
+  if (result.status === "fulfilled") return result.value;
+  console.warn("Library data request failed:", result.reason);
+  return fallback;
+};
 
 export const useBooks = () => {
   // Using Nuxt useState for cross-component shared state with SSR/Hydration support
@@ -11,27 +45,69 @@ export const useBooks = () => {
   
   const loading = useState('library:loading', () => false);
   const initialized = useState('library:initialized', () => false);
+  const error = useState('library:error', () => null);
+
+  const cacheRemoteLibraryCovers = async () => {
+    if (!import.meta.client) return;
+
+    const { cacheCoverImage } = useCoverImageCache();
+    const remoteCoverBooks = books.value.filter((book) => (
+      book?.id && isRemoteCoverUrl(book.cover) && !coverCacheInFlight.has(book.id)
+    ));
+
+    for (const book of remoteCoverBooks) {
+      coverCacheInFlight.add(book.id);
+      try {
+        const cachedCover = await cacheCoverImage(book.cover);
+        if (!cachedCover || cachedCover === book.cover) continue;
+
+        const index = books.value.findIndex((item) => item.id === book.id);
+        if (index !== -1) {
+          books.value[index] = { ...books.value[index], cover: cachedCover };
+        }
+
+        await $fetch(`/api/books/${book.id}`, {
+          method: "PATCH",
+          body: { ...book, cover: cachedCover },
+        });
+      } catch (error) {
+        console.warn("Failed to cache remote cover:", error);
+      } finally {
+        coverCacheInFlight.delete(book.id);
+      }
+    }
+  };
 
   const fetchAllData = async (force = false) => {
-    if (initialized.value && !force) return;
+    if (initialized.value && !force) {
+      loading.value = false;
+      return;
+    }
     
     loading.value = true;
+    error.value = null;
     try {
       const [booksData, authorsData, collectionsData, genresData] = await Promise.allSettled([
-        $fetch("/api/books"),
-        $fetch("/api/authors"),
-        $fetch("/api/collections"),
-        $fetch("/api/genres")
+        fetchWithTimeout("/api/books"),
+        fetchWithTimeout("/api/authors"),
+        fetchWithTimeout("/api/collections"),
+        fetchWithTimeout("/api/genres")
       ]);
+
+      if (booksData.status === "rejected") {
+        error.value = "Bookish could not load your library. Check the database connection and try again.";
+      }
       
-      books.value = booksData.status === 'fulfilled' ? booksData.value : [];
-      authors.value = authorsData.status === 'fulfilled' ? authorsData.value : [];
-      collections.value = collectionsData.status === 'fulfilled' ? collectionsData.value : [];
-      genres.value = genresData.status === 'fulfilled' ? genresData.value : [];
-      initialized.value = true;
-    } catch (error) {
-      console.error("Failed to fetch library data:", error);
+      books.value = resolveLibraryDataResult(booksData, books.value);
+      authors.value = resolveLibraryDataResult(authorsData, authors.value);
+      collections.value = resolveLibraryDataResult(collectionsData, collections.value);
+      genres.value = resolveLibraryDataResult(genresData, genres.value);
+      cacheRemoteLibraryCovers();
+    } catch (fetchError) {
+      console.error("Failed to fetch library data:", fetchError);
+      error.value = "Bookish could not load your library. Check the database connection and try again.";
     } finally {
+      initialized.value = true;
       loading.value = false;
     }
   };
@@ -146,17 +222,26 @@ export const useBooks = () => {
   };
 
   const deleteBook = async (bookId) => {
+    const previousBooks = [...books.value];
+    books.value = books.value.filter((b) => b.id !== bookId);
+
     try {
-      await $fetch(`/api/books/${bookId}`, {
-        method: "DELETE",
+      const deleteContentPromise = import.meta.client
+        ? useBookStorage().deleteBookContent(bookId)
+        : Promise.resolve();
+
+      await Promise.all([
+        $fetch(`/api/books/${bookId}`, {
+          method: "DELETE",
+        }),
+        deleteContentPromise,
+      ]);
+
+      fetchAllData(true).catch((error) => {
+        console.error("Failed to refresh library after delete:", error);
       });
-      books.value = books.value.filter((b) => b.id !== bookId);
-      if (import.meta.client) {
-        const { deleteBookContent } = useBookStorage();
-        await deleteBookContent(bookId);
-      }
-      await fetchAllData(true);
     } catch (error) {
+      books.value = previousBooks;
       console.error("Failed to delete book:", error);
     }
   };
@@ -188,6 +273,7 @@ export const useBooks = () => {
     genres,
     loading,
     initialized,
+    error,
     recentAuthors,
     recentlyAddedBooks,
     recentlyReadBooks,

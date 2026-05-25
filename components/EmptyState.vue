@@ -42,8 +42,8 @@ defineProps({
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: rgba(138, 43, 226, 0.08);
-  border: 1px solid rgba(138, 43, 226, 0.14);
+  background: var(--color-brand-primary-faint);
+  border: 1px solid var(--color-brand-primary-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -52,19 +52,19 @@ defineProps({
 
 .empty-icon-wrap i {
   font-size: 2.25rem;
-  color: #8A2BE2;
+  color: var(--color-brand-primary);
 }
 
 .empty-title {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #1a2332;
+  color: var(--color-brand-primary);
   margin: 0 0 0.5rem 0;
 }
 
 .empty-description {
   font-size: 0.9375rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
   max-width: 340px;
   margin: 0 0 1.75rem 0;
   line-height: 1.65;

@@ -29,6 +29,64 @@ function normalizeSourceForStorage(source) {
   return source
 }
 
+function emptyStorageSummary(error = null) {
+  return {
+    available: !error,
+    contentCount: 0,
+    sourceCount: 0,
+    totalBytes: 0,
+    error,
+  }
+}
+
+function estimateStoredBytes(value, seen = new WeakSet()) {
+  if (value === null || value === undefined) return 0
+  if (typeof value === 'string') return value.length * 2
+  if (typeof value === 'number') return 8
+  if (typeof value === 'boolean') return 4
+  if (value instanceof ArrayBuffer) return value.byteLength
+  if (ArrayBuffer.isView(value)) return value.byteLength
+  if (typeof Blob !== 'undefined' && value instanceof Blob) return value.size
+  if (typeof value !== 'object') return 0
+  if (seen.has(value)) return 0
+
+  seen.add(value)
+
+  if (Array.isArray(value)) {
+    return value.reduce((sum, item) => sum + estimateStoredBytes(item, seen), 0)
+  }
+
+  return Object.entries(value).reduce((sum, [key, item]) => {
+    return sum + key.length * 2 + estimateStoredBytes(item, seen)
+  }, 0)
+}
+
+function summarizeStore(db, storeName) {
+  if (!db.objectStoreNames.contains(storeName)) {
+    return Promise.resolve({ count: 0, bytes: 0 })
+  }
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly')
+    const store = tx.objectStore(storeName)
+    const cursorRequest = store.openCursor()
+    let count = 0
+    let bytes = 0
+
+    cursorRequest.onsuccess = (event) => {
+      const cursor = event.target.result
+      if (!cursor) return
+      count += 1
+      bytes += estimateStoredBytes(cursor.value)
+      cursor.continue()
+    }
+
+    tx.oncomplete = () => resolve({ count, bytes })
+    tx.onerror = (event) => reject(event.target.error)
+    tx.onabort = (event) => reject(event.target.error ?? new DOMException('Transaction aborted'))
+  })
+}
+
 export const useBookStorage = () => {
   const savePdfSource = async (bookId, source) => {
     if (source === undefined) return
@@ -121,5 +179,36 @@ export const useBookStorage = () => {
     return stored !== null
   }
 
-  return { saveBookContent, getBookContent, deleteBookContent, hasBookContent, savePdfSource }
+  const getStorageSummary = async () => {
+    if (typeof indexedDB === 'undefined') {
+      return emptyStorageSummary('IndexedDB is not available.')
+    }
+
+    try {
+      const db = await openDB()
+      const [content, source] = await Promise.all([
+        summarizeStore(db, STORE_NAME),
+        summarizeStore(db, PDF_SOURCE_STORE_NAME),
+      ])
+
+      return {
+        available: true,
+        contentCount: content.count,
+        sourceCount: source.count,
+        totalBytes: content.bytes + source.bytes,
+        error: null,
+      }
+    } catch (error) {
+      return emptyStorageSummary(error?.message || 'Could not inspect local storage.')
+    }
+  }
+
+  return {
+    saveBookContent,
+    getBookContent,
+    deleteBookContent,
+    hasBookContent,
+    savePdfSource,
+    getStorageSummary,
+  }
 }

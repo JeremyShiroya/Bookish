@@ -16,7 +16,7 @@ export async function searchGoogleBooks(title: string, author?: string): Promise
     // Build query with unencoded field operators (Google Books requires intitle: and inauthor: unencoded)
     const parts = [`intitle:${encodeURIComponent(title)}`];
     if (author) parts.push(`inauthor:${encodeURIComponent(author)}`);
-    const url = `https://www.googleapis.com/books/v1/volumes?q=${parts.join('+')}&maxResults=5&printType=books`;
+    const url = `https://www.googleapis.com/books/v1/volumes?q=${parts.join('+')}&maxResults=10&printType=books&country=US&langRestrict=en`;
 
     const res = await fetch(url);
     if (!res.ok) return [];

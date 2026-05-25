@@ -1,155 +1,374 @@
 import * as cheerio from 'cheerio';
 
 const headers = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.9',
 };
 
-export async function searchGoodreads(title: string, author?: string) {
+export interface GoodreadsSearchResult {
+  url: string;
+  title: string;
+  rawTitle: string;
+  author: string | null;
+  cover: string | null;
+  rawSeriesTitle: string | null;
+  series: string | null;
+  seriesInstallment: string | null;
+}
+
+export interface GoodreadsBookDetails {
+  title: string | null;
+  author: string | null;
+  blurb: string | null;
+  cover: string | null;
+  series: string | null;
+  seriesInstallment: string | null;
+  webReview: string | null;
+  ratingValue: string | null;
+  ratingCount: string | null;
+  publishYear: number | null;
+  genre: string | null;
+}
+
+const ABSOLUTE = /^https?:\/\//i;
+
+function compact(value?: unknown) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function absoluteGoodreadsUrl(url?: string | null) {
+  if (!url) return null;
+  return ABSOLUTE.test(url) ? url : `https://www.goodreads.com${url}`;
+}
+
+function normalizeGoodreadsPageUrl(url?: string | null) {
+  const full = absoluteGoodreadsUrl(url);
+  return full ? full.split('?')[0].split('#')[0] : null;
+}
+
+export function normalizeGoodreadsImage(url?: string | null) {
+  if (!url) return null;
+  const cleaned = String(url)
+    .replace(/^http:\/\//i, 'https://')
+    .replace(/\._[A-Z]{1,3}\d+(?:_[A-Z]{1,3}\d+)?_\./, '.')
+    .replace(/\._SX\d+_SY\d+_\./, '.')
+    .replace(/\._SY\d+_\./, '.')
+    .replace(/\._SX\d+_\./, '.');
+  return cleaned.includes('nophoto') ? null : cleaned;
+}
+
+export function parseSeriesFromText(value?: string | null) {
+  const text = compact(value);
+  if (!text) return { series: null as string | null, seriesInstallment: null as string | null };
+
+  const bookInSeries = text.match(/book\s*#?\s*([\d.]+)\s+(?:in|of)\s+(?:the\s+)?(.+?)(?:\s+series)?$/i);
+  if (bookInSeries) {
+    return {
+      series: compact(bookInSeries[2]).replace(/\s+series$/i, '') || null,
+      seriesInstallment: bookInSeries[1],
+    };
+  }
+
+  const namedNumber = text.match(/^(.+?)(?:,\s*)?#\s*([\d.]+)$/i) || text.match(/^(.+?)\s+book\s+([\d.]+)$/i);
+  if (namedNumber) {
+    return {
+      series: compact(namedNumber[1]).replace(/\s+series$/i, '') || null,
+      seriesInstallment: namedNumber[2],
+    };
+  }
+
+  return { series: text.replace(/\s+series$/i, '') || null, seriesInstallment: null };
+}
+
+export function splitGoodreadsTitle(rawTitle?: string | null) {
+  const raw = compact(rawTitle);
+  const match = raw.match(/^(.*?)\s*\(([^()]*(?:#|book\s*)\s*[\d.][^()]*)\)\s*$/i);
+  if (!match) {
+    return { title: raw, rawSeriesTitle: null as string | null, series: null as string | null, seriesInstallment: null as string | null };
+  }
+
+  const parsed = parseSeriesFromText(match[2]);
+  return {
+    title: compact(match[1]),
+    rawSeriesTitle: compact(match[2]),
+    series: parsed.series,
+    seriesInstallment: parsed.seriesInstallment,
+  };
+}
+
+function parseYear(value?: string | null) {
+  const match = compact(value).match(/\b(15|16|17|18|19|20)\d{2}\b/);
+  return match ? parseInt(match[0], 10) : null;
+}
+
+function parseJsonLdBooks($: cheerio.CheerioAPI) {
+  const books: any[] = [];
+
+  const visit = (node: any) => {
+    if (!node) return;
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    if (typeof node !== 'object') return;
+    const type = node['@type'];
+    const typeList = Array.isArray(type) ? type : [type];
+    if (typeList.some((entry) => /book/i.test(String(entry || '')))) books.push(node);
+    if (node['@graph']) visit(node['@graph']);
+  };
+
+  $('script[type="application/ld+json"]').each((_, el) => {
+    try {
+      visit(JSON.parse($(el).html() || ''));
+    } catch {}
+  });
+
+  return books;
+}
+
+function getAuthorName(author: any) {
+  if (!author) return null;
+  if (typeof author === 'string') return compact(author) || null;
+  if (Array.isArray(author)) return getAuthorName(author[0]);
+  return compact(author.name) || null;
+}
+
+function firstText($: cheerio.CheerioAPI, selectors: string[]) {
+  for (const selector of selectors) {
+    const text = compact($(selector).first().text());
+    if (text) return text;
+  }
+  return null;
+}
+
+function firstAttr($: cheerio.CheerioAPI, selectors: string[], attr: string) {
+  for (const selector of selectors) {
+    const value = compact($(selector).first().attr(attr));
+    if (value) return value;
+  }
+  return null;
+}
+
+export function parseGoodreadsSearchHtml(html: string): GoodreadsSearchResult[] {
+  const $ = cheerio.load(html);
+  const results: GoodreadsSearchResult[] = [];
+  const seen = new Set<string>();
+
+  const pushResult = (url: string | null, rawTitle: string, author: string | null, cover: string | null) => {
+    const fullUrl = absoluteGoodreadsUrl(url);
+    if (!fullUrl || seen.has(fullUrl) || !rawTitle) return;
+    seen.add(fullUrl);
+    const split = splitGoodreadsTitle(rawTitle);
+    results.push({
+      url: fullUrl,
+      title: split.title || rawTitle,
+      rawTitle,
+      author: author || null,
+      cover: normalizeGoodreadsImage(cover),
+      rawSeriesTitle: split.rawSeriesTitle,
+      series: split.series,
+      seriesInstallment: split.seriesInstallment,
+    });
+  };
+
+  $('tr[itemtype="http://schema.org/Book"], tr[itemtype="https://schema.org/Book"]').each((_, el) => {
+    const row = $(el);
+    const titleEl = row.find('a.bookTitle').first();
+    const rawTitle =
+      compact(titleEl.find('span[itemprop="name"]').text())
+      || compact(titleEl.text());
+    pushResult(
+      titleEl.attr('href') || null,
+      rawTitle,
+      compact(row.find('a.authorName span[itemprop="name"], a.authorName').first().text()) || null,
+      row.find('img.bookCover, img').first().attr('src') || null,
+    );
+  });
+
+  $('a[href*="/book/show/"]').each((_, el) => {
+    if (results.length >= 8) return;
+    const anchor = $(el);
+    const rawTitle = compact(anchor.find('[itemprop="name"]').text()) || compact(anchor.attr('aria-label')) || compact(anchor.text());
+    if (!rawTitle || rawTitle.length > 180) return;
+    const container = anchor.closest('tr, li, article, div');
+    const author =
+      compact(container.find('a[href*="/author/show/"], a.authorName').first().text())
+      || compact(anchor.closest('tr').find('a.authorName').first().text())
+      || null;
+    const cover = container.find('img[src*="gr-assets"], img[src*="goodreads"], img.bookCover, img').first().attr('src') || null;
+    pushResult(anchor.attr('href') || null, rawTitle, author, cover);
+  });
+
+  return results.slice(0, 8);
+}
+
+export function parseGoodreadsBookHtml(html: string, seed?: Partial<GoodreadsSearchResult>): GoodreadsBookDetails {
+  const $ = cheerio.load(html);
+  const ld = parseJsonLdBooks($)[0] || {};
+  const splitTitle = splitGoodreadsTitle(seed?.rawTitle || seed?.title || '');
+
+  const ldRating = ld.aggregateRating || {};
+  const title =
+    compact(ld.name)
+    || firstText($, ['h1[data-testid="bookTitle"]', 'h1.BookPageTitleSection__title', 'h1'])
+    || seed?.title
+    || null;
+
+  const author =
+    getAuthorName(ld.author)
+    || firstText($, ['span.ContributorLink__name', 'a.ContributorLink', 'a.authorName', '[data-testid="name"]'])
+    || seed?.author
+    || null;
+
+  const blurb =
+    compact(typeof ld.description === 'string' ? ld.description : ld.description?.value)
+    || firstText($, [
+      'div[data-testid="description"] span.Formatted',
+      'div[data-testid="description"]',
+      '.BookPageMetadataSection__description .Formatted',
+      '#description span:last-child',
+      '#description',
+      '.DetailsLayoutRightParagraph__widthConstrained',
+    ]);
+
+  const cover =
+    normalizeGoodreadsImage(
+      firstAttr($, ['meta[property="og:image"]'], 'content')
+      || (Array.isArray(ld.image) ? ld.image[0] : ld.image)
+      || firstAttr($, ['img.ResponsiveImage', '[data-testid="coverImage"] img', 'img[itemprop="image"]'], 'src')
+      || seed?.cover
+    );
+
+  let series = splitTitle.series || seed?.series || null;
+  let seriesInstallment = splitTitle.seriesInstallment || seed?.seriesInstallment || null;
+  const seriesCandidates: string[] = [];
+  $('h3[aria-label], a[href*="/series/"], [class*="Series"], [data-testid*="series"]').each((_, el) => {
+    const value = compact($(el).attr('aria-label')) || compact($(el).text());
+    if (value) seriesCandidates.push(value);
+  });
+  for (const value of seriesCandidates) {
+    if (series && seriesInstallment) break;
+    const parsed = parseSeriesFromText(value);
+    if (!series && parsed.series) series = parsed.series;
+    if (!seriesInstallment && parsed.seriesInstallment) seriesInstallment = parsed.seriesInstallment;
+  }
+
+  const ratingValue =
+    compact(ldRating.ratingValue)
+    || firstText($, ['div.RatingStatistics__rating', '[data-testid="ratingValue"]', 'span[itemprop="ratingValue"]']);
+  const ratingCountRaw =
+    compact(ldRating.ratingCount)
+    || firstText($, ['span[data-testid="ratingsCount"]', '[data-testid="ratingsCount"]'])
+    || firstAttr($, ['meta[itemprop="ratingCount"]'], 'content');
+  const ratingCount = ratingCountRaw ? ratingCountRaw.replace(/[^\d,]/g, '').trim() : null;
+
+  let webReview: string | null = null;
+  if (ratingValue) {
+    webReview = `Goodreads Rating: ${ratingValue}/5`;
+    webReview += ratingCount ? ` (based on ${ratingCount} reviews).` : '.';
+  }
+
+  const publishYear =
+    parseYear(ld.datePublished)
+    || parseYear(firstText($, ['p[data-testid="publicationInfo"]', '[data-testid="publicationInfo"]', '#details', '[class*="publication"]']))
+    || parseYear(html.match(/First published[^<\n]*/i)?.[0]);
+
+  const genres = new Set<string>();
+  const ldGenre = ld.genre;
+  if (Array.isArray(ldGenre)) ldGenre.forEach((g) => compact(g) && genres.add(compact(g)));
+  else if (compact(ldGenre)) genres.add(compact(ldGenre));
+  $('div[data-testid="genresList"] a, a[href*="/genres/"], .bookPageGenreLink, a.Button--tag').each((_, el) => {
+    const value = compact($(el).find('span.Button__labelItem').text()) || compact($(el).text());
+    if (!value || /^(genres|show more|fiction|audiobook)$/i.test(value) || value.length > 40) return;
+    genres.add(value);
+  });
+
+  return {
+    title,
+    author,
+    blurb: blurb || null,
+    cover,
+    series,
+    seriesInstallment,
+    webReview,
+    ratingValue: ratingValue || null,
+    ratingCount: ratingCount || null,
+    publishYear,
+    genre: [...genres].slice(0, 3).join(', ') || null,
+  };
+}
+
+export async function searchGoodreads(title: string, author?: string): Promise<GoodreadsSearchResult[]> {
   try {
     const query = encodeURIComponent(`${title} ${author || ''}`.trim());
-    const searchUrl = `https://www.goodreads.com/search?q=${query}`;
-    
-    const response = await fetch(searchUrl, { headers });
+    const response = await fetch(`https://www.goodreads.com/search?q=${query}`, { headers });
     if (!response.ok) {
-       console.error(`Goodreads search failed with status ${response.status}`);
-       return [];
+      console.error(`Goodreads search failed with status ${response.status}`);
+      return [];
     }
-    const html = await response.text();
-    const $ = cheerio.load(html);
-    
-    const results: any[] = [];
-    
-    $('tr[itemtype="http://schema.org/Book"]').slice(0, 5).each((i, el) => {
-      const titleEl = $(el).find('a.bookTitle');
-      const bookUrl = titleEl.attr('href');
-      let bookTitle = titleEl.find('span[itemprop="name"]').text().trim();
-      const authorName = $(el).find('a.authorName span[itemprop="name"]').text().trim();
-      let coverUrl = $(el).find('img.bookCover').attr('src');
-      
-      // Cleanup the cover URL to try to get a higher res from search page itself
-      if (coverUrl) {
-         // e.g. https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1555447414l/44767458._SY75_.jpg -> _SY475_
-         coverUrl = coverUrl.replace(/_[A-Z]{2}\d+_\./, '');
-      }
-
-      // Sometimes book title contains series in parenthesis, e.g. "Dune (Dune, #1)"
-      // Let's clean the title
-      const rawTitle = bookTitle;
-      const titleMatch = bookTitle.match(/^(.*?)\s*\(.*?\)$/);
-      if (titleMatch) {
-         bookTitle = titleMatch[1].trim();
-      }
-
-      if (bookUrl) {
-         results.push({
-           url: bookUrl.startsWith('/') ? `https://www.goodreads.com${bookUrl}` : bookUrl,
-           title: bookTitle,
-           rawTitle,
-           author: authorName,
-           cover: coverUrl,
-         });
-      }
-    });
-    
-    return results;
+    return parseGoodreadsSearchHtml(await response.text());
   } catch (err) {
     console.error('Error searching Goodreads:', err);
     return [];
   }
 }
 
-export async function scrapeGoodreadsBook(bookUrl: string) {
+export async function scrapeGoodreadsBook(bookUrl: string, seed?: Partial<GoodreadsSearchResult>): Promise<GoodreadsBookDetails | null> {
   try {
     const response = await fetch(bookUrl, { headers });
     if (!response.ok) return null;
-    
-    const html = await response.text();
-    const $ = cheerio.load(html);
-    
-    // Extract Cover (Goodreads uses a ResponsiveImage class for high res now, or a meta tag)
-    let cover = $('meta[property="og:image"]').attr('content');
-    
-    // Extract Blurb (Often in a div with data-testid="description")
-    let blurb = $('div[data-testid="description"]').text().trim();
-    if (!blurb) {
-       blurb = $('#description span').last().text().trim();
-    }
-    
-    // Extract Series — use aria-label for precision: "Book 2 in the Grant County series"
-    let series = null;
-    let seriesInstallment = null;
-    $('h3[aria-label]').each((_, el) => {
-      if (series) return;
-      const label = $(el).attr('aria-label') || '';
-      const m = label.match(/Book\s+([\d.]+)\s+(?:in the|of(?:\s+the)?)\s+(.*?)(?:\s+series)?$/i);
-      if (m) {
-        seriesInstallment = m[1];
-        series = m[2].trim();
-      }
-    });
-    
-    // Extract Rating
-    let ratingStr = $('div.RatingStatistics__rating').first().text().trim() || $('span[itemprop="ratingValue"]').first().text().trim();
-    let ratingCount = $('span[data-testid="ratingsCount"]').first().text().trim() || $('meta[itemprop="ratingCount"]').first().attr('content');
-    
-    // cleanup ratingCount string if it has text like "1,234 ratings"
-    if (ratingCount) {
-        ratingCount = ratingCount.replace(/[^\d,]/g, '').trim();
-    }
-
-    let webReview = null;
-    if (ratingStr) {
-       webReview = `Goodreads Rating: ${ratingStr}/5`;
-       if (ratingCount) webReview += ` (based on ${ratingCount} reviews).`;
-       else webReview += '.';
-    }
-    
-    // Extract Publish Year
-    let publishYear = null;
-    const pubDetails = $('p[data-testid="publicationInfo"]').text().trim() || $('div#details').text().trim();
-    if (pubDetails) {
-       const yearMatch = pubDetails.match(/\b(19|20)\d{2}\b/);
-       if (yearMatch) publishYear = parseInt(yearMatch[0], 10);
-    }
-
-    // Extract Genres
-    const genresList: string[] = [];
-    $('div[data-testid="genresList"] a.Button--tag').each((i, el) => {
-       const g = $(el).find('span.Button__labelItem').text().trim() || $(el).text().trim();
-       if (g && !genresList.includes(g)) genresList.push(g);
-    });
-    if (genresList.length === 0) {
-       $('.bookPageGenreLink').slice(0, 3).each((i, el) => {
-          const g = $(el).text().trim();
-          if (g && !genresList.includes(g)) genresList.push(g);
-       });
-    }
-    const genre = genresList.slice(0, 3).join(', ');
-    
-    return {
-       blurb,
-       cover,
-       series,
-       seriesInstallment,
-       webReview,
-       publishYear,
-       genre
-    };
+    return parseGoodreadsBookHtml(await response.text(), seed);
   } catch (err) {
     console.error('Error scraping book detail:', err);
     return null;
   }
 }
 
-// Returns only the webReview string (e.g. "Goodreads Rating: 4.23/5 (based on 1,234,567 reviews).")
-// Used by the metadata endpoint — one call per user search, not per result.
+export async function searchGoodreadsAuthorImages(name: string): Promise<string[]> {
+  try {
+    const query = encodeURIComponent(name);
+    const response = await fetch(`https://www.goodreads.com/search?q=${query}&search_type=people`, { headers });
+    if (!response.ok) return [];
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const urls: string[] = [];
+    const seen = new Set<string>();
+
+    $('a[href*="/author/show/"]').each((_, el) => {
+      if (urls.length >= 5) return;
+      const href = normalizeGoodreadsPageUrl($(el).attr('href'));
+      if (!href || seen.has(href)) return;
+      seen.add(href);
+      urls.push(href);
+    });
+
+    const images: string[] = [];
+    await Promise.all(urls.map(async (url) => {
+      try {
+        const authorResponse = await fetch(url, { headers });
+        if (!authorResponse.ok) return;
+        const authorHtml = await authorResponse.text();
+        const page = cheerio.load(authorHtml);
+        const image =
+          page('meta[property="og:image"]').attr('content')
+          || page('img.authorPicture, img[itemprop="image"], img.ResponsiveImage').first().attr('src');
+        const normalized = normalizeGoodreadsImage(image);
+        if (normalized) images.push(normalized);
+      } catch {}
+    }));
+
+    return images;
+  } catch {
+    return [];
+  }
+}
+
 export async function getGoodreadsReview(title: string, author?: string): Promise<string | null> {
   try {
     const results = await searchGoodreads(title, author);
     if (!results.length) return null;
-    const details = await scrapeGoodreadsBook(results[0].url);
+    const details = await scrapeGoodreadsBook(results[0].url, results[0]);
     return details?.webReview || null;
   } catch {
     return null;

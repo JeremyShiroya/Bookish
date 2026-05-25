@@ -69,12 +69,12 @@ const router = useRouter();
 .authors-title {
   font-size: 1.5rem;
   font-weight: 400;
-  color: #8A2BE2;
+  color: var(--color-brand-primary);
   margin: 0;
 }
 
 .authors-count {
-  color: #9ca3af;
+  color: var(--color-text-subtle);
   font-weight: normal;
 }
 
@@ -92,15 +92,15 @@ const router = useRouter();
   cursor: pointer;
   transition: all 0.3s ease;
   padding: 1.5rem;
-  background: white;
+  background: var(--color-surface-primary);
   border-radius: 1rem;
   border: 1px solid transparent;
 }
 
 .author-card:hover {
   transform: translateY(-5px);
-  border-color: #E6E6FA;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+  border-color: var(--color-brand-lavender);
+  box-shadow: var(--shadow-card-subtle);
 }
 
 .author-avatar {
@@ -109,8 +109,8 @@ const router = useRouter();
   border-radius: 50%;
   overflow: hidden;
   margin-bottom: 1rem;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-  background: #f3f4f6;
+  box-shadow: var(--shadow-control-subtle);
+  background: var(--color-surface-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -125,23 +125,23 @@ const router = useRouter();
 .initial-avatar {
   font-size: 3rem;
   font-weight: 400;
-  color: #8A2BE2;
+  color: var(--color-brand-primary);
 }
 
 .author-name {
   font-size: 1.125rem;
   font-weight: 400;
-  color: #233447;
+  color: var(--color-text-primary);
   margin: 0 0 0.25rem 0;
 }
 
 .author-card:hover .author-name {
-  color: #8A2BE2;
+  color: var(--color-brand-primary);
 }
 
 .book-count {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin: 0;
 }
 
@@ -150,8 +150,8 @@ const router = useRouter();
   align-items: center;
   gap: 0.5rem;
   padding: 0.875rem 1.5rem;
-  background: linear-gradient(135deg, #8A2BE2 0%, #6A0DAD 100%);
-  color: white;
+  background: var(--gradient-brand-primary);
+  color: var(--color-text-on-brand);
   border-radius: 0.5rem;
   font-weight: 400;
   text-decoration: none;
@@ -160,6 +160,6 @@ const router = useRouter();
 
 .add-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 6px -1px rgba(138, 43, 226, 0.4);
+  box-shadow: 0 4px 6px -1px var(--shadow-brand-glow);
 }
 </style>

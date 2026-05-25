@@ -64,7 +64,7 @@ const confirmDelete = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-background-overlay-soft);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -73,11 +73,11 @@ const confirmDelete = () => {
 }
 
 .modal-container {
-  background: white;
+  background: var(--color-surface-primary);
   border-radius: 0.75rem;
   max-width: 400px;
   width: 100%;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-modal);
 }
 
 .modal-header {
@@ -91,7 +91,7 @@ const confirmDelete = () => {
 .warning-icon {
   width: 4rem;
   height: 4rem;
-  background: #fef2f2;
+  background: var(--color-status-danger-soft);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -101,13 +101,13 @@ const confirmDelete = () => {
 
 .warning-icon i {
   font-size: 2rem;
-  color: #dc2626;
+  color: var(--color-status-danger);
 }
 
 .modal-header h2 {
   font-size: 1.25rem;
   font-weight: 400;
-  color: #1f2937;
+  color: var(--color-text-primary);
   margin: 0;
 }
 
@@ -118,14 +118,14 @@ const confirmDelete = () => {
 
 .confirmation-text {
   font-size: 0.875rem;
-  color: #374151;
+  color: var(--color-text-secondary);
   margin-bottom: 0.5rem;
   line-height: 1.5;
 }
 
 .warning-text {
   font-size: 0.75rem;
-  color: #dc2626;
+  color: var(--color-status-danger);
   margin-bottom: 1.5rem;
 }
 
@@ -134,7 +134,7 @@ const confirmDelete = () => {
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: #f9fafb;
+  background: var(--color-surface-secondary);
   border-radius: 0.5rem;
   text-align: left;
 }
@@ -149,13 +149,13 @@ const confirmDelete = () => {
 .book-details h3 {
   font-size: 0.875rem;
   font-weight: 400;
-  color: #1f2937;
+  color: var(--color-text-primary);
   margin: 0 0 0.25rem 0;
 }
 
 .book-details p {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin: 0;
 }
 
@@ -181,23 +181,23 @@ const confirmDelete = () => {
 }
 
 .cancel-button {
-  border: 1px solid #d1d5db;
-  background: white;
-  color: #374151;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-primary);
+  color: var(--color-text-secondary);
 }
 
 .cancel-button:hover {
-  background: #f9fafb;
+  background: var(--color-surface-secondary);
 }
 
 .delete-button {
   border: none;
-  background: #dc2626;
-  color: white;
+  background: var(--color-status-danger);
+  color: var(--color-text-on-brand);
 }
 
 .delete-button:hover {
-  background: #b91c1c;
+  background: var(--color-status-danger-hover);
 }
 
 @media (max-width: 640px) {

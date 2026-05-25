@@ -219,7 +219,7 @@ const getRatingLabel = (rating) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--color-background-overlay-strong);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -229,13 +229,13 @@ const getRatingLabel = (rating) => {
 }
 
 .modal-container {
-  background: white;
+  background: var(--color-surface-primary);
   border-radius: 1rem;
   max-width: 800px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-modal);
   animation: modalSlideIn 0.3s ease-out;
 }
 
@@ -255,21 +255,21 @@ const getRatingLabel = (rating) => {
   justify-content: space-between;
   align-items: center;
   padding: 2rem 2rem 1rem;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-surface-muted);
 }
 
 .modal-header h2 {
   font-size: 1.5rem;
   font-weight: 400;
-  color: #1f2937;
+  color: var(--color-text-primary);
   margin: 0;
 }
 
 .close-button {
   padding: 0.75rem;
   border: none;
-  background: #f9fafb;
-  color: #6b7280;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-muted);
   cursor: pointer;
   border-radius: 0.5rem;
   transition: all 0.2s;
@@ -279,8 +279,8 @@ const getRatingLabel = (rating) => {
 }
 
 .close-button:hover {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
 }
 
 .modal-form {
@@ -305,14 +305,14 @@ const getRatingLabel = (rating) => {
   aspect-ratio: 7/10;
   border-radius: 0.75rem;
   overflow: hidden;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-card-hover);
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
 .cover-container:hover {
   transform: translateY(-2px);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-modal);
 }
 
 .cover-container:hover .cover-overlay {
@@ -331,12 +331,12 @@ const getRatingLabel = (rating) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--color-background-overlay-strong);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--color-text-on-brand);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -366,16 +366,16 @@ const getRatingLabel = (rating) => {
 .form-group label {
   font-size: 0.875rem;
   font-weight: 400;
-  color: #374151;
+  color: var(--color-text-secondary);
 }
 
 .form-input {
   padding: 0.875rem 1rem;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--color-border-subtle);
   border-radius: 0.5rem;
   font-size: 0.875rem;
   transition: all 0.2s;
-  background: #fafafa;
+  background: var(--color-surface-secondary);
 }
 
 .form-input.textarea {
@@ -385,18 +385,18 @@ const getRatingLabel = (rating) => {
 
 .form-input:focus {
   outline: none;
-  border-color: #8A2BE2;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.1);
+  border-color: var(--color-brand-primary);
+  background: var(--color-surface-primary);
+  box-shadow: 0 0 0 3px var(--color-brand-primary-faint);
 }
 
 .readonly-review {
   padding: 0.875rem 1rem;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 0.5rem;
   font-size: 0.875rem;
-  color: #374151;
+  color: var(--color-text-secondary);
   line-height: 1.5;
 }
 
@@ -413,14 +413,14 @@ const getRatingLabel = (rating) => {
 
 .rating-star {
   font-size: 1.5rem;
-  color: #d1d5db;
+  color: var(--color-border-strong);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .rating-star:hover,
 .rating-star.active {
-  color: #fbbf24;
+  color: var(--color-status-star);
   transform: scale(1.1);
 }
 
@@ -433,15 +433,15 @@ const getRatingLabel = (rating) => {
 .rating-value {
   font-size: 1.125rem;
   font-weight: 400;
-  color: #1f2937;
+  color: var(--color-text-primary);
 }
 
 .rating-label {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-weight: 400;
   padding: 0.25rem 0.75rem;
-  background: #f3f4f6;
+  background: var(--color-surface-muted);
   border-radius: 1rem;
 }
 
@@ -450,7 +450,7 @@ const getRatingLabel = (rating) => {
   gap: 1rem;
   justify-content: flex-end;
   padding-top: 1.5rem;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--color-surface-muted);
 }
 
 .cancel-button,
@@ -467,27 +467,27 @@ const getRatingLabel = (rating) => {
 }
 
 .cancel-button {
-  border: 2px solid #e5e7eb;
-  background: white;
-  color: #6b7280;
+  border: 2px solid var(--color-border-subtle);
+  background: var(--color-surface-primary);
+  color: var(--color-text-muted);
 }
 
 .cancel-button:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
+  background: var(--color-surface-secondary);
+  border-color: var(--color-border-strong);
 }
 
 .save-button {
   border: none;
-  background: linear-gradient(135deg, #8A2BE2 0%, #6A0DAD 100%);
-  color: white;
-  box-shadow: 0 4px 6px -1px rgba(138, 43, 226, 0.3);
+  background: var(--gradient-brand-primary);
+  color: var(--color-text-on-brand);
+  box-shadow: var(--shadow-brand-button);
 }
 
 .save-button:hover {
-  background: linear-gradient(135deg, #6A0DAD 0%, #590A96 100%);
+  background: var(--gradient-brand-primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 6px 8px -1px rgba(138, 43, 226, 0.4);
+  box-shadow: 0 6px 8px -1px var(--shadow-brand-glow);
 }
 
 @media (max-width: 768px) {
