@@ -56,7 +56,7 @@ const navRef = ref(null);
 const menuItems = [
   { name: "Home", icon: "ri-home-smile-2-line", path: "/" },
   { name: "Books", icon: "ri-book-open-line", path: "/books" },
-  { name: "Collections", icon: "ri-archive-line", path: "/collections" },
+  { name: "Playlists", icon: "ri-play-list-2-line", path: "/playlists" },
   { name: "Favourites", icon: "ri-heart-line", path: "/favourites" },
   { name: "Series", icon: "ri-book-shelf-line", path: "/series" },
   { name: "Genres", icon: "ri-price-tag-3-line", path: "/genres" },

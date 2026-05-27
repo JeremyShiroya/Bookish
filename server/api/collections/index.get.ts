@@ -1,6 +1,6 @@
 import { db } from '../../utils/db';
 import { collections, collectionsToBooks, books } from '../../database/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 export default defineEventHandler(async (event) => {
   try {
@@ -9,28 +9,29 @@ export default defineEventHandler(async (event) => {
       name: collections.name,
       description: collections.description,
       cover: collections.cover,
-      bookCount: sql<number>`count(${collectionsToBooks.bookId})::int`,
+      createdAt: collections.createdAt,
+      updatedAt: collections.updatedAt,
     })
     .from(collections)
-    .innerJoin(collectionsToBooks, eq(collections.id, collectionsToBooks.collectionId))
-    .groupBy(collections.id)
     .orderBy(collections.name)
     .limit(20);
 
-    // For each collection, we also want the preview covers (up to 3)
+    // For each playlist, we also want membership and preview covers.
     const collectionsWithPreviews = await Promise.all(result.map(async (col) => {
-      const previewBooks = await db.select({
+      const collectionBooks = await db.select({
+        id: books.id,
         cover: books.cover,
         title: books.title
       })
       .from(books)
       .innerJoin(collectionsToBooks, eq(books.id, collectionsToBooks.bookId))
       .where(eq(collectionsToBooks.collectionId, col.id))
-      .limit(3);
 
       return {
         ...col,
-        previewBooks
+        bookIds: collectionBooks.map((book) => book.id),
+        bookCount: collectionBooks.length,
+        previewBooks: collectionBooks.slice(0, 3),
       };
     }));
 
@@ -38,7 +39,7 @@ export default defineEventHandler(async (event) => {
   } catch (error) {
     throw createError({
       statusCode: 500,
-      statusMessage: 'Failed to fetch collections',
+      statusMessage: 'Failed to fetch playlists',
     });
   }
 });

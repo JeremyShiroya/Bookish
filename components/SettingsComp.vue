@@ -321,7 +321,7 @@ const booksWithWebReviews = computed(() => books.value.filter(book => !!book.web
 const libraryStats = computed(() => [
   { label: 'Books', value: books.value.length, icon: 'ri-book-open-line' },
   { label: 'Authors', value: authors.value.length, icon: 'ri-group-line' },
-  { label: 'Collections', value: collections.value.length, icon: 'ri-archive-line' },
+  { label: 'Playlists', value: collections.value.length, icon: 'ri-play-list-2-line' },
   { label: 'Reading', value: statusCounts.value.Reading || 0, icon: 'ri-bookmark-3-line' },
   { label: 'Finished', value: statusCounts.value.Completed || statusCounts.value.Read || 0, icon: 'ri-checkbox-circle-line' },
 ])
@@ -369,7 +369,6 @@ const setReaderTheme = (readerTheme) => updateSettings({ readerTheme })
 const setReaderZoom = (value) => updateSettings({ readerZoom: Number(value) })
 
 const setAudioVoice = (ttsVoice) => {
-  updateSettings({ ttsVoice })
   setVoice(ttsVoice)
 }
 

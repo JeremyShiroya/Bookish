@@ -43,7 +43,7 @@
     <EmptyState
       v-else
       title="No series detected"
-      description="Books that are part of the same collection will automatically group into series here."
+      description="Books that share series metadata will automatically group here."
       icon="ri-book-shelf-line"
     >
       <template #action>

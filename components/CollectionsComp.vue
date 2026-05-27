@@ -2,7 +2,7 @@
   <div class="collections-container">
     <div class="collections-header">
       <h1 class="collections-title">
-        Collections <span class="collections-count">({{ collections.length }})</span>
+        Playlists <span class="collections-count">({{ collections.length }})</span>
       </h1>
     </div>
 
@@ -39,14 +39,14 @@
     <!-- Empty State -->
     <EmptyState
       v-else
-      title="No collections yet"
-      description="Organize your library by creating custom collections for your favorite series or genres."
-      icon="ri-archive-line"
+      title="No playlists yet"
+      description="Organize your library by creating playlists for favorites, moods, genres, or reading plans."
+      icon="ri-play-list-2-line"
     >
       <template #action>
         <button class="add-btn">
           <i class="ri-add-line"></i>
-          Create Collection
+          Create Playlist
         </button>
       </template>
     </EmptyState>
@@ -62,11 +62,12 @@ const { collections, books } = useBooks();
 
 const collectionsWithBooks = computed(() => {
   return collections.value.map(collection => {
+    const bookIds = collection.bookIds || []
     const previewBooks = books.value
-      .filter(b => collection.bookIds.slice(0, 3).includes(b.id))
+      .filter(b => bookIds.slice(0, 3).includes(b.id))
       .sort((a, b) => {
           // Keep the order of bookIds if possible for the stack
-          return collection.bookIds.indexOf(a.id) - collection.bookIds.indexOf(b.id);
+          return bookIds.indexOf(a.id) - bookIds.indexOf(b.id);
       });
     return {
       ...collection,

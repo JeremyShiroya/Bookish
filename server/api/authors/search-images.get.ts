@@ -12,6 +12,11 @@ const imageHeaders = {
   'Accept-Language': 'en-US,en;q=0.9',
 };
 
+const jsonHeaders = {
+  'User-Agent': 'Bookish/1.0 (author image lookup; contact: local-app)',
+  'Accept': 'application/json',
+};
+
 function addImage(target: string[], seen: Set<string>, url?: string | null) {
   addUniqueImage(target, seen, url, isUsefulAuthorImageUrl);
 }
@@ -54,6 +59,7 @@ async function imageInfoForFiles(fileTitles: string[]) {
     .join('|');
   const detailsRes: any = await $fetch(
     `https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(titles)}&prop=imageinfo&iiprop=url|size|mime&iiurlwidth=1000&format=json&origin=*`,
+    { headers: jsonHeaders },
   );
   return Object.values(detailsRes.query?.pages || {})
     .map((page: any) => page.imageinfo?.[0]?.thumburl || page.imageinfo?.[0]?.url)
@@ -63,8 +69,60 @@ async function imageInfoForFiles(fileTitles: string[]) {
 async function findWikipediaCandidates(name: string) {
   const searchRes: any = await $fetch(
     `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(`${name} writer OR author`)}&format=json&origin=*`,
+    { headers: jsonHeaders },
   );
   return (searchRes.query?.search || []).slice(0, 4).map((item: any) => item.title);
+}
+
+async function findWikipediaSummaryImages(name: string) {
+  const titles = [
+    name,
+    `${name} (writer)`,
+    `${name} (author)`,
+    `${name} (novelist)`,
+  ];
+  const images: string[] = [];
+  const seenTitles = new Set<string>();
+
+  for (const title of titles) {
+    const key = title.toLowerCase();
+    if (seenTitles.has(key)) continue;
+    seenTitles.add(key);
+
+    try {
+      const summary: any = await $fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/\s+/g, '_'))}`,
+        { headers: jsonHeaders },
+      );
+      if (summary?.originalimage?.source) images.push(summary.originalimage.source);
+      if (summary?.thumbnail?.source) images.push(summary.thumbnail.source);
+    } catch {}
+  }
+
+  return images.filter(Boolean);
+}
+
+async function findWikidataAuthorImages(name: string) {
+  try {
+    const search: any = await $fetch(
+      `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&format=json&origin=*`,
+      { headers: jsonHeaders },
+    );
+    const ids = (search.search || []).slice(0, 5).map((item: any) => item.id).filter(Boolean);
+    if (!ids.length) return [];
+
+    const entityData: any = await $fetch(
+      `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(ids.join('|'))}&props=claims&format=json&origin=*`,
+      { headers: jsonHeaders },
+    );
+    const fileNames = ids
+      .map((id: string) => entityData.entities?.[id]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value)
+      .filter(Boolean);
+
+    return imageInfoForFiles(fileNames);
+  } catch {
+    return [];
+  }
 }
 
 async function findDuckDuckGoImages(name: string) {
@@ -87,7 +145,10 @@ async function findDuckDuckGoImages(name: string) {
 
 async function findOpenLibraryAuthorImages(name: string) {
   try {
-    const data: any = await $fetch(`https://openlibrary.org/search/authors.json?q=${encodeURIComponent(name)}&limit=8`);
+    const data: any = await $fetch(
+      `https://openlibrary.org/search/authors.json?q=${encodeURIComponent(name)}&limit=8`,
+      { headers: jsonHeaders },
+    );
     const docs = data.docs || [];
     const images: string[] = [];
     for (const doc of docs) {
@@ -120,11 +181,29 @@ export default defineEventHandler(async (event) => {
   const seen = new Set<string>();
 
   try {
-    const [googleImagesResult, goodreadsImagesResult, openLibraryImagesResult] = await Promise.allSettled([
-      searchGoogleAuthorImages(name),
-      searchGoodreadsAuthorImages(name),
+    const [wikiSummaryResult, wikidataResult, openLibraryImagesResult, goodreadsImagesResult, googleImagesResult] = await Promise.allSettled([
+      findWikipediaSummaryImages(name),
+      findWikidataAuthorImages(name),
       findOpenLibraryAuthorImages(name),
+      searchGoodreadsAuthorImages(name),
+      searchGoogleAuthorImages(name),
     ]);
+
+    if (wikiSummaryResult.status === 'fulfilled') {
+      wikiSummaryResult.value.forEach((url) => addImage(images, seen, url));
+    }
+
+    if (wikidataResult.status === 'fulfilled') {
+      wikidataResult.value.forEach((url) => addImage(images, seen, url));
+    }
+
+    if (openLibraryImagesResult.status === 'fulfilled') {
+      openLibraryImagesResult.value.forEach((url) => addImage(images, seen, url));
+    }
+
+    if (goodreadsImagesResult.status === 'fulfilled') {
+      goodreadsImagesResult.value.forEach((url) => addImage(images, seen, url));
+    }
 
     const googleImages = googleImagesResult.status === 'fulfilled' ? googleImagesResult.value : [];
 
@@ -133,19 +212,14 @@ export default defineEventHandler(async (event) => {
       addImage(images, seen, item.thumbnail);
     });
 
-    if (goodreadsImagesResult.status === 'fulfilled') {
-      goodreadsImagesResult.value.forEach((url) => addImage(images, seen, url));
-    }
-
-    if (openLibraryImagesResult.status === 'fulfilled') {
-      openLibraryImagesResult.value.forEach((url) => addImage(images, seen, url));
-    }
-
     const wikiTitles = await findWikipediaCandidates(name);
 
     for (const title of wikiTitles) {
       try {
-        const summary: any = await $fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
+        const summary: any = await $fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+          { headers: jsonHeaders },
+        );
         addImage(images, seen, summary?.originalimage?.source);
         addImage(images, seen, summary?.thumbnail?.source);
       } catch {}
@@ -153,13 +227,17 @@ export default defineEventHandler(async (event) => {
       try {
         const pageRes: any = await $fetch(
           `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages|images|pageprops&pithumbsize=1000&format=json&origin=*`,
+          { headers: jsonHeaders },
         );
         const page = Object.values(pageRes.query?.pages || {})[0] as any;
         addImage(images, seen, page?.thumbnail?.source);
 
         const wikiDataId = page?.pageprops?.wikibase_item;
         if (wikiDataId) {
-          const entityData: any = await $fetch(`https://www.wikidata.org/wiki/Special:EntityData/${wikiDataId}.json`);
+          const entityData: any = await $fetch(
+            `https://www.wikidata.org/wiki/Special:EntityData/${wikiDataId}.json`,
+            { headers: jsonHeaders },
+          );
           const entity = entityData.entities?.[wikiDataId];
           const fileName = entity?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
           const urls = await imageInfoForFiles(fileName ? [fileName] : []);
@@ -178,6 +256,7 @@ export default defineEventHandler(async (event) => {
     try {
       const commonsRes: any = await $fetch(
         `https://commons.wikimedia.org/w/api.php?action=query&list=search&srnamespace=6&srsearch=${encodeURIComponent(`"${name}" portrait author writer`)}&format=json&origin=*`,
+        { headers: jsonHeaders },
       );
       const files = (commonsRes.query?.search || []).slice(0, 18).map((item: any) => item.title);
       const urls = await imageInfoForFiles(files);

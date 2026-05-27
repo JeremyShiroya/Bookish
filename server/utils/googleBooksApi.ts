@@ -11,20 +11,41 @@ export interface GBResult {
   cover: string | null;
 }
 
+function buildGoogleBooksUrls(title: string, author?: string) {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  const addUrl = (query: string) => {
+    const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=10&printType=books&country=US&langRestrict=en`;
+    if (!seen.has(url)) {
+      seen.add(url);
+      urls.push(url);
+    }
+  };
+
+  const encodedTitle = encodeURIComponent(title);
+  const encodedAuthor = author ? encodeURIComponent(author) : null;
+
+  if (encodedAuthor) addUrl(`intitle:${encodedTitle}+inauthor:${encodedAuthor}`);
+  addUrl(`intitle:${encodedTitle}`);
+  if (encodedAuthor) addUrl(encodeURIComponent(`${title} ${author}`));
+  addUrl(encodedTitle);
+
+  return urls;
+}
+
 export async function searchGoogleBooks(title: string, author?: string): Promise<GBResult[]> {
   try {
-    // Build query with unencoded field operators (Google Books requires intitle: and inauthor: unencoded)
-    const parts = [`intitle:${encodeURIComponent(title)}`];
-    if (author) parts.push(`inauthor:${encodeURIComponent(author)}`);
-    const url = `https://www.googleapis.com/books/v1/volumes?q=${parts.join('+')}&maxResults=10&printType=books&country=US&langRestrict=en`;
+    const seen = new Set<string>();
+    const results: GBResult[] = [];
 
-    const res = await fetch(url);
-    if (!res.ok) return [];
+    for (const url of buildGoogleBooksUrls(title, author)) {
+      const res = await fetch(url);
+      if (!res.ok) continue;
 
-    const data: any = await res.json();
-    if (!data.items?.length) return [];
+      const data: any = await res.json();
+      if (!data.items?.length) continue;
 
-    return data.items
+      const parsed = data.items
       .map((item: any): GBResult | null => {
         const info = item.volumeInfo;
         if (!info?.title) return null;
@@ -62,6 +83,17 @@ export async function searchGoogleBooks(title: string, author?: string): Promise
         };
       })
       .filter((r: GBResult | null): r is GBResult => r !== null);
+
+      for (const result of parsed) {
+        const key = `${result.title.toLowerCase()}:${result.author?.toLowerCase() || ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        results.push(result);
+      }
+
+    }
+
+    return results.slice(0, 10);
   } catch (err) {
     console.error('Google Books API error:', err);
     return [];

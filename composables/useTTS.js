@@ -12,6 +12,7 @@ let _currentBoundaries = []      // word boundaries for the currently playing ch
 let _rafId = null                // requestAnimationFrame handle for word-highlight loop
 
 const DEFAULT_SENTENCE_MAX_CHARS = 480
+const AUDIO_CACHE_LIMIT = 8
 const WORDS_PER_MIN = 145
 
 const EDGE_VOICES = [
@@ -24,6 +25,27 @@ const EDGE_VOICES = [
   { id: 'en-GB-RyanNeural',        name: 'Ryan (UK)' },
   { id: 'en-AU-NatashaNeural',     name: 'Natasha (AU)' },
 ]
+
+const DEFAULT_TTS_VOICE = EDGE_VOICES[0].id
+const KOKORO_VOICE_PREFIX = 'kokoro:'
+
+let _audioCache = new Map()
+
+const isKokoroVoice = (voiceId) => String(voiceId || '').startsWith(KOKORO_VOICE_PREFIX)
+const normalizeAvailableVoice = (voiceId) => {
+  const nextVoice = String(voiceId || '').trim()
+  if (isKokoroVoice(nextVoice)) return DEFAULT_TTS_VOICE
+  return EDGE_VOICES.some(voice => voice.id === nextVoice) ? nextVoice : DEFAULT_TTS_VOICE
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    for (const item of _audioCache.values()) {
+      if (item?.objectUrl) URL.revokeObjectURL(item.audio)
+    }
+    _audioCache.clear()
+  })
+}
 
 // ── Pure helpers (exported for tests) ─────────────────────────────────────
 
@@ -83,6 +105,25 @@ export function splitToChunks(text, maxChars = DEFAULT_SENTENCE_MAX_CHARS) {
   }
 
   return chunks
+}
+
+export function groupChunks(chunks, maxChars = DEFAULT_SENTENCE_MAX_CHARS) {
+  const grouped = []
+  let buffer = ''
+
+  for (const chunk of chunks) {
+    const next = chunk?.trim()
+    if (!next) continue
+    if (buffer && `${buffer} ${next}`.length > maxChars) {
+      grouped.push(buffer)
+      buffer = next
+    } else {
+      buffer = buffer ? `${buffer} ${next}` : next
+    }
+  }
+
+  if (buffer) grouped.push(buffer)
+  return grouped
 }
 
 export function formatDuration(seconds) {
@@ -216,7 +257,7 @@ export const useTTS = () => {
   const ttsTotalChunks  = useState('tts:totalChunks',  () => 0)
   const ttsSpeed        = useState('tts:speed',        () => settings.value.ttsSpeed)
   const ttsVolume       = useState('tts:volume',       () => settings.value.ttsVolume)
-  const ttsVoiceId      = useState('tts:voice',        () => settings.value.ttsVoice)
+  const ttsVoiceId      = useState('tts:voice',        () => normalizeAvailableVoice(settings.value.ttsVoice))
   const ttsVoices       = useState('tts:voices',       () => EDGE_VOICES)
   const ttsCurrentChunk = useState('tts:currentChunk', () => '')
   // Word-level highlight: index into the boundary array for the current chunk
@@ -225,6 +266,12 @@ export const useTTS = () => {
   const ttsBoundaries   = useState('tts:boundaries',   () => [])
 
   const { getBookContent } = useBookStorage()
+
+  const normalizedVoice = normalizeAvailableVoice(ttsVoiceId.value)
+  if (ttsVoiceId.value !== normalizedVoice) {
+    ttsVoiceId.value = normalizedVoice
+    updateSettings({ ttsVoice: normalizedVoice })
+  }
 
   const _estimatedChunkSeconds = (chunk) => {
     const words = (chunk?.match(/\S+/g) || []).length || 1
@@ -253,6 +300,34 @@ export const useTTS = () => {
       : 0
   }
 
+  const _audioCacheKey = (chunkIdx) => `${chunkIdx}:${ttsVoiceId.value}:${ttsSpeed.value}`
+
+  const _cacheAudio = (chunkIdx, data) => {
+    if (!data?.audio) return
+    const key = _audioCacheKey(chunkIdx)
+    if (_audioCache.has(key)) {
+      const old = _audioCache.get(key)
+      if (old?.objectUrl) URL.revokeObjectURL(old.audio)
+      _audioCache.delete(key)
+    }
+    _audioCache.set(key, data)
+    while (_audioCache.size > AUDIO_CACHE_LIMIT) {
+      const oldestKey = _audioCache.keys().next().value
+      const oldest = _audioCache.get(oldestKey)
+      if (oldest?.objectUrl) URL.revokeObjectURL(oldest.audio)
+      _audioCache.delete(oldestKey)
+    }
+  }
+
+  const _getCachedAudio = (chunkIdx) => _audioCache.get(_audioCacheKey(chunkIdx)) ?? null
+
+  const _clearAudioCache = () => {
+    for (const item of _audioCache.values()) {
+      if (item?.objectUrl) URL.revokeObjectURL(item.audio)
+    }
+    _audioCache.clear()
+  }
+
   const _cancelAudio = () => {
     if (_currentAudio) {
       _currentAudio.onended = null
@@ -272,12 +347,16 @@ export const useTTS = () => {
   const _fetchChunkAudio = async (chunkIdx) => {
     const chunk = _chunks[chunkIdx]
     if (!chunk) return null
+    const cached = _getCachedAudio(chunkIdx)
+    if (cached) return cached
     try {
       const data = await $fetch('/api/tts', {
         method: 'POST',
-        body: { text: chunk, voice: ttsVoiceId.value, speed: ttsSpeed.value },
+        body: { text: chunk, voice: normalizeAvailableVoice(ttsVoiceId.value), speed: ttsSpeed.value },
       })
-      return { audio: data.audio ?? null, boundaries: data.boundaries ?? [] }
+      const result = { audio: data.audio ?? null, boundaries: data.boundaries ?? [] }
+      _cacheAudio(chunkIdx, result)
+      return result
     } catch (err) {
       console.warn('[TTS] fetch error:', err)
       return null
@@ -393,6 +472,7 @@ export const useTTS = () => {
 
   const _stopInternal = () => {
     _cancelAudio()
+    _clearAudioCache()
     _chunks = []
     _chunkIdx = 0
     ttsCurrentChunk.value = ''
@@ -405,6 +485,7 @@ export const useTTS = () => {
     _stopInternal()
     ttsBook.value = book
     ttsStatus.value = 'loading'
+    ttsVoiceId.value = normalizeAvailableVoice(ttsVoiceId.value)
 
     let stored = null
     if (!book?.content) {
@@ -430,8 +511,9 @@ export const useTTS = () => {
       return
     }
 
-    _chunks = splitToChunks(text)
-    const contentStart = findContentStart(_chunks)
+    const sentenceChunks = splitToChunks(text)
+    const contentStart = findContentStart(sentenceChunks)
+    _chunks = sentenceChunks
     _chunkIdx = contentStart
     ttsTotalChunks.value = _chunks.length
     _updateProgress()
@@ -484,6 +566,7 @@ export const useTTS = () => {
   const setSpeed = (rate) => {
     const nextSettings = updateSettings({ ttsSpeed: Number(rate) })
     ttsSpeed.value = nextSettings.ttsSpeed
+    _clearAudioCache()
     if (ttsStatus.value === 'playing') {
       _cancelAudio()
       _speakNextEdge()
@@ -500,8 +583,9 @@ export const useTTS = () => {
   }
 
   const setVoice = (voiceId) => {
-    const nextSettings = updateSettings({ ttsVoice: voiceId })
+    const nextSettings = updateSettings({ ttsVoice: normalizeAvailableVoice(voiceId) })
     ttsVoiceId.value = nextSettings.ttsVoice
+    _clearAudioCache()
     if (ttsStatus.value === 'playing') {
       _cancelAudio()
       _speakNextEdge()

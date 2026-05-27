@@ -46,55 +46,62 @@ function extractJsonLdBook(html: string, $: cheerio.CheerioAPI): any | null {
 
 // Returns up to 5 Kobo book-page URLs for a query.
 export async function searchKobo(title: string, author?: string): Promise<string[]> {
-  const q = encodeURIComponent([title, author].filter(Boolean).join(' '));
   const seen = new Set<string>();
   const urls: string[] = [];
   const regions = ['us', 'ww', 'ca', 'gb'];
+  const queries = [
+    { q: encodeURIComponent(title), titleOnly: true },
+    { q: encodeURIComponent([title, author].filter(Boolean).join(' ')), titleOnly: false },
+  ];
 
   for (const region of regions) {
     if (urls.length >= 8) break;
-    const html = await fetchHtml(`https://www.kobo.com/${region}/en/search?query=${q}&fcsearchfield=Title`);
-    if (!html) continue;
 
-    const $ = cheerio.load(html);
+    for (const query of queries) {
+      if (urls.length >= 8) break;
+      const html = await fetchHtml(`https://www.kobo.com/${region}/en/search?query=${query.q}${query.titleOnly ? '&fcsearchfield=Title' : ''}`);
+      if (!html) continue;
 
-    // Primary: extract ebook links directly from anchor tags
-    $('a[href*="/ebook/"]').each((_, el) => {
-      if (urls.length >= 8) return;
-      const href = $(el).attr('href');
-      if (!href) return;
-      const full = href.startsWith('http') ? href : `https://www.kobo.com${href}`;
-      const clean = full.split('?')[0].split('#')[0];
-      if (!seen.has(clean)) { seen.add(clean); urls.push(clean); }
-    });
+      const $ = cheerio.load(html);
 
-    // Fallback: parse __NEXT_DATA__ SSR blob (Kobo uses Next.js)
-    const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-    if (match) {
-      try {
-        const nd = JSON.parse(match[1]);
-        const pp = nd?.props?.pageProps;
-        // Current Kobo structure: searchResultSSR.Items[].Book.Slug
-        const ssrItems: any[] = pp?.searchResultSSR?.Items || [];
-        for (const item of ssrItems) {
-          const slug = item.Book?.Slug || item.Book?.slug;
-          if (slug && urls.length < 8) {
-            const u = `https://www.kobo.com/${region}/en/ebook/${slug}`;
-            if (!seen.has(u)) { seen.add(u); urls.push(u); }
-          }
-        }
-        // Legacy structure fallback
-        if (urls.length === 0) {
-          const legacyItems: any[] = pp?.searchResults?.items || pp?.items || [];
-          for (const item of legacyItems) {
-          const slug = item.slug || item.Slug || item.id;
+      // Primary: extract ebook links directly from anchor tags
+      $('a[href*="/ebook/"]').each((_, el) => {
+        if (urls.length >= 8) return;
+        const href = $(el).attr('href');
+        if (!href) return;
+        const full = href.startsWith('http') ? href : `https://www.kobo.com${href}`;
+        const clean = full.split('?')[0].split('#')[0];
+        if (!seen.has(clean)) { seen.add(clean); urls.push(clean); }
+      });
+
+      // Fallback: parse __NEXT_DATA__ SSR blob (Kobo uses Next.js)
+      const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+      if (match) {
+        try {
+          const nd = JSON.parse(match[1]);
+          const pp = nd?.props?.pageProps;
+          // Current Kobo structure: searchResultSSR.Items[].Book.Slug
+          const ssrItems: any[] = pp?.searchResultSSR?.Items || [];
+          for (const item of ssrItems) {
+            const slug = item.Book?.Slug || item.Book?.slug;
             if (slug && urls.length < 8) {
               const u = `https://www.kobo.com/${region}/en/ebook/${slug}`;
               if (!seen.has(u)) { seen.add(u); urls.push(u); }
             }
           }
-        }
-      } catch {}
+          // Legacy structure fallback
+          if (urls.length === 0) {
+            const legacyItems: any[] = pp?.searchResults?.items || pp?.items || [];
+            for (const item of legacyItems) {
+            const slug = item.slug || item.Slug || item.id;
+              if (slug && urls.length < 8) {
+                const u = `https://www.kobo.com/${region}/en/ebook/${slug}`;
+                if (!seen.has(u)) { seen.add(u); urls.push(u); }
+              }
+            }
+          }
+        } catch {}
+      }
     }
   }
 

@@ -1,7 +1,20 @@
+import { toRaw } from 'vue'
+
 const DB_NAME = 'bookish-storage'
 const STORE_NAME = 'book-content'
 const PDF_SOURCE_STORE_NAME = 'book-pdf-source'
 const DB_VERSION = 2
+
+function cloneForStorage(value) {
+  if (value === null || value === undefined) return value
+  const raw = toRaw(value)
+  if (raw instanceof ArrayBuffer) return raw.slice(0)
+  if (ArrayBuffer.isView(raw)) {
+    return raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)
+  }
+  if (typeof Blob !== 'undefined' && raw instanceof Blob) return raw
+  return JSON.parse(JSON.stringify(raw))
+}
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -21,12 +34,7 @@ function openDB() {
 }
 
 function normalizeSourceForStorage(source) {
-  if (source === null || source === undefined) return source
-  if (source instanceof ArrayBuffer) return source.slice(0)
-  if (ArrayBuffer.isView(source)) {
-    return source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength)
-  }
-  return source
+  return cloneForStorage(source)
 }
 
 function emptyStorageSummary(error = null) {
@@ -116,10 +124,10 @@ export const useBookStorage = () => {
     const db = await openDB()
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite')
-      const record = { content, pages }
-      if (tocTitles !== undefined) record.tocTitles = tocTitles ?? null
-      if (tocItems !== undefined) record.tocItems = tocItems ?? null
-      if (format !== undefined) record.format = format ?? null
+      const record = { content: cloneForStorage(content ?? null), pages: cloneForStorage(pages ?? 0) }
+      if (tocTitles !== undefined) record.tocTitles = cloneForStorage(tocTitles ?? null)
+      if (tocItems !== undefined) record.tocItems = cloneForStorage(tocItems ?? null)
+      if (format !== undefined) record.format = cloneForStorage(format ?? null)
       if (pdfTocChecked !== undefined) record.pdfTocChecked = !!pdfTocChecked
       tx.objectStore(STORE_NAME).put(record, bookId)
       tx.oncomplete = () => resolve()

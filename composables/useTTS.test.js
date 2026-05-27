@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { stripHtml, splitToChunks, formatDuration, findContentStart } from './useTTS.js'
+import { stripHtml, splitToChunks, groupChunks, formatDuration, findContentStart } from './useTTS.js'
 
 describe('stripHtml', () => {
   it('removes block tags and collapses whitespace', () => {
@@ -49,6 +49,18 @@ describe('splitToChunks', () => {
   it('keeps normal sentences as individual playback chunks', () => {
     const chunks = splitToChunks('First sentence. Second sentence! Third sentence?')
     expect(chunks).toEqual(['First sentence.', 'Second sentence!', 'Third sentence?'])
+  })
+})
+
+describe('groupChunks', () => {
+  it('combines short sentence chunks for local Kokoro playback', () => {
+    const chunks = ['First sentence.', 'Second sentence.', 'Third sentence.']
+    expect(groupChunks(chunks, 40)).toEqual(['First sentence. Second sentence.', 'Third sentence.'])
+  })
+
+  it('preserves text while grouping chunks', () => {
+    const chunks = ['Alpha.', 'Beta is longer.', 'Gamma.']
+    expect(groupChunks(chunks, 30).join(' ')).toBe(chunks.join(' '))
   })
 })
 

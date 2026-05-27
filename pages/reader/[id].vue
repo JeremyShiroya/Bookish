@@ -145,12 +145,12 @@
 <script setup>
 definePageMeta({ layout: 'reader' })
 
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, toRaw, watch } from 'vue'
 import { useBooks } from '~/composables/useBooks'
 import { stripHtml, splitToChunks, useTTS } from '~/composables/useTTS'
 import { useBookStorage } from '~/composables/useBookStorage'
 import { useBookishSettings } from '~/composables/useBookishSettings'
-import { extractPdfTocFromSource } from '~/composables/usePdfExtractor'
+import { extractPdfTocFromSource, pdfSourceToBytes } from '~/composables/usePdfExtractor'
 
 const route = useRoute()
 const router = useRouter()
@@ -539,7 +539,8 @@ async function ensurePdfToc(bookId) {
 
   tocLoading.value = true
   try {
-    const extractedItems = await extractPdfTocFromSource(pdfSource.value)
+    const sourceBytes = await pdfSourceToBytes(toRaw(pdfSource.value))
+    const extractedItems = await extractPdfTocFromSource(sourceBytes)
     tocItems.value = extractedItems
     pdfTocChecked.value = true
 

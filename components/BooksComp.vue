@@ -237,30 +237,37 @@
                 {{ book.author }} 
                 <span v-if="book.publishYear">• {{ book.publishYear }}</span>
               </p>
-              <p v-if="book.series" class="book-series">{{ book.series }}</p>
+              <p class="book-series" :class="{ standalone: !book.series }">
+                {{ book.series || 'Standalone' }}
+              </p>
               <div v-if="book.genre" class="book-genre-tag" :title="'Genre: ' + book.genre">
                 <i class="ri-price-tag-3-line"></i>
                 <span>{{ book.genre }}</span>
               </div>
               
+              <div v-if="getGoodreadsRating(book)" class="book-goodreads-row" title="Goodreads Rating">
+                <GoodreadsRatingDisplay :web-review="book.webReview" compact />
+              </div>
+
               <div class="book-meta">
-                <div class="meta-item" title="Goodreads Rating">
-                  <svg class="goodreads-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#f4f1ea"/><path fill="#382110" d="M13.203 14.341c-2.404 0-3.329-1.22-3.329-3.272c0-2.324 1.21-3.313 3.329-3.313c2.424 0 3.329 1.23 3.329 3.313c0 2.052-.925 3.272-3.329 3.272M13.203 5c-3.134 0-5.46 1.251-5.46 5.424c0 3.518 1.879 5.86 5.46 5.86c1.192 0 2.454-.369 3.329-1.313v1.313c0 2.502-1.128 3.579-3.329 3.579c-2.051 0-3.18-.892-3.344-2.267H7.728c.164 2.462 2.379 4.144 5.475 4.144c4.154 0 5.459-2.195 5.459-5.456V5.215h-2.133v1.1c-.875-.953-2.138-1.315-3.326-1.315z"/></svg>
-                  <span>{{ formatWebRating(book.webReview) }}</span>
-                </div>
                 <div class="meta-item" title="Personal Rating">
                   <i class="ri-star-fill star-icon"></i>
                   <span>{{ book.rating || '—' }}</span>
                 </div>
-                <div class="meta-item progress-meta" title="Reading Progress">
-                  <i class="ri-book-read-line"></i>
-                  <span>{{ book.progress }}%</span>
+                <div class="grid-progress" title="Reading Progress">
+                  <div class="grid-progress-track">
+                    <div class="grid-progress-fill" :style="{ width: `${book.progress || 0}%` }"></div>
+                  </div>
+                  <span>{{ book.progress || 0 }}%</span>
                 </div>
               </div>
               
               <div class="book-actions">
                 <button class="action-btn" :class="{ active: book.isFavourite }" title="Add to favorites" @click.stop="toggleFavourite(book.id)">
                   <i :class="[book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line']"></i>
+                </button>
+                <button class="action-btn" title="Add to playlist" @click.stop="openPlaylistModal(book)">
+                  <i class="ri-play-list-2-line"></i>
                 </button>
                 <button class="action-btn" title="Edit book" @click.stop="router.push(`/edit/${book.id}`)">
                   <i class="ri-edit-line"></i>
@@ -275,6 +282,16 @@
 
         <!-- List View -->
         <div v-else class="books-list">
+          <div class="list-header-row">
+            <span></span>
+            <span>Book</span>
+            <span>Type</span>
+            <span>Progress</span>
+            <span>Goodreads</span>
+            <span>Rating</span>
+            <span>Format</span>
+            <span></span>
+          </div>
           <div 
             v-for="book in filteredBooks" 
             :key="book.id" 
@@ -285,10 +302,14 @@
             
             <div class="list-details">
               <h3 class="list-title">{{ book.title }}</h3>
-              <p class="list-author">{{ book.author }}</p>
+              <p class="list-author">
+                {{ book.author }}
+                <span v-if="book.publishYear"> • {{ book.publishYear }}</span>
+              </p>
             </div>
 
             <div class="list-meta">
+              <span class="list-series" :class="{ standalone: !book.series }">{{ book.series || 'Standalone' }}</span>
               <span class="list-series">{{ book.series || '—' }}</span>
             </div>
 
@@ -299,7 +320,11 @@
               <span class="list-progress-text">{{ book.progress }}%</span>
             </div>
 
-            <div class="list-rating-cell">
+            <div class="list-goodreads-cell" title="Goodreads Rating">
+              <GoodreadsRatingDisplay :web-review="book.webReview" compact />
+            </div>
+
+            <div class="list-rating-cell" title="Personal Rating">
               <i class="ri-star-fill list-star"></i>
               <span>{{ book.rating || '—' }}</span>
             </div>
@@ -309,6 +334,9 @@
             <div class="list-actions" @click.stop>
               <button class="list-action-btn" :class="{ active: book.isFavourite }" title="Favourite" @click="toggleFavourite(book.id)">
                 <i :class="book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line'"></i>
+              </button>
+              <button class="list-action-btn" title="Add to playlist" @click="openPlaylistModal(book)">
+                <i class="ri-play-list-2-line"></i>
               </button>
               <button class="list-action-btn" title="Edit" @click="router.push(`/edit/${book.id}`)">
                 <i class="ri-edit-line"></i>
@@ -325,7 +353,7 @@
       <EmptyState
         v-else
         title="Your library is empty"
-        description="Connect your first document to start building your personal book collection."
+        description="Connect your first document to start building your personal library."
         icon="ri-book-open-line"
       >
         <template #action>
@@ -338,6 +366,76 @@
     </div>
 
 
+    <div v-if="showPlaylistModal" class="playlist-modal-overlay" @click="closePlaylistModal">
+      <div class="playlist-modal" @click.stop>
+        <div class="playlist-modal-header">
+          <div>
+            <h2>Add to Playlist</h2>
+            <p>{{ selectedPlaylistBook?.title }}</p>
+          </div>
+          <button class="close-button" @click="closePlaylistModal">
+            <i class="ri-close-line"></i>
+          </button>
+        </div>
+
+        <div class="playlist-mode-toggle">
+          <button
+            type="button"
+            :class="{ active: playlistMode === 'existing' }"
+            :disabled="selectablePlaylists.length === 0"
+            @click="playlistMode = 'existing'"
+          >
+            Existing
+          </button>
+          <button
+            type="button"
+            :class="{ active: playlistMode === 'new' }"
+            @click="playlistMode = 'new'"
+          >
+            New Playlist
+          </button>
+        </div>
+
+        <div v-if="playlistMode === 'existing'" class="playlist-picker">
+          <label
+            v-for="playlist in selectablePlaylists"
+            :key="playlist.id"
+            class="playlist-option"
+            :class="{ active: selectedPlaylistId === String(playlist.id) }"
+          >
+            <input type="radio" :value="String(playlist.id)" v-model="selectedPlaylistId" />
+            <span>
+              <strong>{{ playlist.name }}</strong>
+              <small>{{ playlist.bookCount || 0 }} books</small>
+            </span>
+          </label>
+
+          <p v-if="selectablePlaylists.length === 0" class="playlist-empty-note">
+            This book is already in every playlist. Create a new one to add it somewhere fresh.
+          </p>
+        </div>
+
+        <div v-else class="playlist-create-form">
+          <label>
+            Name
+            <input v-model="newPlaylistName" type="text" placeholder="Weekend reads" class="playlist-input" />
+          </label>
+          <label>
+            Description
+            <textarea v-model="newPlaylistDescription" rows="3" placeholder="Optional note..." class="playlist-input"></textarea>
+          </label>
+        </div>
+
+        <div class="playlist-modal-actions">
+          <button type="button" class="btn-secondary" @click="closePlaylistModal">Cancel</button>
+          <button type="button" class="btn-primary-modal" :disabled="!canSavePlaylist || isSavingPlaylist" @click="saveBookToPlaylist">
+            <i v-if="isSavingPlaylist" class="ri-loader-4-line spinner"></i>
+            <i v-else class="ri-play-list-add-line"></i>
+            {{ isSavingPlaylist ? 'Adding...' : 'Add to Playlist' }}
+          </button>
+        </div>
+      </div>
+    </div>
 
 
     <!-- Delete Confirmation Modal -->
@@ -353,17 +451,32 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import DeleteConfirmModal from "./DeleteConfirmModal.vue";
+import GoodreadsRatingDisplay from "./GoodreadsRatingDisplay.vue";
 
 import { useBooks } from "~/composables/useBooks";
+import { getGoodreadsRating } from "~/composables/useGoodreadsRating";
 import { useTTS } from "~/composables/useTTS";
 import { useBookishSettings } from "~/composables/useBookishSettings";
+import { useToast } from "~/composables/useToast";
 
 // Reactive data
 import EmptyState from "./EmptyState.vue";
 
-const { books, loading, error, updateBook, deleteBook: removeBookFromStore, addBook, toggleFavourite, fetchAllData } = useBooks();
+const {
+  books,
+  collections,
+  loading,
+  error,
+  updateBook,
+  deleteBook: removeBookFromStore,
+  toggleFavourite,
+  createPlaylist,
+  addBookToPlaylist,
+  fetchAllData,
+} = useBooks();
 const { play: playTTS, ttsBook, ttsStatus } = useTTS()
 const { settings, updateSettings } = useBookishSettings();
+const { addToast } = useToast();
 
 const isBookActive = (book) =>
   ttsBook.value?.id === book.id && ttsStatus.value !== 'idle'
@@ -391,6 +504,13 @@ const activeActionsMenu = ref(null);
 // Modal states
 const showDeleteModal = ref(false);
 const selectedBook = ref(null);
+const showPlaylistModal = ref(false);
+const selectedPlaylistBook = ref(null);
+const selectedPlaylistId = ref("");
+const playlistMode = ref("existing");
+const newPlaylistName = ref("");
+const newPlaylistDescription = ref("");
+const isSavingPlaylist = ref(false);
 
 // Computed filtered books
 const filteredBooks = computed(() => {
@@ -419,13 +539,26 @@ const filteredBooks = computed(() => {
     if (sortBy.value === "name") {
       comparison = a.title.localeCompare(b.title);
     } else if (sortBy.value === "rating") {
-      comparison = a.rating - b.rating;
+      comparison = getGoodreadsRating(a) - getGoodreadsRating(b);
     }
     return sortDirection.value === "asc" ? comparison : -comparison;
   });
 
   return filtered;
 });
+
+const selectablePlaylists = computed(() => {
+  const bookId = selectedPlaylistBook.value?.id;
+  return collections.value.filter((playlist) => (
+    !bookId || !(playlist.bookIds || []).includes(bookId)
+  ));
+});
+
+const canSavePlaylist = computed(() => (
+  playlistMode.value === "new"
+    ? newPlaylistName.value.trim().length > 0
+    : Boolean(selectedPlaylistId.value)
+));
 
 // Methods
 const toggleDropdown = (dropdown) => {
@@ -470,12 +603,49 @@ const retryLoadLibrary = () => {
   fetchAllData(true);
 };
 
+const openPlaylistModal = (book) => {
+  selectedPlaylistBook.value = book;
+  const firstAvailable = collections.value.find((playlist) => !(playlist.bookIds || []).includes(book.id));
+  selectedPlaylistId.value = firstAvailable ? String(firstAvailable.id) : "";
+  playlistMode.value = firstAvailable ? "existing" : "new";
+  newPlaylistName.value = "";
+  newPlaylistDescription.value = "";
+  showPlaylistModal.value = true;
+};
 
+const closePlaylistModal = () => {
+  showPlaylistModal.value = false;
+  selectedPlaylistBook.value = null;
+  selectedPlaylistId.value = "";
+  playlistMode.value = "existing";
+  newPlaylistName.value = "";
+  newPlaylistDescription.value = "";
+  isSavingPlaylist.value = false;
+};
 
-const formatWebRating = (webReview) => {
-  if (!webReview) return '—';
-  const match = webReview.match(/Rating:\s*([\d.]+)/);
-  return match ? match[1] : '—';
+const saveBookToPlaylist = async () => {
+  if (!selectedPlaylistBook.value || !canSavePlaylist.value || isSavingPlaylist.value) return;
+
+  isSavingPlaylist.value = true;
+  try {
+    let playlistId = selectedPlaylistId.value;
+    if (playlistMode.value === "new") {
+      const playlist = await createPlaylist({
+        name: newPlaylistName.value.trim(),
+        description: newPlaylistDescription.value.trim() || null,
+      });
+      playlistId = String(playlist.id);
+    }
+
+    await addBookToPlaylist(playlistId, selectedPlaylistBook.value.id);
+    addToast("Book added to playlist", "success");
+    closePlaylistModal();
+  } catch (error) {
+    console.error("Playlist update failed:", error);
+    addToast("Failed to update playlist", "error");
+  } finally {
+    isSavingPlaylist.value = false;
+  }
 };
 
 
@@ -727,11 +897,13 @@ onUnmounted(() => {
   grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
   gap: 2rem;
   justify-content: start;
+  align-items: start;
 }
 
 .book-card.horizontal {
   display: flex;
   flex-direction: row;
+  align-items: flex-start;
   gap: 1.25rem;
   background: transparent;
   border-radius: 16px;
@@ -787,6 +959,7 @@ onUnmounted(() => {
 
 .book-cover {
   width: 110px;
+  height: 165px;
   aspect-ratio: 2/3;
   border-radius: 8px;
   overflow: hidden;
@@ -877,7 +1050,7 @@ onUnmounted(() => {
 .book-title {
   font-size: 1.15rem;
   font-weight: 500;
-  color: var(--color-surface-primary);
+  color: var(--color-text-on-image-primary);
   margin: 0 0 0.25rem 0;
   line-height: 1.3;
   display: -webkit-box;
@@ -898,11 +1071,16 @@ onUnmounted(() => {
 
 .book-series {
   font-size: 0.8rem;
-  color: var(--color-brand-lavender);
+  color: var(--color-text-on-image-tertiary);
   margin: 0 0 0.25rem 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.book-series.standalone {
+  color: var(--color-text-on-image-secondary);
+  opacity: 0.8;
 }
 
 .book-genre-tag {
@@ -920,10 +1098,64 @@ onUnmounted(() => {
 
 .book-meta {
   display: flex;
-  gap: 1rem;
-  margin-top: auto;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 0;
   font-size: 0.85rem;
   color: var(--color-surface-glass);
+}
+
+.grid-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 90px;
+}
+
+.grid-progress-track {
+  flex: 1;
+  height: 7px;
+  min-width: 58px;
+  border-radius: 999px;
+  background: var(--color-border-on-image);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--color-border-on-image);
+}
+
+.grid-progress-fill {
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: var(--gradient-library-progress);
+  transition: width 0.3s ease;
+}
+
+.grid-progress span {
+  color: var(--color-text-on-image-secondary);
+  font-size: 0.78rem;
+  min-width: 34px;
+  text-align: right;
+}
+
+.book-goodreads-row {
+  margin-top: auto;
+  margin-bottom: 0.65rem;
+  min-width: 0;
+}
+
+.book-goodreads-row :deep(.goodreads-rating) {
+  color: var(--color-text-on-image-secondary);
+  flex-wrap: wrap;
+  row-gap: 0.2rem;
+}
+
+.book-goodreads-row :deep(.goodreads-score) {
+  color: var(--color-text-on-image-primary);
+}
+
+.book-goodreads-row :deep(.goodreads-count) {
+  color: var(--color-text-on-image-secondary);
 }
 
 .meta-item {
@@ -954,7 +1186,7 @@ onUnmounted(() => {
 }
 
 .progress-meta i {
-  color: var(--color-brand-lavender);
+  color: var(--color-text-on-image-primary);
 }
 
 .book-actions {
@@ -1002,35 +1234,51 @@ onUnmounted(() => {
 .books-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.65rem;
+}
+
+.list-header-row,
+.list-row {
+  display: grid;
+  grid-template-columns: 50px minmax(220px, 2fr) minmax(130px, 1fr) 150px 210px 70px 70px 148px;
+  align-items: center;
+  gap: 1rem;
+}
+
+.list-header-row {
+  padding: 0 1rem;
+  color: var(--color-text-subtle);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .list-row {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  padding: 0.75rem 1rem;
-  background: var(--color-surface-secondary);
+  padding: 0.85rem 1rem;
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
+  box-shadow: var(--shadow-card-subtle);
 }
 
 .list-row:hover {
-  background: var(--color-surface-tertiary);
-  transform: translateX(4px);
+  background: var(--color-surface-secondary);
+  border-color: var(--color-border-card);
+  transform: translateY(-2px);
 }
 
 .list-cover {
-  width: 42px;
-  height: 60px;
+  width: 50px;
+  height: 72px;
   border-radius: 6px;
   object-fit: cover;
   flex-shrink: 0;
+  box-shadow: var(--shadow-control-subtle);
 }
 
 .list-details {
-  flex: 2;
   min-width: 0;
 }
 
@@ -1054,24 +1302,36 @@ onUnmounted(() => {
 }
 
 .list-meta {
-  flex: 1;
   min-width: 0;
 }
 
 .list-series {
+  display: inline-flex;
+  max-width: 100%;
   font-size: 0.8rem;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.list-series.standalone {
+  color: var(--color-text-muted);
+}
+
+.list-meta .list-series + .list-series {
+  display: none;
 }
 
 .list-progress-cell {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  width: 120px;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 .list-progress-bar {
@@ -1100,10 +1360,23 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  width: 50px;
-  flex-shrink: 0;
   font-size: 0.85rem;
   color: var(--color-text-secondary);
+}
+
+.list-goodreads-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.list-goodreads-cell :deep(.goodreads-rating) {
+  overflow: hidden;
+}
+
+.list-goodreads-cell :deep(.goodreads-count) {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .list-star {
@@ -1118,22 +1391,15 @@ onUnmounted(() => {
   background: var(--color-brand-primary-faint);
   padding: 0.2rem 0.6rem;
   border-radius: 4px;
-  width: 50px;
+  width: fit-content;
   text-align: center;
-  flex-shrink: 0;
   letter-spacing: 0.03em;
 }
 
 .list-actions {
   display: flex;
-  gap: 0.15rem;
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.list-row:hover .list-actions {
-  opacity: 1;
+  gap: 0.25rem;
+  justify-content: flex-end;
 }
 
 .list-action-btn {
@@ -1165,6 +1431,209 @@ onUnmounted(() => {
   color: var(--color-status-danger);
 }
 
+.playlist-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: var(--color-background-overlay-soft);
+  backdrop-filter: blur(5px);
+}
+
+.playlist-modal {
+  width: min(520px, 100%);
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 14px;
+  box-shadow: var(--shadow-modal);
+  overflow: hidden;
+}
+
+.playlist-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.playlist-modal-header h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+.playlist-modal-header p {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+
+.close-button {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 1.25rem;
+}
+
+.close-button:hover {
+  background: var(--color-surface-secondary);
+  color: var(--color-text-primary);
+}
+
+.playlist-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem 0;
+}
+
+.playlist-mode-toggle button {
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.playlist-mode-toggle button.active {
+  background: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+}
+
+.playlist-mode-toggle button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.playlist-picker,
+.playlist-create-form {
+  padding: 1rem 1.5rem 1.25rem;
+}
+
+.playlist-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.playlist-option {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  background: var(--color-surface-secondary);
+  cursor: pointer;
+}
+
+.playlist-option.active {
+  border-color: var(--color-brand-primary);
+  background: var(--color-surface-active);
+}
+
+.playlist-option input {
+  accent-color: var(--color-brand-primary);
+}
+
+.playlist-option span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.playlist-option strong {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.playlist-option small,
+.playlist-empty-note {
+  color: var(--color-text-muted);
+}
+
+.playlist-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.playlist-create-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: var(--color-text-secondary);
+  font-size: 0.86rem;
+}
+
+.playlist-input {
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 9px;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-primary);
+  font: inherit;
+  resize: vertical;
+}
+
+.playlist-input:focus {
+  outline: none;
+  border-color: var(--color-brand-primary);
+  background: var(--color-surface-primary);
+}
+
+.playlist-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 1.25rem;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.btn-secondary,
+.btn-primary-modal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 40px;
+  padding: 0.65rem 1rem;
+  border-radius: 9px;
+  cursor: pointer;
+  border: 1px solid var(--color-border-subtle);
+}
+
+.btn-secondary {
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+}
+
+.btn-primary-modal {
+  background: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+}
+
+.btn-primary-modal:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
   .books-container {
     padding: 0;
@@ -1184,15 +1653,24 @@ onUnmounted(() => {
     justify-content: center;
   }
 
+  .list-header-row {
+    display: none;
+  }
+
+  .list-row {
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    gap: 0.85rem;
+  }
+
   .list-meta,
   .list-progress-cell,
+  .list-goodreads-cell,
   .list-rating-cell,
   .list-format {
     display: none;
   }
 
   .list-row {
-    gap: 1rem;
     padding: 0.6rem 0.75rem;
   }
 

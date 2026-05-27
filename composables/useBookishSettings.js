@@ -13,6 +13,17 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   metadataAutoFill: true,
 })
 
+const TTS_VOICE_IDS = new Set([
+  'en-US-ChristopherNeural',
+  'en-US-JennyNeural',
+  'en-US-AriaNeural',
+  'en-US-GuyNeural',
+  'en-US-DavisNeural',
+  'en-GB-SoniaNeural',
+  'en-GB-RyanNeural',
+  'en-AU-NatashaNeural',
+])
+
 const settingsState = ref({ ...DEFAULT_BOOKISH_SETTINGS })
 let loadedFromStorage = false
 
@@ -21,6 +32,11 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 const numberOrDefault = (value, fallback, min, max) => {
   const next = Number(value)
   return Number.isFinite(next) ? clamp(next, min, max) : fallback
+}
+
+const voiceOrDefault = (value) => {
+  const voice = typeof value === 'string' ? value.trim() : ''
+  return TTS_VOICE_IDS.has(voice) ? voice : DEFAULT_BOOKISH_SETTINGS.ttsVoice
 }
 
 export function normalizeBookishSettings(value) {
@@ -42,9 +58,7 @@ export function normalizeBookishSettings(value) {
     librarySort: ['name', 'rating'].includes(source.librarySort)
       ? source.librarySort
       : DEFAULT_BOOKISH_SETTINGS.librarySort,
-    ttsVoice: typeof source.ttsVoice === 'string' && source.ttsVoice.trim()
-      ? source.ttsVoice
-      : DEFAULT_BOOKISH_SETTINGS.ttsVoice,
+    ttsVoice: voiceOrDefault(source.ttsVoice),
     ttsSpeed: numberOrDefault(
       source.ttsSpeed,
       DEFAULT_BOOKISH_SETTINGS.ttsSpeed,

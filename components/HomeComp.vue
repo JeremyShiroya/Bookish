@@ -89,6 +89,9 @@
               <div class="popular-info">
                 <h4 class="popular-title">{{ book.title }}</h4>
                 <p class="popular-author">{{ book.author }}</p>
+                <div class="popular-rating" v-if="getGoodreadsRating(book)">
+                  <GoodreadsRatingDisplay :web-review="book.webReview" compact />
+                </div>
                 <p class="popular-blurb">{{ truncate(book.blurb, 90) }}</p>
               </div>
               <button
@@ -153,8 +156,10 @@
 <script setup>
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
+import { getGoodreadsRating } from "~/composables/useGoodreadsRating";
 import { useTTS } from "~/composables/useTTS";
 import EmptyState from "./EmptyState.vue";
+import GoodreadsRatingDisplay from "./GoodreadsRatingDisplay.vue";
 import HomeSkeleton from "./HomeSkeleton.vue";
 
 const {
@@ -463,7 +468,16 @@ const truncate = (text, length) => {
 .popular-author {
   font-size: 0.85rem;
   color: var(--text-muted);
-  margin: 0 0 1rem 0;
+  margin: 0 0 0.5rem 0;
+}
+
+.popular-rating {
+  margin: 0 0 0.75rem 0;
+}
+
+.popular-rating :deep(.goodreads-rating) {
+  flex-wrap: wrap;
+  row-gap: 0.2rem;
 }
 
 .popular-blurb {

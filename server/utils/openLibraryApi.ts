@@ -11,6 +11,11 @@ export interface OLResult {
   isbn13s: string[];
 }
 
+const openLibraryHeaders = {
+  'User-Agent': 'Bookish/1.0 (metadata lookup; contact: local-app)',
+  'Accept': 'application/json',
+};
+
 function normalizeSubjectGenre(subject: string) {
   const cleaned = subject.replace(/\s+/g, ' ').trim();
   const lower = cleaned.toLowerCase();
@@ -55,21 +60,42 @@ function extractGenres(subjects: string[]) {
 
 export async function searchOpenLibrary(title: string, author?: string): Promise<OLResult[]> {
   try {
-    let url = `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&limit=5`;
-    if (author) url += `&author=${encodeURIComponent(author)}`;
+    const urls = [
+      `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}${author ? `&author=${encodeURIComponent(author)}` : ''}&limit=8`,
+      `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&limit=8`,
+      `https://openlibrary.org/search.json?q=${encodeURIComponent([title, author].filter(Boolean).join(' '))}&limit=8`,
+    ];
+    const seenUrls = new Set<string>();
+    const seenResults = new Set<string>();
+    const docs: any[] = [];
 
-    const res = await fetch(url);
-    if (!res.ok) return [];
+    for (const url of urls) {
+      if (seenUrls.has(url)) continue;
+      seenUrls.add(url);
 
-    const data = await res.json();
-    if (!data.docs?.length) return [];
+      const res = await fetch(url, { headers: openLibraryHeaders });
+      if (!res.ok) continue;
+
+      const data = await res.json();
+      if (!data.docs?.length) continue;
+
+      for (const doc of data.docs as any[]) {
+        const key = doc.key || `${doc.title}:${doc.author_name?.join(',') || ''}`;
+        if (seenResults.has(key)) continue;
+        seenResults.add(key);
+        docs.push(doc);
+      }
+
+    }
+
+    if (!docs.length) return [];
 
     const results = await Promise.all(
-      (data.docs as any[]).map(async (doc): Promise<OLResult> => {
+      docs.slice(0, 8).map(async (doc): Promise<OLResult> => {
         let blurb: string | null = null;
         let detailSubjects: string[] = [];
         try {
-          const detailRes = await fetch(`https://openlibrary.org${doc.key}.json`);
+          const detailRes = await fetch(`https://openlibrary.org${doc.key}.json`, { headers: openLibraryHeaders });
           if (detailRes.ok) {
             const detail = await detailRes.json();
             blurb = typeof detail.description === 'string'

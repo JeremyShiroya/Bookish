@@ -41,6 +41,11 @@
                 <p class="metadata-author">{{ result.author }}</p>
                 <p class="metadata-year" v-if="result.publishYear">{{ result.publishYear }} <span v-if="result.genre">• {{ result.genre }}</span></p>
                 <p class="metadata-series" v-if="result.series">{{ result.series }} <span v-if="result.seriesInstallment">#{{ result.seriesInstallment }}</span></p>
+                <GoodreadsRatingDisplay
+                  v-if="result.webReview"
+                  :web-review="result.webReview"
+                  compact
+                />
               </div>
             </div>
           </div>
@@ -145,7 +150,21 @@
             ></textarea>
           </div>
 
-          <div class="form-row">
+          <div class="form-group">
+            <label>Book Type</label>
+            <div class="radio-group">
+              <label class="radio-option" :class="{ active: bookKind === 'standalone' }">
+                <input type="radio" value="standalone" v-model="bookKind" @change="handleBookKindChange" />
+                <span>Standalone</span>
+              </label>
+              <label class="radio-option" :class="{ active: bookKind === 'series' }">
+                <input type="radio" value="series" v-model="bookKind" />
+                <span>Series</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-row" v-if="bookKind === 'series'">
             <div class="form-group">
               <label for="series">Series</label>
               <input 
@@ -224,13 +243,10 @@
             </div>
           </div>
 
-          <div class="form-group" v-if="editBook.webReview">
-            <label class="web-review-label">
-              <svg class="goodreads-svg-inline" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#f4f1ea"/><path fill="#382110" d="M13.203 14.341c-2.404 0-3.329-1.22-3.329-3.272c0-2.324 1.21-3.313 3.329-3.313c2.424 0 3.329 1.23 3.329 3.313c0 2.052-.925 3.272-3.329 3.272M13.203 5c-3.134 0-5.46 1.251-5.46 5.424c0 3.518 1.879 5.86 5.46 5.86c1.192 0 2.454-.369 3.329-1.313v1.313c0 2.502-1.128 3.579-3.329 3.579c-2.051 0-3.18-.892-3.344-2.267H7.728c.164 2.462 2.379 4.144 5.475 4.144c4.154 0 5.459-2.195 5.459-5.456V5.215h-2.133v1.1c-.875-.953-2.138-1.315-3.326-1.315z"/></svg>
-              Web Review
-            </label>
+          <div class="form-group">
+            <label class="web-review-label">Goodreads Rating & Reviews</label>
             <div class="readonly-review">
-              {{ editBook.webReview }}
+              <GoodreadsRatingDisplay :web-review="editBook.webReview" show-empty />
             </div>
           </div>
 
@@ -252,8 +268,10 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
+import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
 import { useCoverImageCache } from '~/composables/useCoverImageCache'
 import CoverImageModal from './CoverImageModal.vue'
+import GoodreadsRatingDisplay from './GoodreadsRatingDisplay.vue'
 
 const props = defineProps({
   bookId: {
@@ -296,6 +314,7 @@ const showCoverModal = ref(false)
 const coverModalMode = ref('choice')
 const isSearchingCovers = ref(false)
 const coverOptions = ref([])
+const bookKind = ref('standalone')
 
 const openCoverModal = () => {
   coverModalMode.value = 'choice'
@@ -332,6 +351,7 @@ onMounted(async () => {
         router.push('/books')
       }
     }
+    bookKind.value = editBook.value.series || editBook.value.seriesInstallment ? 'series' : 'standalone'
   } catch (err) {
     console.error('Error loading book:', err)
     addToast('Failed to load book details', 'error')
@@ -343,6 +363,7 @@ onMounted(async () => {
 const handleCoverChange = (event) => {
   const file = event.target.files[0]
   if (file) {
+    closeCoverModal()
     const reader = new FileReader()
     reader.onload = (e) => { 
       coverPreview.value = e.target.result 
@@ -396,18 +417,10 @@ const fetchMetadata = async () => {
   metadataResults.value = [];
 
   try {
-    const query = new URLSearchParams();
-    query.append('title', editBook.value.title);
-    if (editBook.value.author) {
-      query.append('author', editBook.value.author);
-    }
-    
-    const response = await fetch(`/api/books/metadata?${query.toString()}`);
-    const data = await response.json();
-    
-    if (data.results) {
-      metadataResults.value = data.results;
-    }
+    metadataResults.value = await fetchBookMetadataResults(
+      editBook.value.title,
+      editBook.value.author,
+    );
   } catch (error) {
     console.error('Failed to fetch metadata:', error);
     addToast('Failed to fetch metadata from the web.', 'error');
@@ -426,6 +439,9 @@ const selectMetadata = async (result) => {
   editBook.value.seriesInstallment = result.seriesInstallment || editBook.value.seriesInstallment;
   editBook.value.webReview = result.webReview || editBook.value.webReview;
   editBook.value.genre = result.genre || editBook.value.genre;
+  if (editBook.value.series || editBook.value.seriesInstallment) {
+    bookKind.value = 'series';
+  }
   
   if (result.cover) {
     const cachedCover = await cacheCoverImage(result.cover);
@@ -435,6 +451,13 @@ const selectMetadata = async (result) => {
   
   showMetadataModal.value = false;
   addToast('Metadata applied successfully', 'success');
+}
+
+const handleBookKindChange = () => {
+  if (bookKind.value === 'standalone') {
+    editBook.value.series = ''
+    editBook.value.seriesInstallment = ''
+  }
 }
 
 const handleUpdateBook = async () => {
@@ -448,8 +471,9 @@ const handleUpdateBook = async () => {
     cover: cachedCover || editBook.value.cover,
   }
   
-  if (!bookToUpdate.series || bookToUpdate.series.trim() === '') {
+  if (bookKind.value === 'standalone' || !bookToUpdate.series || bookToUpdate.series.trim() === '') {
     bookToUpdate.series = null
+    bookToUpdate.seriesInstallment = null
   }
   
   try {
@@ -726,6 +750,36 @@ const handleUpdateBook = async () => {
   gap: 0.25rem;
 }
 
+.radio-group {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.form-group .radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1rem;
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.form-group .radio-option:hover,
+.form-group .radio-option.active {
+  border-color: var(--color-brand-primary);
+  background: var(--color-surface-active);
+  color: var(--color-text-primary);
+}
+
+.form-group .radio-option input {
+  accent-color: var(--color-brand-primary);
+}
+
 .required {
   color: var(--color-status-danger-bright);
 }
@@ -815,6 +869,12 @@ const handleUpdateBook = async () => {
   font-size: 0.95rem;
   color: var(--color-text-secondary);
   line-height: 1.5;
+}
+
+.readonly-review :deep(.goodreads-rating),
+.metadata-info :deep(.goodreads-rating) {
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
 }
 
 .page-actions {

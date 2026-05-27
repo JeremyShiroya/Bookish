@@ -56,7 +56,7 @@
       <!-- Right Column: Books & Gallery -->
       <main class="books-main-content">
         <header class="gallery-heading">
-          <h2>Collection</h2>
+          <h2>Books</h2>
           <div class="accent-line"></div>
         </header>
 
@@ -107,7 +107,7 @@
 
         <div v-if="!author.books?.length" class="no-books-state">
           <i class="ri-book-open-line"></i>
-          <p>No books available in this collection yet.</p>
+          <p>No books available for this author yet.</p>
         </div>
       </main>
     </div>
@@ -189,6 +189,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useTTS } from '~/composables/useTTS';
+import { fetchAuthorImageResults } from '~/composables/useAuthorImageSearch';
 
 import { useToast } from '~/composables/useToast';
 
@@ -275,12 +276,10 @@ const scrapeAuthorImage = async () => {
     showImagePicker.value = true; // Open modal immediately
     imageOptions.value = [];
     
-    const response = await $fetch(`/api/authors/search-images`, {
-      params: { name: author.value.name }
-    });
+    const images = await fetchAuthorImageResults(author.value.name);
     
-    if (response.images && response.images.length > 0) {
-      imageOptions.value = response.images;
+    if (images.length > 0) {
+      imageOptions.value = images;
     } else {
       showImagePicker.value = false;
       addToast('Could not find any suitable images on the web.', 'error');

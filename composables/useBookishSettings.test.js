@@ -45,4 +45,12 @@ describe('useBookishSettings storage helpers', () => {
 
     expect(readBookishSettings(storage)).toEqual(DEFAULT_BOOKISH_SETTINGS)
   })
+
+  it('falls back when a hidden Kokoro voice was previously saved', () => {
+    const storage = createMemoryStorage()
+
+    writeBookishSettings({ ttsVoice: 'kokoro:af_heart' }, storage)
+
+    expect(readBookishSettings(storage).ttsVoice).toBe(DEFAULT_BOOKISH_SETTINGS.ttsVoice)
+  })
 })

@@ -1,12 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   parseGoodreadsBookHtml,
+  parseGoodreadsDiscoveryHtml,
   parseGoodreadsSearchHtml,
   parseSeriesFromText,
+  searchGoodreads,
   splitGoodreadsTitle,
 } from './goodreadsScraper';
 
 describe('goodreadsScraper parsing helpers', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('extracts series and installment from title parentheticals', () => {
     expect(splitGoodreadsTitle('Dune (Dune, #1)')).toEqual({
       title: 'Dune',
@@ -36,7 +42,7 @@ describe('goodreadsScraper parsing helpers', () => {
               "description": "A reporter returns home to investigate a disturbing crime.",
               "datePublished": "2006-09-26",
               "genre": ["Mystery", "Thriller"],
-              "aggregateRating": { "ratingValue": "4.02", "ratingCount": "123456" }
+              "aggregateRating": { "ratingValue": "4.02", "ratingCount": "123456", "reviewCount": "7890" }
             }
           </script>
         </head>
@@ -61,7 +67,8 @@ describe('goodreadsScraper parsing helpers', () => {
       genre: 'Mystery, Thriller, Crime',
       ratingValue: '4.02',
       ratingCount: '123456',
-      webReview: 'Goodreads Rating: 4.02/5 (based on 123456 reviews).',
+      reviewCount: '7890',
+      webReview: 'Goodreads Rating: 4.02/5 (123456 ratings, 7890 reviews).',
     });
   });
 
@@ -74,6 +81,7 @@ describe('goodreadsScraper parsing helpers', () => {
           <div id="details">First published June 1st 1965 by Chilton Books</div>
           <span itemprop="ratingValue">4.28</span>
           <meta itemprop="ratingCount" content="987654">
+          <meta itemprop="reviewCount" content="45678">
           <a class="bookPageGenreLink">Science Fiction</a>
           <a class="bookPageGenreLink">Classics</a>
         </body>
@@ -86,7 +94,7 @@ describe('goodreadsScraper parsing helpers', () => {
       seriesInstallment: '1',
       publishYear: 1965,
       genre: 'Science Fiction, Classics',
-      webReview: 'Goodreads Rating: 4.28/5 (based on 987654 reviews).',
+      webReview: 'Goodreads Rating: 4.28/5 (987654 ratings, 45678 reviews).',
     });
   });
 
@@ -98,6 +106,7 @@ describe('goodreadsScraper parsing helpers', () => {
           <td>
             <a class="bookTitle" href="/book/show/44767458-dune"><span itemprop="name">Dune (Dune, #1)</span></a>
             <a class="authorName"><span itemprop="name">Frank Herbert</span></a>
+            <span class="minirating">4.28 avg rating - 1,511,111 ratings</span>
           </td>
         </tr>
       </table>
@@ -112,6 +121,70 @@ describe('goodreadsScraper parsing helpers', () => {
       rawSeriesTitle: 'Dune, #1',
       series: 'Dune',
       seriesInstallment: '1',
+      ratingValue: '4.28',
+      ratingCount: '1,511,111',
+      reviewCount: null,
+      webReview: 'Goodreads Rating: 4.28/5 (1,511,111 ratings).',
+    });
+  });
+
+  it('discovers Goodreads book URLs and ratings from search result snippets', () => {
+    const html = `
+      <div class="result">
+        <a class="result__a" href="/l/?uddg=https%3A%2F%2Fwww.goodreads.com%2Fbook%2Fshow%2F3735293-clean-code">Clean Code by Robert C. Martin | Goodreads</a>
+        <a class="result__snippet">4.37 avg rating, 23,637 ratings, 1,485 reviews</a>
+      </div>
+    `;
+
+    expect(parseGoodreadsDiscoveryHtml(html)[0]).toMatchObject({
+      url: 'https://www.goodreads.com/book/show/3735293-clean-code',
+      title: 'Clean Code',
+      author: 'Robert C. Martin',
+      ratingValue: '4.37',
+      ratingCount: '23,637',
+      reviewCount: '1,485',
+      webReview: 'Goodreads Rating: 4.37/5 (23,637 ratings, 1,485 reviews).',
+    });
+  });
+
+  it('tries the Goodreads title redirect before the blocked search page', async () => {
+    const detailHtml = `
+      <html>
+        <head>
+          <script type="application/ld+json">
+            {
+              "@type": "Book",
+              "name": "Dune",
+              "author": { "name": "Frank Herbert" },
+              "aggregateRating": { "ratingValue": "4.29", "ratingCount": "1670353", "reviewCount": "86099" }
+            }
+          </script>
+        </head>
+      </html>
+    `;
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('https://www.goodreads.com/book/title')) {
+        const response = new Response(detailHtml, { status: 200 });
+        Object.defineProperty(response, 'url', {
+          value: 'https://www.goodreads.com/book/show/44767458-dune',
+        });
+        return response;
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const results = await searchGoodreads('Dune', 'Frank Herbert');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/book/title?id=Dune%20Frank%20Herbert');
+    expect(results[0]).toMatchObject({
+      url: 'https://www.goodreads.com/book/show/44767458-dune',
+      title: 'Dune',
+      author: 'Frank Herbert',
+      webReview: 'Goodreads Rating: 4.29/5 (1670353 ratings, 86099 reviews).',
     });
   });
 });
