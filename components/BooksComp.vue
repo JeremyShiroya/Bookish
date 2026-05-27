@@ -232,7 +232,7 @@
               </div>
             </div>
             <div class="book-info">
-              <h3 class="book-title">{{ book.title }}</h3>
+              <h3 class="book-title" :title="book.title">{{ truncateWords(book.title, 7) }}</h3>
               <p class="book-author">
                 {{ book.author }} 
                 <span v-if="book.publishYear">• {{ book.publishYear }}</span>
@@ -252,6 +252,7 @@
               <div class="book-meta">
                 <div class="meta-item" title="Personal Rating">
                   <i class="ri-star-fill star-icon"></i>
+                  <span>{{ formatPersonalRating(book.rating) }}</span>
                   <span>{{ book.rating || '—' }}</span>
                 </div>
                 <div class="grid-progress" title="Reading Progress">
@@ -280,56 +281,57 @@
           </div>
         </div>
 
-        <!-- List View -->
-        <div v-else class="books-list">
-          <div class="list-header-row">
-            <span></span>
-            <span>Book</span>
-            <span>Type</span>
-            <span>Progress</span>
-            <span>Goodreads</span>
-            <span>Rating</span>
-            <span>Format</span>
-            <span></span>
-          </div>
-          <div 
-            v-for="book in filteredBooks" 
-            :key="book.id" 
+        <div v-else class="books-list redesigned-list">
+          <div
+            v-for="book in filteredBooks"
+            :key="book.id"
             class="list-row"
             @click="router.push(`/reader/${book.id}`)"
           >
-            <img :src="resolveBookCover(book)" :alt="book.title" class="list-cover" @error="(e) => coverFallback(e, book.title)" />
-            
-            <div class="list-details">
-              <h3 class="list-title">{{ book.title }}</h3>
-              <p class="list-author">
-                {{ book.author }}
-                <span v-if="book.publishYear"> • {{ book.publishYear }}</span>
-              </p>
+            <div class="list-cover-wrap">
+              <img :src="resolveBookCover(book)" :alt="book.title" class="list-cover" @error="(e) => coverFallback(e, book.title)" />
             </div>
 
-            <div class="list-meta">
-              <span class="list-series" :class="{ standalone: !book.series }">{{ book.series || 'Standalone' }}</span>
-              <span class="list-series">{{ book.series || '—' }}</span>
-            </div>
-
-            <div class="list-progress-cell">
-              <div class="list-progress-bar">
-                <div class="list-progress-fill" :style="{ width: book.progress + '%' }"></div>
+            <div class="list-main">
+              <div class="list-title-row">
+                <h3 class="list-title" :title="book.title">{{ truncateWords(book.title, 9) }}</h3>
+                <span class="list-format">{{ book.format ? book.format.toUpperCase() : 'BOOK' }}</span>
               </div>
-              <span class="list-progress-text">{{ book.progress }}%</span>
+              <p class="list-author">
+                {{ book.author || 'Unknown author' }}
+                <span v-if="book.publishYear"> &bull; {{ book.publishYear }}</span>
+              </p>
+              <div class="list-tags">
+                <span class="list-chip" :class="{ standalone: !book.series }">
+                  {{ book.series || 'Standalone' }}
+                </span>
+                <span v-if="book.genre" class="list-chip genre">
+                  <i class="ri-price-tag-3-line"></i>
+                  {{ book.genre }}
+                </span>
+              </div>
             </div>
 
-            <div class="list-goodreads-cell" title="Goodreads Rating">
-              <GoodreadsRatingDisplay :web-review="book.webReview" compact />
+            <div class="list-progress-cell" :title="`${book.progress || 0}% read`">
+              <div class="list-progress-topline">
+                <span>{{ book.status || 'Unread' }}</span>
+                <strong>{{ book.progress || 0 }}%</strong>
+              </div>
+              <div class="list-progress-bar">
+                <div class="list-progress-fill" :style="{ width: `${book.progress || 0}%` }"></div>
+              </div>
             </div>
 
-            <div class="list-rating-cell" title="Personal Rating">
-              <i class="ri-star-fill list-star"></i>
-              <span>{{ book.rating || '—' }}</span>
+            <div class="list-ratings">
+              <div class="list-rating-cell" title="Personal Rating">
+                <i class="ri-star-fill list-star"></i>
+                <span>{{ formatPersonalRating(book.rating) }}</span>
+              </div>
+              <div class="list-goodreads-cell" title="Goodreads Rating">
+                <GoodreadsRatingDisplay v-if="getGoodreadsRating(book)" :web-review="book.webReview" compact />
+                <span v-else class="rating-empty">No Goodreads rating</span>
+              </div>
             </div>
-
-            <span class="list-format">{{ book.format ? book.format.toUpperCase() : '—' }}</span>
 
             <div class="list-actions" @click.stop>
               <button class="list-action-btn" :class="{ active: book.isFavourite }" title="Favourite" @click="toggleFavourite(book.id)">
@@ -347,6 +349,7 @@
             </div>
           </div>
         </div>
+
       </div>
 
       <!-- Empty State -->
@@ -488,7 +491,7 @@ const handlePlay = (book) => {
 const router = useRouter();
 
 // Filter options
-const readingStatuses = ["Unread", "Reading", "Completed"];
+const readingStatuses = ["Unread", "Reading", "Read"];
 
 // Filter states
 const sortBy = ref(settings.value.librarySort);
@@ -559,6 +562,17 @@ const canSavePlaylist = computed(() => (
     ? newPlaylistName.value.trim().length > 0
     : Boolean(selectedPlaylistId.value)
 ));
+
+const truncateWords = (value, limit = 7) => {
+  const words = String(value || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length <= limit) return words.join(" ");
+  return `${words.slice(0, limit).join(" ")}...`;
+};
+
+const formatPersonalRating = (rating) => {
+  const score = Number(rating || 0);
+  return score > 0 ? `${score}/10` : "--/10";
+};
 
 // Methods
 const toggleDropdown = (dropdown) => {
@@ -895,9 +909,10 @@ onUnmounted(() => {
 .books-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-auto-rows: 276px;
   gap: 2rem;
   justify-content: start;
-  align-items: start;
+  align-items: stretch;
 }
 
 .book-card.horizontal {
@@ -917,6 +932,8 @@ onUnmounted(() => {
   overflow: hidden;
   color: var(--color-text-on-brand);
   z-index: 1;
+  min-height: 276px;
+  height: 100%;
 }
 
 .book-card.horizontal:hover {
@@ -1044,7 +1061,9 @@ onUnmounted(() => {
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  padding: 0.25rem 0;
+  height: 100%;
+  overflow: hidden;
+  padding: 0.15rem 0;
 }
 
 .book-title {
@@ -1052,7 +1071,7 @@ onUnmounted(() => {
   font-weight: 500;
   color: var(--color-text-on-image-primary);
   margin: 0 0 0.25rem 0;
-  line-height: 1.3;
+  line-height: 1.22;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1092,8 +1111,9 @@ onUnmounted(() => {
   background: var(--color-border-on-image);
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.45rem;
   width: fit-content;
+  max-width: 100%;
 }
 
 .book-meta {
@@ -1102,7 +1122,7 @@ onUnmounted(() => {
   gap: 0.85rem;
   margin-top: 0;
   font-size: 0.85rem;
-  color: var(--color-surface-glass);
+  color: var(--color-text-on-image-secondary);
 }
 
 .grid-progress {
@@ -1139,8 +1159,8 @@ onUnmounted(() => {
 }
 
 .book-goodreads-row {
-  margin-top: auto;
-  margin-bottom: 0.65rem;
+  margin-top: 0.4rem;
+  margin-bottom: 0.5rem;
   min-width: 0;
 }
 
@@ -1162,10 +1182,16 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  color: var(--color-text-on-image-secondary);
+  min-width: 58px;
 }
 
 .meta-item i {
   color: var(--color-text-on-image-subtle);
+}
+
+.meta-item span + span {
+  display: none;
 }
 
 .goodreads-svg {
@@ -1194,6 +1220,7 @@ onUnmounted(() => {
   gap: 0.5rem;
   border-top: 1px solid var(--color-border-on-image);
   padding-top: 0.75rem;
+  margin-top: auto;
 }
 
 .action-btn {
@@ -1212,7 +1239,7 @@ onUnmounted(() => {
 
 .action-btn:hover {
   background: var(--color-surface-on-image-hover);
-  color: var(--color-surface-primary);
+  color: var(--color-text-on-image-primary);
   border-color: var(--color-border-on-image-strong);
 }
 
@@ -1429,6 +1456,135 @@ onUnmounted(() => {
 .list-action-btn.delete:hover {
   background: var(--color-status-danger-soft);
   color: var(--color-status-danger);
+}
+
+.redesigned-list {
+  gap: 0.85rem;
+}
+
+.redesigned-list .list-row {
+  grid-template-columns: 72px minmax(230px, 1.7fr) minmax(170px, 0.8fr) minmax(210px, 1fr) auto;
+  min-height: 112px;
+  padding: 1rem;
+  background:
+    linear-gradient(135deg, var(--color-surface-primary), var(--color-surface-secondary));
+  border-color: var(--color-border-card);
+  border-radius: 10px;
+  box-shadow: var(--shadow-card-subtle);
+}
+
+.redesigned-list .list-row:hover {
+  background:
+    linear-gradient(135deg, var(--color-surface-secondary), var(--color-surface-tertiary));
+  border-color: var(--color-border-focus);
+}
+
+.list-cover-wrap {
+  width: 58px;
+  height: 84px;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: var(--shadow-cover);
+}
+
+.redesigned-list .list-cover {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+.list-main {
+  min-width: 0;
+}
+
+.list-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  margin-bottom: 0.2rem;
+}
+
+.redesigned-list .list-title {
+  font-size: 1rem;
+  color: var(--color-text-primary);
+}
+
+.list-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+  min-width: 0;
+}
+
+.list-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 160px;
+  padding: 0.22rem 0.55rem;
+  border-radius: 6px;
+  background: var(--color-surface-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list-chip.standalone {
+  color: var(--color-text-muted);
+}
+
+.list-chip.genre {
+  background: var(--color-brand-primary-faint);
+  color: var(--color-brand-primary-hover);
+}
+
+.list-progress-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.list-progress-topline strong {
+  color: var(--color-text-secondary);
+}
+
+.list-ratings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.redesigned-list .list-rating-cell {
+  color: var(--color-text-secondary);
+}
+
+.rating-empty {
+  color: var(--color-text-subtle);
+  font-size: 0.78rem;
+}
+
+.redesigned-list .list-format {
+  flex: 0 0 auto;
+  color: var(--color-brand-primary);
+}
+
+.redesigned-list .list-actions {
+  align-self: center;
+}
+
+.redesigned-list .list-action-btn:hover {
+  background: var(--color-surface-active);
+  color: var(--color-brand-primary-hover);
 }
 
 .playlist-modal-overlay {

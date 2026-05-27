@@ -264,7 +264,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
@@ -315,6 +315,15 @@ const coverModalMode = ref('choice')
 const isSearchingCovers = ref(false)
 const coverOptions = ref([])
 const bookKind = ref('standalone')
+
+watch(
+  () => editBook.value.status,
+  (status) => {
+    if (status === 'Read') {
+      editBook.value.progress = 100
+    }
+  },
+)
 
 const openCoverModal = () => {
   coverModalMode.value = 'choice'
@@ -468,6 +477,7 @@ const handleUpdateBook = async () => {
 
   const bookToUpdate = {
     ...editBook.value,
+    progress: editBook.value.status === 'Read' ? 100 : editBook.value.progress,
     cover: cachedCover || editBook.value.cover,
   }
   

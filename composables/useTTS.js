@@ -127,9 +127,14 @@ export function groupChunks(chunks, maxChars = DEFAULT_SENTENCE_MAX_CHARS) {
 }
 
 export function formatDuration(seconds) {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
+  const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0))
+  const h = Math.floor(safeSeconds / 3600)
+  const m = Math.floor((safeSeconds % 3600) / 60)
+  const s = safeSeconds % 60
+
+  if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`
+  if (m > 0) return `${m}m ${s.toString().padStart(2, '0')}s`
+  return `${s}s`
 }
 
 export async function resolveReadableText(book, stored = null) {
@@ -286,6 +291,7 @@ export const useTTS = () => {
   })
 
   const totalTime = computed(() => {
+    if (!_chunks.length) return '--'
     const seconds = _chunks.reduce((sum, chunk) => sum + _estimatedChunkSeconds(chunk), 0)
     return formatDuration(seconds)
   })

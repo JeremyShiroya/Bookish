@@ -99,6 +99,13 @@
           <i class="ri-skip-forward-fill"></i>
         </button>
       </div>
+      <div class="time-display" aria-label="Playback time">
+        <span>{{ elapsedTime }}</span>
+        <div class="time-progress-track">
+          <div class="time-progress-fill" :style="{ width: `${ttsProgress || 0}%` }"></div>
+        </div>
+        <span>{{ totalTime }}</span>
+      </div>
     </div>
 
     <div class="extra-controls">
@@ -149,7 +156,8 @@ import { useBooks } from '~/composables/useBooks'
 
 const {
   ttsBook, ttsStatus, ttsSpeed, ttsVolume,
-  ttsVoiceId, ttsVoices,
+  ttsVoiceId, ttsVoices, ttsProgress,
+  elapsedTime, totalTime,
   play, togglePlay, skipChunks, skipSeconds, setSpeed, setVolume, setVoice,
 } = useTTS()
 
@@ -369,11 +377,48 @@ const coverFallback = (event, title) => {
 
 .player-controls {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   flex: 1 1 auto;
   min-width: 0;
-  max-width: 560px;
+  max-width: 680px;
+  gap: 0.35rem;
+}
+
+.time-display {
+  display: grid;
+  grid-template-columns: max-content minmax(180px, 1fr) max-content;
+  align-items: center;
+  gap: 0.75rem;
+  width: min(640px, 100%);
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+}
+
+.time-display span {
+  min-width: 3.5rem;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.time-display span:last-child {
+  text-align: right;
+}
+
+.time-progress-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  overflow: hidden;
+}
+
+.time-progress-fill {
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: var(--color-brand-primary);
+  transition: width 0.3s ease;
 }
 
 .control-buttons {

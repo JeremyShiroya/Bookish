@@ -7,7 +7,12 @@
     </div>
 
     <div v-if="collectionsWithBooks.length > 0" class="collections-grid">
-      <div v-for="collection in collectionsWithBooks" :key="collection.id" class="collection-card">
+      <div
+        v-for="collection in collectionsWithBooks"
+        :key="collection.id"
+        class="collection-card"
+        @click="router.push(`/playlists/${collection.id}`)"
+      >
         <div class="stacked-covers">
           <div 
             v-for="i in 3" 
@@ -55,10 +60,12 @@
 
 <script setup>
 import { computed } from "vue";
+import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import EmptyState from "./EmptyState.vue";
 
 const { collections, books } = useBooks();
+const router = useRouter();
 
 const collectionsWithBooks = computed(() => {
   return collections.value.map(collection => {

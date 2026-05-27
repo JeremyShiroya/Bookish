@@ -26,6 +26,7 @@
           <router-link
             :to="item.path"
             class="menu-item"
+            :class="{ active: isMenuItemActive(index) }"
             active-class="active"
             @mouseenter="hoverIndex = index"
           >
@@ -39,6 +40,7 @@
         <router-link
           :to="settingsItem.path"
           class="menu-item"
+          :class="{ active: isSettingsActive }"
           active-class="active"
           @mouseenter="hoverIndex = menuItems.length"
         >
@@ -51,7 +53,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from "vue";
+import { computed, ref, onMounted, watch, nextTick } from "vue";
 import { useRoute } from "vue-router";
 
 const route = useRoute();
@@ -77,31 +79,34 @@ const hoverIndex = ref(-1);
 const highlightStyle = ref({ top: "0px", height: "0px", opacity: 0 });
 const isHighlightActive = ref(false);
 
+const getActiveRouteIndex = () => {
+  if (route.path.startsWith("/settings")) return menuItems.length;
+  if (route.path === "/") return 0;
+  if (
+    route.path === "/add" ||
+    route.path.startsWith("/edit") ||
+    route.path.startsWith("/reader")
+  ) {
+    return menuItems.findIndex((item) => item.path === "/books");
+  }
+  if (route.path.startsWith("/author/")) {
+    return menuItems.findIndex((item) => item.path === "/authors");
+  }
+  const idx = menuItems.findIndex(
+    (item) => item.path !== "/" && route.path.startsWith(item.path),
+  );
+  return idx !== -1 ? idx : 0;
+};
+
+const isMenuItemActive = (index) => getActiveRouteIndex() === index;
+const isSettingsActive = computed(() => getActiveRouteIndex() === menuItems.length);
+
 const updateHighlight = async () => {
   await nextTick();
   if (!navRef.value) return;
 
   let targetIndex = hoverIndex.value;
   let isActive = false;
-
-  const getActiveRouteIndex = () => {
-    if (route.path.startsWith("/settings")) return menuItems.length;
-    if (route.path === "/") return 0;
-    if (
-      route.path === "/add" ||
-      route.path.startsWith("/edit") ||
-      route.path.startsWith("/reader")
-    ) {
-      return menuItems.findIndex((item) => item.path === "/books");
-    }
-    if (route.path.startsWith("/author/")) {
-      return menuItems.findIndex((item) => item.path === "/authors");
-    }
-    const idx = menuItems.findIndex(
-      (item) => item.path !== "/" && route.path.startsWith(item.path),
-    );
-    return idx !== -1 ? idx : 0;
-  };
 
   const activeRouteIndex = getActiveRouteIndex();
 
@@ -158,11 +163,11 @@ watch(hoverIndex, updateHighlight);
 .sidebar {
   background-color: var(--purple-sidebar);
   width: var(--sidebar-width);
-  height: calc(100vh - 90px);
+  height: calc(100vh - var(--layout-playing-bar-height));
   position: fixed;
   left: 0;
   top: 0;
-  padding: 20px 0;
+  padding: 20px 0 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -208,7 +213,6 @@ watch(hoverIndex, updateHighlight);
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   overflow-y: auto;
   scrollbar-width: none;
   position: relative;
@@ -263,7 +267,8 @@ watch(hoverIndex, updateHighlight);
 }
 
 .settings {
-  padding: 0 10px 30px 10px;
+  margin-top: auto;
+  padding: 10px;
   border-top: 1px solid var(--color-border-on-image);
   position: relative;
 }

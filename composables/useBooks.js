@@ -6,6 +6,7 @@ import { getGoodreadsRating } from '~/composables/useGoodreadsRating';
 
 const coverCacheInFlight = new Set();
 const LIBRARY_FETCH_TIMEOUT_MS = 15000;
+let libraryFetchPromise = null;
 
 const fetchWithTimeout = async (url, options = {}) => {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -84,33 +85,42 @@ export const useBooks = () => {
       loading.value = false;
       return;
     }
-    
-    loading.value = true;
-    error.value = null;
-    try {
-      const [booksData, authorsData, collectionsData, genresData] = await Promise.allSettled([
-        fetchWithTimeout("/api/books"),
-        fetchWithTimeout("/api/authors"),
-        fetchWithTimeout("/api/collections"),
-        fetchWithTimeout("/api/genres")
-      ]);
 
-      if (booksData.status === "rejected") {
-        error.value = "Bookish could not load your library. Check the database connection and try again.";
-      }
-      
-      books.value = resolveLibraryDataResult(booksData, books.value);
-      authors.value = resolveLibraryDataResult(authorsData, authors.value);
-      collections.value = resolveLibraryDataResult(collectionsData, collections.value);
-      genres.value = resolveLibraryDataResult(genresData, genres.value);
-      cacheRemoteLibraryCovers();
-    } catch (fetchError) {
-      console.error("Failed to fetch library data:", fetchError);
-      error.value = "Bookish could not load your library. Check the database connection and try again.";
-    } finally {
-      initialized.value = true;
-      loading.value = false;
+    if (libraryFetchPromise && !force) {
+      return libraryFetchPromise;
     }
+    
+    libraryFetchPromise = (async () => {
+      loading.value = true;
+      error.value = null;
+      try {
+        const [booksData, authorsData, collectionsData, genresData] = await Promise.allSettled([
+          fetchWithTimeout("/api/books"),
+          fetchWithTimeout("/api/authors"),
+          fetchWithTimeout("/api/collections"),
+          fetchWithTimeout("/api/genres")
+        ]);
+
+        if (booksData.status === "rejected") {
+          error.value = "Bookish could not load your library. Check the database connection and try again.";
+        }
+      
+        books.value = resolveLibraryDataResult(booksData, books.value);
+        authors.value = resolveLibraryDataResult(authorsData, authors.value);
+        collections.value = resolveLibraryDataResult(collectionsData, collections.value);
+        genres.value = resolveLibraryDataResult(genresData, genres.value);
+        cacheRemoteLibraryCovers();
+      } catch (fetchError) {
+        console.error("Failed to fetch library data:", fetchError);
+        error.value = "Bookish could not load your library. Check the database connection and try again.";
+      } finally {
+        initialized.value = true;
+        loading.value = false;
+        libraryFetchPromise = null;
+      }
+    })();
+
+    return libraryFetchPromise;
   };
 
   const fetchBookById = async (id) => {
