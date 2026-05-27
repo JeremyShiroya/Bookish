@@ -132,9 +132,10 @@ export function formatDuration(seconds) {
   const m = Math.floor((safeSeconds % 3600) / 60)
   const s = safeSeconds % 60
 
-  if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`
-  if (m > 0) return `${m}m ${s.toString().padStart(2, '0')}s`
-  return `${s}s`
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  }
+  return `${m}:${s.toString().padStart(2, '0')}`
 }
 
 export async function resolveReadableText(book, stored = null) {
@@ -260,6 +261,8 @@ export const useTTS = () => {
   const ttsProgress     = useState('tts:progress',     () => 0)
   const ttsChunkIdx     = useState('tts:chunkIdx',     () => 0)
   const ttsTotalChunks  = useState('tts:totalChunks',  () => 0)
+  const ttsElapsedSeconds = useState('tts:elapsedSeconds', () => 0)
+  const ttsTotalSeconds = useState('tts:totalSeconds', () => 0)
   const ttsSpeed        = useState('tts:speed',        () => settings.value.ttsSpeed)
   const ttsVolume       = useState('tts:volume',       () => settings.value.ttsVolume)
   const ttsVoiceId      = useState('tts:voice',        () => normalizeAvailableVoice(settings.value.ttsVoice))
@@ -284,16 +287,12 @@ export const useTTS = () => {
   }
 
   const elapsedTime = computed(() => {
-    const seconds = _chunks
-      .slice(0, Math.max(0, ttsChunkIdx.value))
-      .reduce((sum, chunk) => sum + _estimatedChunkSeconds(chunk), 0)
-    return formatDuration(seconds)
+    return formatDuration(ttsElapsedSeconds.value)
   })
 
   const totalTime = computed(() => {
-    if (!_chunks.length) return '--'
-    const seconds = _chunks.reduce((sum, chunk) => sum + _estimatedChunkSeconds(chunk), 0)
-    return formatDuration(seconds)
+    if (ttsTotalSeconds.value <= 0) return '--'
+    return formatDuration(ttsTotalSeconds.value)
   })
 
   // ── Internal helpers ───────────────────────────────────────────────────────
@@ -301,6 +300,10 @@ export const useTTS = () => {
   const _updateProgress = () => {
     ttsChunkIdx.value = _chunkIdx
     ttsCurrentChunk.value = _chunks[_chunkIdx] || ''
+    ttsElapsedSeconds.value = _chunks
+      .slice(0, Math.max(0, _chunkIdx))
+      .reduce((sum, chunk) => sum + _estimatedChunkSeconds(chunk), 0)
+    ttsTotalSeconds.value = _chunks.reduce((sum, chunk) => sum + _estimatedChunkSeconds(chunk), 0)
     ttsProgress.value = ttsTotalChunks.value > 0
       ? Math.round((_chunkIdx / ttsTotalChunks.value) * 100)
       : 0
@@ -566,6 +569,8 @@ export const useTTS = () => {
     ttsProgress.value = 0
     ttsChunkIdx.value = 0
     ttsTotalChunks.value = 0
+    ttsElapsedSeconds.value = 0
+    ttsTotalSeconds.value = 0
     ttsBook.value = null
   }
 
@@ -573,6 +578,7 @@ export const useTTS = () => {
     const nextSettings = updateSettings({ ttsSpeed: Number(rate) })
     ttsSpeed.value = nextSettings.ttsSpeed
     _clearAudioCache()
+    if (_chunks.length) _updateProgress()
     if (ttsStatus.value === 'playing') {
       _cancelAudio()
       _speakNextEdge()
@@ -648,6 +654,7 @@ export const useTTS = () => {
 
   return {
     ttsBook, ttsStatus, ttsProgress, ttsChunkIdx, ttsTotalChunks,
+    ttsElapsedSeconds, ttsTotalSeconds,
     ttsSpeed, ttsVolume, ttsVoiceId, ttsVoices, ttsCurrentChunk,
     ttsWordIdx, ttsBoundaries,
     elapsedTime, totalTime,

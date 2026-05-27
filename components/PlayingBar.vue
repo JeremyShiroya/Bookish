@@ -390,20 +390,23 @@ const coverFallback = (event, title) => {
   display: grid;
   grid-template-columns: max-content minmax(180px, 1fr) max-content;
   align-items: center;
-  gap: 0.75rem;
+  column-gap: 0.45rem;
   width: min(640px, 100%);
   color: var(--color-text-secondary);
   font-size: 0.78rem;
 }
 
 .time-display span {
-  min-width: 3.5rem;
   white-space: nowrap;
   line-height: 1;
 }
 
-.time-display span:last-child {
+.time-display span:first-child {
   text-align: right;
+}
+
+.time-display span:last-child {
+  text-align: left;
 }
 
 .time-progress-track {

@@ -186,16 +186,17 @@ describe('findContentStart', () => {
 
 describe('formatDuration', () => {
   it('formats 0 seconds', () => {
-    expect(formatDuration(0)).toBe('0s')
+    expect(formatDuration(0)).toBe('0:00')
   })
-  it('formats 65 seconds as minutes and seconds', () => {
-    expect(formatDuration(65)).toBe('1m 05s')
+  it('formats 65 seconds as clock time', () => {
+    expect(formatDuration(65)).toBe('1:05')
   })
   it('pads single-digit seconds', () => {
-    expect(formatDuration(61)).toBe('1m 01s')
+    expect(formatDuration(40)).toBe('0:40')
+    expect(formatDuration(61)).toBe('1:01')
   })
-  it('formats large values as hours and minutes', () => {
-    expect(formatDuration(3600)).toBe('1h 00m')
-    expect(formatDuration(60188)).toBe('16h 43m')
+  it('formats large values as hours, minutes, and seconds', () => {
+    expect(formatDuration(3600)).toBe('1:00:00')
+    expect(formatDuration(60188)).toBe('16:43:08')
   })
 })
