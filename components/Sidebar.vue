@@ -15,13 +15,17 @@
       </router-link>
     </div>
     <nav class="nav-menu" ref="navRef" @mouseleave="hoverIndex = -1">
-      <div class="highlight-pill" :style="highlightStyle" :class="{ 'is-active': isHighlightActive }"></div>
-      
+      <div
+        class="highlight-pill"
+        :style="highlightStyle"
+        :class="{ 'is-active': isHighlightActive }"
+      ></div>
+
       <ul class="menu-list">
         <li v-for="(item, index) in menuItems" :key="item.name">
-          <router-link 
-            :to="item.path" 
-            class="menu-item" 
+          <router-link
+            :to="item.path"
+            class="menu-item"
             active-class="active"
             @mouseenter="hoverIndex = index"
           >
@@ -56,11 +60,11 @@ const navRef = ref(null);
 const menuItems = [
   { name: "Home", icon: "ri-home-smile-2-line", path: "/" },
   { name: "Books", icon: "ri-book-open-line", path: "/books" },
+  { name: "Series", icon: "ri-book-shelf-line", path: "/series" },
+  // { name: "Genres", icon: "ri-price-tag-3-line", path: "/genres" },
+  { name: "Authors", icon: "ri-team-line", path: "/authors" },
   { name: "Playlists", icon: "ri-play-list-2-line", path: "/playlists" },
   { name: "Favourites", icon: "ri-heart-line", path: "/favourites" },
-  { name: "Series", icon: "ri-book-shelf-line", path: "/series" },
-  { name: "Genres", icon: "ri-price-tag-3-line", path: "/genres" },
-  { name: "Authors", icon: "ri-group-line", path: "/authors" },
 ];
 
 const settingsItem = {
@@ -70,26 +74,32 @@ const settingsItem = {
 };
 
 const hoverIndex = ref(-1);
-const highlightStyle = ref({ top: '0px', height: '0px', opacity: 0 });
+const highlightStyle = ref({ top: "0px", height: "0px", opacity: 0 });
 const isHighlightActive = ref(false);
 
 const updateHighlight = async () => {
   await nextTick();
   if (!navRef.value) return;
-  
+
   let targetIndex = hoverIndex.value;
   let isActive = false;
-  
+
   const getActiveRouteIndex = () => {
-    if (route.path.startsWith('/settings')) return menuItems.length;
-    if (route.path === '/') return 0;
-    if (route.path === '/add' || route.path.startsWith('/edit') || route.path.startsWith('/reader')) {
-      return menuItems.findIndex(item => item.path === '/books');
+    if (route.path.startsWith("/settings")) return menuItems.length;
+    if (route.path === "/") return 0;
+    if (
+      route.path === "/add" ||
+      route.path.startsWith("/edit") ||
+      route.path.startsWith("/reader")
+    ) {
+      return menuItems.findIndex((item) => item.path === "/books");
     }
-    if (route.path.startsWith('/author/')) {
-      return menuItems.findIndex(item => item.path === '/authors');
+    if (route.path.startsWith("/author/")) {
+      return menuItems.findIndex((item) => item.path === "/authors");
     }
-    const idx = menuItems.findIndex(item => item.path !== '/' && route.path.startsWith(item.path));
+    const idx = menuItems.findIndex(
+      (item) => item.path !== "/" && route.path.startsWith(item.path),
+    );
     return idx !== -1 ? idx : 0;
   };
 
@@ -101,33 +111,33 @@ const updateHighlight = async () => {
   } else if (targetIndex === activeRouteIndex) {
     isActive = true;
   }
-  
+
   isHighlightActive.value = isActive;
-  
+
   let targetEl;
   if (targetIndex >= 0 && targetIndex < menuItems.length) {
-    const listEl = navRef.value.querySelector('.menu-list');
+    const listEl = navRef.value.querySelector(".menu-list");
     if (listEl && listEl.children[targetIndex]) {
       targetEl = listEl.children[targetIndex];
     }
   } else if (targetIndex === menuItems.length) {
-    targetEl = navRef.value.querySelector('.settings');
+    targetEl = navRef.value.querySelector(".settings");
   }
-  
+
   if (targetEl) {
-    const itemEl = targetEl.querySelector('.menu-item') || targetEl;
-    
+    const itemEl = targetEl.querySelector(".menu-item") || targetEl;
+
     let currentEl = itemEl;
     let absoluteTop = 0;
     while (currentEl && currentEl !== navRef.value) {
       absoluteTop += currentEl.offsetTop;
       currentEl = currentEl.offsetParent;
     }
-    
+
     highlightStyle.value = {
       top: `${absoluteTop}px`,
       height: `${itemEl.offsetHeight}px`,
-      opacity: 1
+      opacity: 1,
     };
   } else {
     highlightStyle.value.opacity = 0;
@@ -137,7 +147,7 @@ const updateHighlight = async () => {
 onMounted(() => {
   // Slight delay to ensure fonts/layout are fully rendered
   setTimeout(updateHighlight, 100);
-  window.addEventListener('resize', updateHighlight);
+  window.addEventListener("resize", updateHighlight);
 });
 
 watch(() => route.path, updateHighlight);
@@ -191,7 +201,7 @@ watch(hoverIndex, updateHighlight);
 
 .title {
   font-size: 1.2rem;
-  font-weight: 400;;
+  font-weight: 400;
 }
 
 .nav-menu {
