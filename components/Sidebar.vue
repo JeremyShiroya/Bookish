@@ -269,7 +269,7 @@ watch(hoverIndex, updateHighlight);
 .settings {
   margin-top: auto;
   padding: 10px;
-  border-top: 1px solid var(--color-border-on-image);
+  /* border-top: 1px solid var(--color-border-on-image); */
   position: relative;
 }
 
