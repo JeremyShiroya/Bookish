@@ -7,13 +7,17 @@
   Read EPUBs and PDFs, listen with neural text-to-speech, and let Bookish automatically enrich your collection with covers, ratings, and metadata.
 
   <br />
-
-  ![Nuxt](https://img.shields.io/badge/Nuxt-4-00DC82?style=flat-square&logo=nuxt.js&logoColor=white)
-  ![Vue](https://img.shields.io/badge/Vue-3-4FC08D?style=flat-square&logo=vue.js&logoColor=white)
-  ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)
-  ![Drizzle](https://img.shields.io/badge/Drizzle-ORM-C5F74F?style=flat-square&logoColor=black)
-  ![Neon](https://img.shields.io/badge/Neon-PostgreSQL-00E5FF?style=flat-square&logo=postgresql&logoColor=white)
-
+<p align="center">
+  <img src="./public/icons/nuxt.svg" alt="Nuxt" height="36" />
+  &nbsp;
+  <img src="./public/icons/vue.svg" alt="Vue" height="36" />
+  &nbsp;
+  <img src="./public/icons/typescript.svg" alt="TypeScript" height="36" />
+  &nbsp;
+  <img src="./public/icons/drizzle.svg" alt="Drizzle ORM" height="36" />
+  &nbsp;
+  <img src="./public/icons/neon.svg" alt="Neon" height="36" />
+</p>
   <br />
 
   <!-- Replace with an actual screenshot once available -->
