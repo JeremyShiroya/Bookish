@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.9.1/fonts/remixicon.css" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: 1390px;
+  height: 370px;
+  overflow: hidden;
+  background: #0c0c14;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #fff;
+}
+
+.banner {
+  width: 1390px;
+  height: 370px;
+  position: relative;
+  overflow: hidden;
+  background: #0c0c14;
+}
+
+/* Subtle radial glow */
+.banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(109,40,217,0.10) 0%, transparent 68%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── TOP-LEFT CARD ── */
+.tl-card {
+  position: absolute;
+  top: 22px; left: 22px;
+  width: 188px; height: 148px;
+  background: linear-gradient(148deg, #4C1D95 0%, #6D28D9 50%, #8B5CF6 100%);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  box-shadow:
+    0 10px 36px rgba(109,40,217,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.20);
+  z-index: 10;
+}
+.tl-icon { font-size: 48px; line-height: 1; color: rgba(255,255,255,0.95); }
+.tl-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: rgba(255,255,255,0.80);
+  text-transform: uppercase;
+}
+
+/* ── AUTHOR CIRCLES ── */
+.circle {
+  position: absolute;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid #1a1a26;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.65);
+  z-index: 6;
+}
+.circle img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+
+/* ── CENTER LOGO ── */
+.center-logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  z-index: 20;
+}
+.logo-badge {
+  width: 88px; height: 88px;
+  border-radius: 22px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow:
+    0 6px 28px rgba(109,40,217,0.40),
+    0 2px 8px rgba(0,0,0,0.35);
+}
+.logo-badge img {
+  width: 100%; height: 100%;
+  object-fit: contain;
+}
+.logo-name {
+  font-size: 76px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -3px;
+  text-shadow: 0 4px 24px rgba(0,0,0,0.55);
+  line-height: 1;
+}
+
+/* ── TOP-RIGHT PANEL ── */
+.tr-panel {
+  position: absolute;
+  top: 0; right: 0;
+  width: 458px;
+  border-bottom-left-radius: 20px;
+  background: rgba(13,13,20,0.97);
+  border-left: 1px solid rgba(255,255,255,0.09);
+  border-bottom: 1px solid rgba(255,255,255,0.09);
+  overflow: hidden;
+  z-index: 8;
+}
+.tr-settings {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.60);
+  font-size: 13px;
+  font-weight: 500;
+}
+.tr-settings i { font-size: 15px; }
+
+.tr-book-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.tr-book-cover {
+  width: 33px; height: 50px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.50);
+}
+.tr-book-info { flex: 1; min-width: 0; }
+.tr-book-title {
+  font-size: 13px; font-weight: 500;
+  color: rgba(255,255,255,0.90);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tr-book-author {
+  font-size: 11px;
+  color: rgba(255,255,255,0.40);
+  margin-top: 2px;
+}
+.tr-book-meta {
+  font-size: 11px;
+  color: rgba(255,255,255,0.28);
+  flex-shrink: 0;
+}
+
+/* TTS / Playing bar */
+.tr-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  background: rgba(0,0,0,0.28);
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.tr-player-thumb {
+  width: 37px; height: 37px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+}
+.tr-player-body { flex: 1; min-width: 0; }
+.tr-player-title {
+  font-size: 12px; font-weight: 600;
+  color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tr-player-upnext {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tr-progress-row {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 5px;
+}
+.tr-ptime { font-size: 9px; color: rgba(255,255,255,0.32); }
+.tr-pbar {
+  flex: 1; height: 2px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 1px;
+}
+.tr-pfill {
+  width: 28%; height: 100%;
+  background: #7C3AED;
+  border-radius: 1px;
+}
+.tr-ctrl {
+  display: flex; align-items: center; gap: 7px;
+  margin-left: 6px;
+}
+.tc {
+  font-size: 14px;
+  color: rgba(255,255,255,0.50);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.tc.play {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: #7C3AED;
+  color: #fff;
+  font-size: 12px;
+  box-shadow: 0 2px 10px rgba(109,40,217,0.55);
+}
+.tr-win-btns {
+  display: flex; gap: 5px;
+  margin-left: 5px;
+}
+.twb {
+  width: 19px; height: 19px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  color: rgba(255,255,255,0.35);
+}
+
+/* ── BOTTOM-LEFT PANEL ── */
+.bl-panel {
+  position: absolute;
+  bottom: 0; left: 0;
+  width: 498px;
+  border-top-right-radius: 20px;
+  background: rgba(13,13,20,0.97);
+  border-right: 1px solid rgba(255,255,255,0.09);
+  border-top: 1px solid rgba(255,255,255,0.09);
+  padding: 16px 20px 18px;
+  z-index: 8;
+}
+.bl-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 13px;
+}
+.bl-title { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.92); }
+.bl-showall {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; color: rgba(255,255,255,0.32);
+}
+.bl-books { display: flex; gap: 11px; }
+.bl-book { display: flex; flex-direction: column; gap: 7px; }
+.bl-cover-wrap {
+  position: relative;
+  width: 78px; height: 114px;
+  border-radius: 6px; overflow: hidden;
+  box-shadow: 0 5px 18px rgba(0,0,0,0.55);
+}
+.bl-cover-wrap img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.bl-cover-heart {
+  position: absolute;
+  bottom: 6px; right: 6px;
+  width: 24px; height: 24px;
+  background: rgba(0,0,0,0.72);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  color: rgba(255,255,255,0.65);
+}
+.bl-book-name {
+  font-size: 10px;
+  color: rgba(255,255,255,0.50);
+  width: 78px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── BOTTOM-RIGHT CARD ── */
+.br-card {
+  position: absolute;
+  bottom: 22px; right: 22px;
+  width: 188px; height: 148px;
+  background: linear-gradient(148deg, #6D28D9 0%, #9D4EDD 50%, #C084FC 100%);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 10px 36px rgba(157,92,246,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.20);
+  z-index: 10;
+}
+.br-icon { font-size: 56px; color: rgba(255,255,255,0.95); }
+</style>
+</head>
+<body>
+<div class="banner">
+
+  <!-- ── TOP-LEFT: purple library card ── -->
+  <div class="tl-card">
+    <i class="ri-bookshelf-line tl-icon"></i>
+    <span class="tl-label">Library</span>
+  </div>
+
+  <!-- ── AUTHOR CIRCLES: top row ── -->
+  <div class="circle" style="width:110px;height:110px;top:18px;left:232px;">
+    <img src="../public/Images/J. K. Rowling.jpg" alt="J.K. Rowling">
+  </div>
+  <div class="circle" style="width:110px;height:110px;top:10px;left:356px;">
+    <img src="../public/Images/Agatha Christie.jpg" alt="Agatha Christie">
+  </div>
+  <div class="circle" style="width:110px;height:110px;top:6px;left:480px;">
+    <img src="../public/Images/Stephen King.jpg" alt="Stephen King">
+  </div>
+
+  <!-- ── CENTER LOGO ── -->
+  <div class="center-logo">
+    <div class="logo-badge">
+      <img src="../public/Images/Logo.png" alt="Bookish">
+    </div>
+    <div class="logo-name">Bookish</div>
+  </div>
+
+  <!-- ── AUTHOR CIRCLES: bottom row ── -->
+  <div class="circle" style="width:110px;height:110px;bottom:18px;left:638px;">
+    <img src="../public/Images/Toni Morrison.webp" alt="Toni Morrison">
+  </div>
+  <div class="circle" style="width:110px;height:110px;bottom:10px;left:762px;">
+    <img src="../public/Images/George R.R Martin.webp" alt="George R.R. Martin">
+  </div>
+  <div class="circle" style="width:110px;height:110px;bottom:6px;left:886px;">
+    <img src="../public/Images/Karin-Slaughter.jpg" alt="Karin Slaughter">
+  </div>
+
+  <!-- ── TOP-RIGHT: book library panel ── -->
+  <div class="tr-panel">
+    <div class="tr-settings">
+      <i class="ri-settings-3-line"></i>
+      Settings
+    </div>
+
+    <div class="tr-book-row">
+      <img class="tr-book-cover" src="../public/1984.jpg" alt="1984">
+      <div class="tr-book-info">
+        <div class="tr-book-title">1984</div>
+        <div class="tr-book-author">George Orwell</div>
+      </div>
+      <div class="tr-book-meta">Unread</div>
+    </div>
+
+    <div class="tr-book-row">
+      <img class="tr-book-cover" src="../public/Three Body Problem.jpg" alt="Three Body Problem">
+      <div class="tr-book-info">
+        <div class="tr-book-title">The Three-Body Problem</div>
+        <div class="tr-book-author">Liu Cixin</div>
+      </div>
+      <div class="tr-book-meta">Reading</div>
+    </div>
+
+    <!-- TTS playing bar -->
+    <div class="tr-player">
+      <img class="tr-player-thumb" src="../public/Brave New World.jpg" alt="Brave New World">
+      <div class="tr-player-body">
+        <div class="tr-player-title">Brave New World</div>
+        <div class="tr-player-upnext">Up Next &nbsp;1984 by George Orwell</div>
+        <div class="tr-progress-row">
+          <span class="tr-ptime">01:24</span>
+          <div class="tr-pbar"><div class="tr-pfill"></div></div>
+          <span class="tr-ptime">18:45</span>
+        </div>
+      </div>
+      <div class="tr-ctrl">
+        <i class="ri-heart-line tc"></i>
+        <i class="ri-close-line tc"></i>
+        <i class="ri-skip-back-fill tc"></i>
+        <i class="ri-play-fill tc play"></i>
+        <i class="ri-skip-forward-fill tc"></i>
+        <i class="ri-repeat-line tc"></i>
+        <i class="ri-list-unordered tc"></i>
+      </div>
+      <div class="tr-win-btns">
+        <span class="twb">⊡</span>
+        <span class="twb">✕</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BOTTOM-LEFT: recently added books ── -->
+  <div class="bl-panel">
+    <div class="bl-header">
+      <span class="bl-title">Recently Added Books</span>
+      <span class="bl-showall">
+        <i class="ri-grid-line"></i>
+        Show All
+      </span>
+    </div>
+    <div class="bl-books">
+      <div class="bl-book">
+        <div class="bl-cover-wrap">
+          <img src="../public/Red Rising.jpg" alt="Red Rising">
+          <div class="bl-cover-heart"><i class="ri-heart-line"></i></div>
+        </div>
+        <span class="bl-book-name">Red Rising</span>
+      </div>
+      <div class="bl-book">
+        <div class="bl-cover-wrap">
+          <img src="../public/The Boyfriend.jpg" alt="The Boyfriend">
+          <div class="bl-cover-heart"><i class="ri-heart-line"></i></div>
+        </div>
+        <span class="bl-book-name">The Boyfriend</span>
+      </div>
+      <div class="bl-book">
+        <div class="bl-cover-wrap">
+          <img src="../public/Hunger of the gods.jpg" alt="Hunger of the Gods">
+          <div class="bl-cover-heart"><i class="ri-heart-line"></i></div>
+        </div>
+        <span class="bl-book-name">Hunger of the Gods</span>
+      </div>
+      <div class="bl-book">
+        <div class="bl-cover-wrap">
+          <img src="../public/Brave New World.jpg" alt="Brave New World">
+          <div class="bl-cover-heart"><i class="ri-heart-fill" style="color:#e45;"></i></div>
+        </div>
+        <span class="bl-book-name">Brave New World</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BOTTOM-RIGHT: purple favourites card ── -->
+  <div class="br-card">
+    <i class="ri-heart-3-fill br-icon"></i>
+  </div>
+
+</div>
+</body>
+</html>

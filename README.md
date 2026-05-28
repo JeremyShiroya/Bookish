@@ -90,7 +90,7 @@
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/bookish.git
+git clone https://github.com/JeremyShiroya/bookish.git
 cd bookish
 ```
 
@@ -165,7 +165,3 @@ bookish/
 <br />
 
 ---
-
-## License
-
-[MIT](./LICENSE)
