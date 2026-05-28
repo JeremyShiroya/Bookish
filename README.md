@@ -12,7 +12,7 @@
   &nbsp;
   <img src="./public/icons/vue.svg" alt="Vue" height="36" />
   &nbsp;
-  <img src="./public/icons/type-script.svg" alt="TypeScript" height="36" />
+  <img src="./public/icons/type--script.svg" alt="TypeScript" height="36" />
   &nbsp;
   <img src="./public/icons/drizzle.svg" alt="Drizzle ORM" height="36" />
   &nbsp;
