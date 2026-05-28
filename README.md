@@ -165,7 +165,3 @@ bookish/
 <br />
 
 ---
-
-## License
-
-[MIT](./LICENSE)
