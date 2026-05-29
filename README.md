@@ -51,7 +51,7 @@
 
 ## Gallery
 
-<img src="./docs/gallery/library.png" width="100%" alt="Your Library, Always Organised" />
+<img src="./docs/gallery/image-1.png" width="100%" alt="Your Library, Always Organised" />
 <img src="./docs/gallery/reader.png" width="100%" alt="Read How You Want To" />
 <img src="./docs/gallery/tts.png" width="100%" alt="Every Book an Audiobook" />
 <img src="./docs/gallery/metadata.png" width="100%" alt="Covers. Ratings. Blurbs. Done." />
