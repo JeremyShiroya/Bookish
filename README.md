@@ -57,7 +57,7 @@
 
 | Home | Reader | Now Playing |
 |:---:|:---:|:---:|
-| ![Home](./docs/screenshots/homeu.png) | ![Reader](./docs/screenshots/reader.png) | ![Playing Bar](./docs/screenshots/playing-bar.png) |
+| ![Home](./docs/screenshots/mockup-1.png) | ![Reader](./docs/screenshots/reader.png) | ![Playing Bar](./docs/screenshots/playing-bar.png) |
 
 | Authors | Collections | Settings |
 |:---:|:---:|:---:|
