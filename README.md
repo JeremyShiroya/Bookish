@@ -49,19 +49,13 @@
 
 ---
 
-## Screenshots
+## Gallery
 
-> Screenshots coming soon — placeholders will be replaced once available.
-
-<!-- Recommended shots: Home dashboard, EPUB reader, Playing bar, Author page, Settings -->
-
-| Home | Reader | Now Playing |
-|:---:|:---:|:---:|
-| ![Home](./docs/screenshots/mockup--1.png) | ![Reader](./docs/screenshots/reader.png) | ![Playing Bar](./docs/screenshots/playing-bar.png) |
-
-| Authors | Collections | Settings |
-|:---:|:---:|:---:|
-| ![Authors](./docs/screenshots/authors.png) | ![Collections](./docs/screenshots/collections.png) | ![Settings](./docs/screenshots/settings.png) |
+<img src="./docs/gallery/library.png" width="100%" alt="Your Library, Always Organised" />
+<img src="./docs/gallery/reader.png" width="100%" alt="Read How You Want To" />
+<img src="./docs/gallery/tts.png" width="100%" alt="Every Book an Audiobook" />
+<img src="./docs/gallery/metadata.png" width="100%" alt="Covers. Ratings. Blurbs. Done." />
+<img src="./docs/gallery/authors.png" width="100%" alt="Know Your Authors" />
 
 <br />
 
