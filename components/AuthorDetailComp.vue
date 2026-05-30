@@ -186,20 +186,19 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useTTS } from '~/composables/useTTS';
-import { fetchAuthorImageResults } from '~/composables/useAuthorImageSearch';
-
 import { useToast } from '~/composables/useToast';
-
 import { useBooks } from '~/composables/useBooks';
+import { useLibraryStore } from '~/composables/useLibraryStore';
+import { fetchAuthorImageResults } from '~/composables/useAuthorImageSearch';
 
 const route = useRoute();
 const router = useRouter();
 const { play: playTTS } = useTTS();
 const { addToast } = useToast();
-const { fetchAllData, authors: globalAuthors, books: globalBooks } = useBooks();
+const { fetchAllData, authors: globalAuthors, books: globalBooks, initialized } = useBooks();
 
 const author = ref(null);
 const loading = ref(true);
@@ -209,40 +208,33 @@ const showEditChoice = ref(false);
 const showImagePicker = ref(false);
 const imageOptions = ref([]);
 
-const fetchAuthor = async () => {
-  const authorId = parseInt(route.params.id);
-  
-  // 1. Try to load from global store first for INSTANT results
-  const cachedAuthor = globalAuthors.value.find(a => a.id === authorId);
-  if (cachedAuthor) {
-    // Filter books for this author from the global books store
-    const authorBooks = globalBooks.value.filter(b => b.authorId === authorId);
-    
-    author.value = {
-      ...cachedAuthor,
-      books: authorBooks
-    };
-    loading.value = false; // Page shows up immediately!
-  } else {
-    // Only show full loading overlay if we don't even have cached info
-    loading.value = true;
-  }
+const fetchAuthor = () => {
+  const authorName = decodeURIComponent(route.params.id);
+  const authorBooks = globalBooks.value.filter(b => b.author === authorName);
+  const authorInfo = globalAuthors.value.find(a => a.name === authorName);
 
-  try {
+  if (authorBooks.length > 0) {
+    author.value = {
+      name: authorName,
+      image: authorInfo?.image ?? authorBooks.find(b => b.authorImage)?.authorImage ?? null,
+      bio: authorInfo?.bio ?? authorBooks.find(b => b.authorBio)?.authorBio ?? null,
+      books: authorBooks,
+    };
     error.value = null;
-    const data = await $fetch(`/api/authors/${route.params.id}`);
-    
-    // Update with latest data from server
-    author.value = data;
-  } catch (err) {
-    console.error('Failed to fetch author:', err);
-    if (!author.value) {
-      error.value = 'We encountered an issue loading the author profile. Please try again later.';
-    }
-  } finally {
-    loading.value = false;
+  } else if (initialized.value) {
+    error.value = 'Author not found in your library.';
+    author.value = null;
   }
+  loading.value = false;
 };
+
+watchEffect(() => {
+  if (!initialized.value) {
+    loading.value = true;
+    return;
+  }
+  fetchAuthor();
+});
 
 const handleImageClick = () => {
   showEditChoice.value = true;
@@ -255,7 +247,6 @@ const triggerFileUpload = () => {
   input.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = async () => {
       await updateAuthorImage(reader.result);
@@ -269,15 +260,12 @@ const triggerFileUpload = () => {
 
 const scrapeAuthorImage = async () => {
   if (!author.value) return;
-  
   try {
     isScraping.value = true;
     showEditChoice.value = false;
-    showImagePicker.value = true; // Open modal immediately
+    showImagePicker.value = true;
     imageOptions.value = [];
-    
     const images = await fetchAuthorImageResults(author.value.name);
-    
     if (images.length > 0) {
       imageOptions.value = images;
     } else {
@@ -300,26 +288,16 @@ const selectImage = async (imgUrl) => {
 };
 
 const removeImageOption = (imgUrl) => {
-  imageOptions.value = imageOptions.value.filter((image) => image !== imgUrl);
+  imageOptions.value = imageOptions.value.filter(img => img !== imgUrl);
 };
 
 const updateAuthorImage = async (newImageUrl) => {
   try {
-    // Show a subtle loading state instead of full overlay
-    isScraping.value = true; 
-    await $fetch(`/api/authors/${author.value.id}`, {
-      method: 'PATCH',
-      body: { image: newImageUrl }
-    });
-    
-    // 1. Update local state
-    author.value.image = newImageUrl;
-    
-    // 2. Sync global state (Home, Sidebar, etc.)
+    isScraping.value = true;
+    const authorName = decodeURIComponent(route.params.id);
+    await useLibraryStore().updateAuthorImage(authorName, newImageUrl);
+    if (author.value) author.value = { ...author.value, image: newImageUrl };
     await fetchAllData(true);
-    
-    // 3. Refresh author detail
-    await fetchAuthor();
   } catch (err) {
     console.error('Update failed:', err);
     addToast('Failed to update image.', 'error');
@@ -327,10 +305,6 @@ const updateAuthorImage = async (newImageUrl) => {
     isScraping.value = false;
   }
 };
-
-onMounted(() => {
-  fetchAuthor();
-});
 
 const totalPages = computed(() => {
   if (!author.value?.books) return 0;
@@ -345,12 +319,6 @@ const resolveBookCover = (book) => {
   if (book.cover && !book.cover.startsWith('blob:')) return book.cover;
   return '/placeholder-book.png';
 };
-
-const formatWebRating = (rating) => {
-  if (!rating) return '0.0';
-  return parseFloat(rating).toFixed(1);
-};
-
 </script>
 
 <style scoped>
