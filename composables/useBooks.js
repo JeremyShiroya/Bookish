@@ -73,7 +73,6 @@ export const useBooks = () => {
 
   const fetchAllData = async (force = false) => {
     if (initialized.value && !force) {
-      loading.value = false;
       return;
     }
     loading.value = true;
@@ -160,6 +159,7 @@ export const useBooks = () => {
     }
     try {
       const store = useLibraryStore();
+      // Always write the full merged record so the store has a complete snapshot.
       const result = await store.updateBook(index !== -1 ? books.value[index] : updatedBook);
       if (index !== -1) books.value[index] = result;
     } catch (err) {

@@ -609,7 +609,7 @@ async function loadBook(id) {
     book.value = cached
     loading.value = false
   } else {
-    const meta = await fetchBookById(id)
+    const meta = fetchBookById(id)
     if (!meta) {
       loading.value = false
       return

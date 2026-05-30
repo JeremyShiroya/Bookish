@@ -352,7 +352,7 @@ onMounted(async () => {
       editBook.value = JSON.parse(JSON.stringify(existing))
     } else {
       // Fallback to fetch if not found
-      const fetched = await fetchBookById(props.bookId)
+      const fetched = fetchBookById(props.bookId)
       if (fetched) {
         editBook.value = fetched
       } else {
