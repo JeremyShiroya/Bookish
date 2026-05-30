@@ -1048,8 +1048,10 @@ onUnmounted(async () => {
 
 .chapter-content :deep(.tts-active) {
   background: var(--color-reader-highlight);
-  border-radius: 3px;
-  box-shadow: 0 0 0 1px var(--color-reader-highlight-border);
+  border-radius: 4px;
+  box-shadow: 0 0 0 1.5px rgba(138, 43, 226, 0.65);
+  padding: 0.05em 0.2em;
+  margin: 0 -0.2em;
   transition: background 0.2s;
 }
 
