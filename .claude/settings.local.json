@@ -8,7 +8,9 @@
       "Bash(Select-Object Name, PSIsContainer)",
       "Bash(Format-Table -AutoSize)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(npx vitest *)",
+      "Bash(node -e \"const p = require\\('C:/Users/jerem/GitHub/Bookish/package.json'\\); const combined = {...p.dependencies, ...p.devDependencies}; const keys = Object.keys\\(combined\\).filter\\(k => /fake|vitest|indexeddb/i.test\\(k\\)\\); keys.forEach\\(k => console.log\\(k, combined[k]\\)\\)\")"
     ]
   }
 }

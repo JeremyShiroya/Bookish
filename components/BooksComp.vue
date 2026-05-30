@@ -552,9 +552,9 @@ const filteredBooks = computed(() => {
 
 const selectablePlaylists = computed(() => {
   const bookId = selectedPlaylistBook.value?.id;
-  return collections.value.filter((playlist) => (
-    !bookId || !(playlist.bookIds || []).includes(bookId)
-  ));
+  return collections.value
+    .filter((playlist) => !bookId || !(playlist.bookIds || []).includes(bookId))
+    .map((playlist) => ({ ...playlist, bookCount: (playlist.bookIds || []).length }));
 });
 
 const canSavePlaylist = computed(() => (
