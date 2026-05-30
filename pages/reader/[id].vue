@@ -1047,7 +1047,7 @@ onUnmounted(async () => {
 }
 
 .chapter-content :deep(.tts-active) {
-  background: var(--color-reader-highlight);
+  background: rgba(138, 43, 226, 0.1);
   border-radius: 4px;
   box-shadow: 0 0 0 1.5px rgba(138, 43, 226, 0.65);
   padding: 0.05em 0.2em;
