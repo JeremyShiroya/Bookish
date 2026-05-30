@@ -294,7 +294,7 @@ const removeImageOption = (imgUrl) => {
 const updateAuthorImage = async (newImageUrl) => {
   try {
     isScraping.value = true;
-    const authorName = decodeURIComponent(route.params.id);
+    const authorName = author.value.name;
     await useLibraryStore().updateAuthorImage(authorName, newImageUrl);
     if (author.value) author.value = { ...author.value, image: newImageUrl };
     await fetchAllData(true);
