@@ -120,6 +120,7 @@ export const useLibraryStore = () => {
         const collection = e.target.result
         if (!collection) {
           reject(new Error(`Collection ${collectionId} not found`))
+          tx.abort()
           return
         }
         if (!collection.bookIds.includes(bookId)) {
@@ -135,16 +136,18 @@ export const useLibraryStore = () => {
   }
 
   const updateAuthorImage = async (authorName, imageUrl) => {
-    const books = await getBooks()
-    const authorBooks = books.filter(b => b.author === authorName)
-    if (!authorBooks.length) return
     const db = await openLibraryDB()
     await new Promise((resolve, reject) => {
       const tx = db.transaction('books', 'readwrite')
       const store = tx.objectStore('books')
-      const now = new Date().toISOString()
-      for (const book of authorBooks) {
-        store.put({ ...book, authorImage: imageUrl, updatedAt: now })
+      const req = store.getAll()
+      req.onsuccess = (e) => {
+        const now = new Date().toISOString()
+        for (const book of e.target.result) {
+          if (book.author === authorName) {
+            store.put({ ...book, authorImage: imageUrl, updatedAt: now })
+          }
+        }
       }
       tx.oncomplete = () => resolve()
       tx.onerror = (e) => reject(e.target.error)
