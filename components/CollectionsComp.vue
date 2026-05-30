@@ -78,6 +78,7 @@ const collectionsWithBooks = computed(() => {
       });
     return {
       ...collection,
+      bookCount: bookIds.length,
       previewBooks
     };
   });
