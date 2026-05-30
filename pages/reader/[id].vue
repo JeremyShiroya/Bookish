@@ -676,7 +676,7 @@ watch(isPdfRenderable, async () => {
 onMounted(async () => {
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('resize', updateBookEdge)
-  await loadBook(Number(route.params.id))
+  await loadBook(route.params.id)
 })
 
 onUnmounted(async () => {
