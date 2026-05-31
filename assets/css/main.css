@@ -42,15 +42,17 @@
 
   /* Surfaces */
   --color-surface-primary: #ffffff;
-  --color-surface-secondary: #f8fafc;
-  --color-surface-tertiary: #f1f5f9;
-  --color-surface-muted: #f3f4f6;
-  --color-surface-hover: #f3f7ff;
-  --color-surface-active: #f3e8ff;
+  --color-surface-secondary: rgba(138, 43, 226, 0.05);
+  --color-surface-tertiary: rgba(138, 43, 226, 0.08);
+  --color-surface-muted: rgba(138, 43, 226, 0.06);
+  --color-surface-hover: rgba(147, 112, 219, 0.18);
+  --color-surface-active: rgba(147, 112, 219, 0.24);
   --color-surface-modal: #ffffff;
-  --color-surface-input: #f8fafc;
-  --color-surface-input-focus: #ffffff;
+  --color-surface-input: rgba(255, 255, 255, 0.45);
+  --color-surface-input-focus: rgba(255, 255, 255, 0.8);
   --color-surface-glass: rgba(255, 255, 255, 0.95);
+  /* Card surface — used by panels/list cards that should blend into the app background */
+  --color-surface-card: transparent;
   --color-surface-on-image: rgba(255, 255, 255, 0.12);
   --color-surface-on-image-soft: rgba(255, 255, 255, 0.05);
   --color-surface-on-image-hover: rgba(255, 255, 255, 0.22);
@@ -72,11 +74,11 @@
   --color-text-logo: #000000;
 
   /* Borders */
-  --color-border-subtle: #e2e8f0;
-  --color-border-strong: #cbd5e1;
-  --color-border-card: #d8dce8;
+  --color-border-subtle: #cdcfde;
+  --color-border-strong: #b9bccd;
+  --color-border-card: #cdcfde;
   --color-border-focus: #8A2BE2;
-  --color-border-focus-ring: #f3e8ff;
+  --color-border-focus-ring: rgba(138, 43, 226, 0.18);
   --color-border-on-image: rgba(255, 255, 255, 0.16);
   --color-border-on-image-strong: rgba(255, 255, 255, 0.34);
 
@@ -100,8 +102,8 @@
   --color-reader-page: #ffffff;
   --color-reader-toolbar: #ffffff;
   --color-reader-border: #e0ddd7;
-  --color-reader-highlight: rgba(255, 213, 79, 0.48);
-  --color-reader-highlight-border: rgba(236, 179, 0, 0.2);
+  --color-reader-highlight: #9370DB3F;
+  --color-reader-highlight-border: #8A2BE2;
   --color-reader-light-background: #eceae4;
   --color-reader-light-page: #ffffff;
   --color-reader-light-toolbar: #ffffff;
@@ -134,10 +136,10 @@
   --gradient-genre-forest: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
 
   /* Effects */
-  --shadow-card-subtle: 0 4px 20px rgba(15, 23, 42, 0.04);
+  --shadow-card-subtle: none;
   --shadow-card-raised: 0 10px 30px rgba(15, 23, 42, 0.08);
-  --shadow-card-hover: 0 10px 15px -3px rgba(15, 23, 42, 0.12);
-  --shadow-form-shell: 0 10px 30px -10px rgba(15, 23, 42, 0.08);
+  --shadow-card-hover: none;
+  --shadow-form-shell: none;
   --shadow-modal: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
   --shadow-toast: 0 10px 30px -10px rgba(15, 23, 42, 0.15), 0 0 0 1px rgba(15, 23, 42, 0.05);
   --shadow-focus-ring: 0 0 0 3px var(--color-border-focus-ring);
@@ -210,15 +212,16 @@
 
   /* Surfaces */
   --color-surface-primary: #1f1d29;
-  --color-surface-secondary: #272433;
-  --color-surface-tertiary: #302c3d;
-  --color-surface-muted: #2b2936;
-  --color-surface-hover: #2b2936;
-  --color-surface-active: #2d1f42;
+  --color-surface-secondary: rgba(168, 85, 247, 0.08);
+  --color-surface-tertiary: rgba(168, 85, 247, 0.12);
+  --color-surface-muted: rgba(168, 85, 247, 0.09);
+  --color-surface-hover: rgba(168, 85, 247, 0.22);
+  --color-surface-active: rgba(168, 85, 247, 0.28);
   --color-surface-modal: #1f1d29;
-  --color-surface-input: #272433;
-  --color-surface-input-focus: #302c3d;
+  --color-surface-input: rgba(255, 255, 255, 0.06);
+  --color-surface-input-focus: rgba(255, 255, 255, 0.1);
   --color-surface-glass: rgba(31, 29, 41, 0.95);
+  --color-surface-card: transparent;
   --color-surface-on-image: rgba(255, 255, 255, 0.12);
   --color-surface-on-image-soft: rgba(255, 255, 255, 0.05);
   --color-surface-on-image-hover: rgba(255, 255, 255, 0.22);
@@ -240,9 +243,9 @@
   --color-text-logo: #ffffff;
 
   /* Borders */
-  --color-border-subtle: #383445;
-  --color-border-strong: #4b465a;
-  --color-border-card: #383445;
+  --color-border-subtle: #3f3b50;
+  --color-border-strong: #524d63;
+  --color-border-card: #3f3b50;
   --color-border-focus: #a855f7;
   --color-border-focus-ring: rgba(168, 85, 247, 0.2);
   --color-border-on-image: rgba(255, 255, 255, 0.16);
@@ -268,8 +271,8 @@
   --color-reader-page: #27262d;
   --color-reader-toolbar: #1e1d24;
   --color-reader-border: #3a3940;
-  --color-reader-highlight: rgba(255, 213, 79, 0.42);
-  --color-reader-highlight-border: rgba(255, 213, 79, 0.24);
+  --color-reader-highlight: #9370DB3F;
+  --color-reader-highlight-border: #8A2BE2;
   --color-reader-light-background: #eceae4;
   --color-reader-light-page: #ffffff;
   --color-reader-light-toolbar: #ffffff;
@@ -293,10 +296,10 @@
   --gradient-cover-action-overlay: linear-gradient(to bottom, rgba(10, 8, 16, 0.48) 0%, rgba(10, 8, 16, 0.12) 50%, rgba(10, 8, 16, 0.82) 100%);
 
   /* Effects */
-  --shadow-card-subtle: 0 4px 20px rgba(0, 0, 0, 0.24);
+  --shadow-card-subtle: none;
   --shadow-card-raised: 0 16px 34px rgba(0, 0, 0, 0.36);
-  --shadow-card-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.32);
-  --shadow-form-shell: 0 10px 30px -10px rgba(0, 0, 0, 0.38);
+  --shadow-card-hover: none;
+  --shadow-form-shell: none;
   --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
   --shadow-toast: 0 10px 30px -10px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
   --shadow-focus-ring: 0 0 0 3px var(--color-border-focus-ring);

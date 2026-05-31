@@ -7,11 +7,14 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   readerZoom: 1.0,
   libraryView: 'grid',
   librarySort: 'name',
+  libraryItemsPerPage: 20,
   ttsVoice: 'en-US-ChristopherNeural',
   ttsSpeed: 1.0,
   ttsVolume: 1.0,
   metadataAutoFill: true,
 })
+
+export const LIBRARY_ITEMS_PER_PAGE_OPTIONS = Object.freeze([10, 20, 30, 50, 100])
 
 const TTS_VOICE_IDS = new Set([
   'en-US-ChristopherNeural',
@@ -58,6 +61,9 @@ export function normalizeBookishSettings(value) {
     librarySort: ['name', 'rating'].includes(source.librarySort)
       ? source.librarySort
       : DEFAULT_BOOKISH_SETTINGS.librarySort,
+    libraryItemsPerPage: LIBRARY_ITEMS_PER_PAGE_OPTIONS.includes(Number(source.libraryItemsPerPage))
+      ? Number(source.libraryItemsPerPage)
+      : DEFAULT_BOOKISH_SETTINGS.libraryItemsPerPage,
     ttsVoice: voiceOrDefault(source.ttsVoice),
     ttsSpeed: numberOrDefault(
       source.ttsSpeed,

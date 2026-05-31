@@ -105,6 +105,8 @@ const searchInternetArchive = async (title, author) => {
   return docs.slice(0, 6).map((doc, index) => {
     const metadata = details[index]?.metadata || {};
     const identifier = doc.identifier || metadata.identifier;
+    const publisherRaw = metadata.publisher || doc.publisher;
+    const publisher = Array.isArray(publisherRaw) ? compact(publisherRaw[0]) : compact(publisherRaw);
     return {
       googleId: `ia:${identifier}`,
       title: compact(metadata.title || doc.title),
@@ -115,6 +117,7 @@ const searchInternetArchive = async (title, author) => {
       seriesInstallment: null,
       genre: normalizeGenre(metadata.subject || doc.subject),
       publishYear: parseYear(metadata.year, metadata.date, doc.year),
+      publisher: publisher || null,
       webReview: null,
     };
   }).filter((item) => item.title);
@@ -151,6 +154,7 @@ const searchOpenLibrary = async (title, author) => {
       seriesInstallment: doc.series_position?.[0] || null,
       genre: normalizeGenre([...(doc.subject || []), ...(details[index]?.subjects || [])]),
       publishYear: doc.first_publish_year || null,
+      publisher: Array.isArray(doc.publisher) ? compact(doc.publisher[0]) : compact(doc.publisher) || null,
       webReview: null,
     })).filter((item) => item.title);
   } catch {
@@ -178,6 +182,7 @@ const mergeResults = (title, author, sources) => {
         seriesInstallment: firstValue(item.seriesInstallment, ...matches.map((match) => match.seriesInstallment)),
         genre: firstValue(item.genre, ...matches.map((match) => match.genre)),
         publishYear: firstValue(item.publishYear, ...matches.map((match) => match.publishYear)),
+        publisher: firstValue(item.publisher, ...matches.map((match) => match.publisher)),
         webReview: null,
       };
     })

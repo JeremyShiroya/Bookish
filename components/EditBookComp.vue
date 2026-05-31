@@ -292,6 +292,7 @@ const editBook = ref({
   series: '',
   seriesInstallment: '',
   publishYear: null,
+  publisher: '',
   webReview: '',
   format: '',
   pages: 0,
@@ -396,6 +397,7 @@ const searchBookCovers = async () => {
     const query = new URLSearchParams()
     query.append('title', editBook.value.title)
     if (editBook.value.author) query.append('author', editBook.value.author)
+    if (editBook.value.publisher) query.append('publisher', editBook.value.publisher)
 
     const response = await fetch(`/api/books/search-covers?${query.toString()}`)
     const data = await response.json()
@@ -444,6 +446,7 @@ const selectMetadata = async (result) => {
   editBook.value.author = result.author || editBook.value.author;
   editBook.value.blurb = result.blurb || editBook.value.blurb;
   editBook.value.publishYear = result.publishYear || editBook.value.publishYear;
+  editBook.value.publisher = result.publisher || editBook.value.publisher;
   editBook.value.series = result.series || editBook.value.series;
   editBook.value.seriesInstallment = result.seriesInstallment || editBook.value.seriesInstallment;
   editBook.value.webReview = result.webReview || editBook.value.webReview;
@@ -529,17 +532,17 @@ const handleUpdateBook = async () => {
 
 .btn-cancel {
   padding: 0.75rem 1.5rem;
-  background: var(--color-surface-primary);
-  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-card);
   border-radius: 10px;
   color: var(--color-text-primary);
   font-weight: 400;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s;
 }
 
 .btn-cancel:hover {
-  background: var(--color-surface-secondary);
+  background: var(--color-surface-hover);
 }
 
 .loading-state {
@@ -559,11 +562,10 @@ const handleUpdateBook = async () => {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 3rem;
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   padding: 2.5rem;
   border-radius: 20px;
-  border: 1px solid var(--color-border-subtle);
-  box-shadow: var(--shadow-form-shell);
+  border: 1px solid var(--color-border-card);
 }
 
 .media-column {

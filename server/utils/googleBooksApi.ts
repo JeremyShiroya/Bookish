@@ -6,6 +6,7 @@ export interface GBResult {
   blurb: string | null;
   genre: string | null;
   publishYear: number | null;
+  publisher: string | null;
   series: string | null;
   seriesInstallment: string | null;
   cover: string | null;
@@ -77,6 +78,7 @@ export async function searchGoogleBooks(title: string, author?: string): Promise
           blurb: info.description || null,
           genre: info.categories?.slice(0, 3).join(', ') || null,
           publishYear,
+          publisher: typeof info.publisher === 'string' && info.publisher.trim() ? info.publisher.trim() : null,
           series,
           seriesInstallment,
           cover,

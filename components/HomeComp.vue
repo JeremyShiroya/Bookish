@@ -237,11 +237,10 @@ const truncate = (text, length) => {
 }
 
 .recent-grid {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 2rem;
-  overflow-x: auto;
   padding: 2.5rem 0.5rem 0.5rem;
-  scroll-snap-type: x mandatory;
 }
 
 .recent-grid::-webkit-scrollbar {
@@ -252,8 +251,7 @@ const truncate = (text, length) => {
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1;
-  min-width: 280px;
+  min-width: 0;
   height: 130px;
   border-radius: 16px;
   cursor: pointer;
@@ -404,7 +402,7 @@ const truncate = (text, length) => {
 .main-content-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 2rem;
+  gap: 4rem;
   margin-bottom: 6rem;
   padding: 0 0.5rem; /* align with recent-grid padding */
 }
@@ -516,14 +514,14 @@ const truncate = (text, length) => {
 
 /* Your Authors */
 .authors-list-card {
-  background: var(--surface-color);
+  /* background: var(--surface-color); */
   border-radius: 20px;
-  padding: 2rem;
+  /* padding: 2rem 0; */
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   margin-top: 1.5rem;
-  box-shadow: var(--shadow-form-shell);
+  /* box-shadow: var(--shadow-form-shell); */
 }
 
 .author-list-item {
@@ -586,6 +584,15 @@ const truncate = (text, length) => {
 @media (max-width: 1024px) {
   .main-content-row {
     grid-template-columns: 1fr;
+  }
+  .recent-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .recent-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

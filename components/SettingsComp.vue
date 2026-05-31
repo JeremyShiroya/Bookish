@@ -181,6 +181,23 @@
           </div>
         </div>
 
+        <div class="setting-row">
+          <div class="setting-copy">
+            <h3>Items per page</h3>
+            <p>{{ settings.libraryItemsPerPage }} books per pagination page.</p>
+          </div>
+          <div class="chip-group" aria-label="Items per page">
+            <button
+              v-for="option in itemsPerPageOptions"
+              :key="option"
+              :class="{ active: settings.libraryItemsPerPage === option }"
+              @click="setLibraryItemsPerPage(option)"
+            >
+              {{ option }}
+            </button>
+          </div>
+        </div>
+
         <div class="format-strip" v-if="formatStats.length">
           <div v-for="format in formatStats" :key="format.name" class="format-pill">
             <span>{{ format.name }}</span>
@@ -280,7 +297,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useBooks } from '~/composables/useBooks'
-import { useBookishSettings } from '~/composables/useBookishSettings'
+import { useBookishSettings, LIBRARY_ITEMS_PER_PAGE_OPTIONS } from '~/composables/useBookishSettings'
 import { useBookStorage } from '~/composables/useBookStorage'
 import { useTTS } from '~/composables/useTTS'
 
@@ -385,7 +402,10 @@ const setAudioVolume = (value) => {
 
 const setLibraryView = (libraryView) => updateSettings({ libraryView })
 const setLibrarySort = (librarySort) => updateSettings({ librarySort })
+const setLibraryItemsPerPage = (libraryItemsPerPage) => updateSettings({ libraryItemsPerPage })
 const setMetadataAutoFill = (metadataAutoFill) => updateSettings({ metadataAutoFill })
+
+const itemsPerPageOptions = LIBRARY_ITEMS_PER_PAGE_OPTIONS
 
 const formatBytes = (bytes) => {
   if (!bytes) return '0 B'
@@ -446,10 +466,9 @@ onMounted(refreshStorageSummary)
 .settings-panel,
 .stat-item,
 .about-section {
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   border: 1px solid var(--color-border-card);
-  border-radius: 8px;
-  box-shadow: var(--shadow-card-subtle);
+  border-radius: 10px;
 }
 
 .settings-hero {
@@ -648,7 +667,7 @@ onMounted(refreshStorageSummary)
 .chip-group button {
   min-height: 36px;
   border: 1px solid var(--color-border-card);
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   color: var(--color-text-muted);
   border-radius: 8px;
   padding: 0 0.8rem;
@@ -660,11 +679,17 @@ onMounted(refreshStorageSummary)
   transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
 }
 
+.segmented-control button:hover,
+.chip-group button:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
 .segmented-control button.active,
 .chip-group button.active {
-  background: var(--color-brand-primary-soft);
+  background: var(--purple-li-active);
   border-color: var(--color-brand-primary);
-  color: var(--color-brand-primary-hover);
+  color: var(--color-brand-primary);
 }
 
 .range-control {
@@ -693,7 +718,7 @@ onMounted(refreshStorageSummary)
   appearance: none;
   border: 1px solid var(--color-border-card);
   border-radius: 8px;
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   color: var(--color-text-primary);
   padding: 0 2.25rem 0 0.8rem;
   font-family: inherit;
@@ -809,19 +834,24 @@ onMounted(refreshStorageSummary)
   height: 34px;
   border: 1px solid var(--color-border-card);
   border-radius: 8px;
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   color: var(--color-brand-primary-hover);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.icon-action:hover {
+  background: var(--color-surface-hover);
 }
 
 .about-section {
   min-height: 240px;
   padding: 2.2rem 1.5rem;
   text-align: center;
-  background: linear-gradient(135deg, var(--color-surface-primary) 0%, var(--color-surface-secondary) 100%);
+  background: var(--color-surface-card);
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -2,186 +2,54 @@
   <div class="books-container">
     <!-- Header -->
     <div class="books-header">
-      <h1 class="books-title">
-        Books <span class="books-count">({{ filteredBooks.length }})</span>
-      </h1>
+      <div class="books-title-row">
+        <h1 class="books-title">Books</h1>
+        <button class="add-book-btn" @click="router.push('/add')">
+          <i class="ri-add-line"></i>
+          Add Book
+        </button>
+      </div>
 
-      <div class="controls-row">
-        <!-- Filters -->
-        <div class="filters-container">
-          <!-- Sort by Filter -->
-          <div class="filter-dropdown" ref="sortDropdown">
-            <button class="filter-button" @click="toggleDropdown('sort')">
-              Sort by
-              <i class="ri-arrow-down-s-line"></i>
-            </button>
-            <div class="dropdown-menu" v-show="activeDropdown === 'sort'">
-              <div class="dropdown-section">
-                <h4>Sort by</h4>
-                <div
-                  class="dropdown-option"
-                  :class="{ active: sortBy === 'name' }"
-                  @click="setSortBy('name')"
-                >
-                  <i class="ri-check-line" v-if="sortBy === 'name'"></i>
-                  Name
-                </div>
-                <div
-                  class="dropdown-option"
-                  :class="{ active: sortBy === 'rating' }"
-                  @click="setSortBy('rating')"
-                >
-                  <i class="ri-check-line" v-if="sortBy === 'rating'"></i>
-                  Rating
-                </div>
-              </div>
-              <div class="dropdown-divider"></div>
-              <div class="dropdown-section">
-                <h4>Sort direction</h4>
-                <template v-if="sortBy === 'name'">
-                  <div
-                    class="dropdown-option"
-                    :class="{ active: sortDirection === 'asc' }"
-                    @click="setSortDirection('asc')"
-                  >
-                    <i class="ri-check-line" v-if="sortDirection === 'asc'"></i>
-                    A to Z
-                  </div>
-                  <div
-                    class="dropdown-option"
-                    :class="{ active: sortDirection === 'desc' }"
-                    @click="setSortDirection('desc')"
-                  >
-                    <i
-                      class="ri-check-line"
-                      v-if="sortDirection === 'desc'"
-                    ></i>
-                    Z to A
-                  </div>
-                </template>
-                <template v-else-if="sortBy === 'rating'">
-                  <div
-                    class="dropdown-option"
-                    :class="{ active: sortDirection === 'desc' }"
-                    @click="setSortDirection('desc')"
-                  >
-                    <i
-                      class="ri-check-line"
-                      v-if="sortDirection === 'desc'"
-                    ></i>
-                    Good - Bad
-                  </div>
-                  <div
-                    class="dropdown-option"
-                    :class="{ active: sortDirection === 'asc' }"
-                    @click="setSortDirection('asc')"
-                  >
-                    <i class="ri-check-line" v-if="sortDirection === 'asc'"></i>
-                    Bad - Good
-                  </div>
-                </template>
-              </div>
-            </div>
+      <!-- Metric Cards -->
+      <div v-if="books.length > 0" class="metric-cards">
+        <div class="metric-card">
+          <div class="metric-icon metric-icon-total">
+            <i class="ri-stack-line"></i>
           </div>
-
-          <!-- Reading Status Filter -->
-          <div class="filter-dropdown" ref="statusDropdown">
-            <button class="filter-button" @click="toggleDropdown('status')">
-              Reading Status
-              <i class="ri-arrow-down-s-line"></i>
-            </button>
-            <div class="dropdown-menu" v-show="activeDropdown === 'status'">
-              <div
-                class="dropdown-option"
-                :class="{ active: selectedStatus === 'all' }"
-                @click="setStatus('all')"
-              >
-                <i class="ri-check-line" v-if="selectedStatus === 'all'"></i>
-                All Status
-              </div>
-              <div
-                class="dropdown-option"
-                v-for="status in readingStatuses"
-                :key="status"
-                :class="{ active: selectedStatus === status }"
-                @click="setStatus(status)"
-              >
-                <i class="ri-check-line" v-if="selectedStatus === status"></i>
-                {{ status }}
-              </div>
-            </div>
+          <div class="metric-text">
+            <div class="metric-label">Total</div>
+            <div class="metric-value">{{ bookMetrics.total }}</div>
           </div>
-
-          <!-- Rating Filter -->
-          <div class="filter-dropdown" ref="ratingDropdown">
-            <button class="filter-button" @click="toggleDropdown('rating')">
-              Rating
-              <i class="ri-arrow-down-s-line"></i>
-            </button>
-            <div class="dropdown-menu" v-show="activeDropdown === 'rating'">
-              <div
-                class="dropdown-option"
-                :class="{ active: selectedRating === 'all' }"
-                @click="setRating('all')"
-              >
-                <i class="ri-check-line" v-if="selectedRating === 'all'"></i>
-                All Ratings
-              </div>
-              <div
-                class="dropdown-option"
-                :class="{ active: selectedRating === 'good' }"
-                @click="setRating('good')"
-              >
-                <i class="ri-check-line" v-if="selectedRating === 'good'"></i>
-                Good (6-10)
-              </div>
-              <div
-                class="dropdown-option"
-                :class="{ active: selectedRating === 'mid' }"
-                @click="setRating('mid')"
-              >
-                <i class="ri-check-line" v-if="selectedRating === 'mid'"></i>
-                Mid (5)
-              </div>
-              <div
-                class="dropdown-option"
-                :class="{ active: selectedRating === 'bad' }"
-                @click="setRating('bad')"
-              >
-                <i class="ri-check-line" v-if="selectedRating === 'bad'"></i>
-                Bad (1-4)
-              </div>
-            </div>
-          </div>
-
-          <!-- Add Book Button -->
-          <button class="add-book-btn" @click="router.push('/add')">
-            <i class="ri-add-line"></i>
-            Add Book
-          </button>
         </div>
-
-        <!-- View Toggle -->
-        <div class="view-toggle">
-          <span class="view-label">View</span>
-          <div class="toggle-buttons">
-            <button
-              class="toggle-button"
-              :class="{ active: viewMode === 'grid' }"
-              @click="setViewMode('grid')"
-            >
-              <i class="ri-apps-2-line"></i>
-            </button>
-            <button
-              class="toggle-button"
-              :class="{ active: viewMode === 'table' }"
-              @click="setViewMode('table')"
-            >
-              <i class="ri-list-unordered"></i>
-            </button>
+        <div class="metric-card">
+          <div class="metric-icon metric-icon-unread">
+            <i class="ri-book-2-line"></i>
+          </div>
+          <div class="metric-text">
+            <div class="metric-label">Unread</div>
+            <div class="metric-value">{{ bookMetrics.unread }}</div>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon metric-icon-reading">
+            <i class="ri-book-open-line"></i>
+          </div>
+          <div class="metric-text">
+            <div class="metric-label">Reading</div>
+            <div class="metric-value">{{ bookMetrics.reading }}</div>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon metric-icon-finished">
+            <i class="ri-checkbox-circle-line"></i>
+          </div>
+          <div class="metric-text">
+            <div class="metric-label">Finished</div>
+            <div class="metric-value">{{ bookMetrics.read }}</div>
           </div>
         </div>
       </div>
+      
     </div>
 
     <!-- Loading State -->
@@ -206,10 +74,185 @@
       </EmptyState>
 
       <div v-else-if="books.length > 0">
+        <div class="view-container" :class="{ 'is-card': viewMode === 'table' }">
+          <!-- Controls Row (chips + filters on left, add book + view toggle on right) -->
+          <div class="controls-row in-container">
+            <div class="controls-left">
+              <!-- Reading Status Chips -->
+              <div
+                class="status-chips"
+                ref="chipsRef"
+                @mouseleave="chipHoverIndex = -1"
+              >
+                <div
+                  class="chip-highlight"
+                  :style="chipHighlightStyle"
+                  :class="{ 'is-active': isChipHighlightActive }"
+                ></div>
+                <button
+                  class="status-chip"
+                  :class="{ active: selectedStatus === 'all' }"
+                  @click="setStatus('all')"
+                  @mouseenter="chipHoverIndex = 0"
+                >All</button>
+                <button
+                  v-for="(status, idx) in readingStatuses"
+                  :key="status"
+                  class="status-chip"
+                  :class="{ active: selectedStatus === status }"
+                  @click="setStatus(status)"
+                  @mouseenter="chipHoverIndex = idx + 1"
+                >{{ status }}</button>
+              </div>
+            </div>
+            
+            <div class="controls-right">
+              <!-- Combined Filters Dropdown -->
+              <div class="filter-dropdown filters-merged" ref="filtersDropdown">
+                <button class="filter-button" @click="toggleDropdown('filters')">
+                  <i class="ri-filter-3-line"></i>
+                  Filters
+                  <span v-if="activeFilterCount > 0" class="filter-count">{{ activeFilterCount }}</span>
+                  <i class="ri-arrow-down-s-line"></i>
+                </button>
+                <div class="dropdown-menu filters-menu" v-show="activeDropdown === 'filters'">
+                  <div class="dropdown-section">
+                    <h4>Sort by</h4>
+                    <div
+                      class="dropdown-option"
+                      :class="{ active: sortBy === 'name' }"
+                      @click="setSortBy('name')"
+                    >
+                      <i class="ri-check-line" v-if="sortBy === 'name'"></i>
+                      Name
+                    </div>
+                    <div
+                      class="dropdown-option"
+                      :class="{ active: sortBy === 'rating' }"
+                      @click="setSortBy('rating')"
+                    >
+                      <i class="ri-check-line" v-if="sortBy === 'rating'"></i>
+                      Rating
+                    </div>
+                  </div>
+                  <div class="dropdown-divider"></div>
+                  <div class="dropdown-section">
+                    <h4>Sort direction</h4>
+                    <template v-if="sortBy === 'name'">
+                      <div
+                        class="dropdown-option"
+                        :class="{ active: sortDirection === 'asc' }"
+                        @click="setSortDirection('asc')"
+                      >
+                        <i class="ri-check-line" v-if="sortDirection === 'asc'"></i>
+                        A to Z
+                      </div>
+                      <div
+                        class="dropdown-option"
+                        :class="{ active: sortDirection === 'desc' }"
+                        @click="setSortDirection('desc')"
+                      >
+                        <i class="ri-check-line" v-if="sortDirection === 'desc'"></i>
+                        Z to A
+                      </div>
+                    </template>
+                    <template v-else-if="sortBy === 'rating'">
+                      <div
+                        class="dropdown-option"
+                        :class="{ active: sortDirection === 'desc' }"
+                        @click="setSortDirection('desc')"
+                      >
+                        <i class="ri-check-line" v-if="sortDirection === 'desc'"></i>
+                        Good - Bad
+                      </div>
+                      <div
+                        class="dropdown-option"
+                        :class="{ active: sortDirection === 'asc' }"
+                        @click="setSortDirection('asc')"
+                      >
+                        <i class="ri-check-line" v-if="sortDirection === 'asc'"></i>
+                        Bad - Good
+                      </div>
+                    </template>
+                  </div>
+                  <div class="dropdown-divider"></div>
+                  <div class="dropdown-section">
+                    <h4>Rating</h4>
+                    <div
+                      class="dropdown-option"
+                      :class="{ active: selectedRating === 'all' }"
+                      @click="setRating('all')"
+                    >
+                      <i class="ri-check-line" v-if="selectedRating === 'all'"></i>
+                      All Ratings
+                    </div>
+                    <div
+                      class="dropdown-option"
+                      :class="{ active: selectedRating === 'good' }"
+                      @click="setRating('good')"
+                    >
+                      <i class="ri-check-line" v-if="selectedRating === 'good'"></i>
+                      Good (6-10)
+                    </div>
+                    <div
+                      class="dropdown-option"
+                      :class="{ active: selectedRating === 'mid' }"
+                      @click="setRating('mid')"
+                    >
+                      <i class="ri-check-line" v-if="selectedRating === 'mid'"></i>
+                      Mid (5)
+                    </div>
+                    <div
+                      class="dropdown-option"
+                      :class="{ active: selectedRating === 'bad' }"
+                      @click="setRating('bad')"
+                    >
+                      <i class="ri-check-line" v-if="selectedRating === 'bad'"></i>
+                      Bad (1-4)
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- View Toggle -->
+              <div
+                class="view-chips"
+                ref="viewChipsRef"
+                @mouseleave="viewHoverIndex = -1"
+              >
+                <div
+                  class="chip-highlight"
+                  :style="viewHighlightStyle"
+                  :class="{ 'is-active': isViewHighlightActive }"
+                ></div>
+                <button
+                  class="status-chip view-chip-icon"
+                  :class="{ active: viewMode === 'grid' }"
+                  @click="setViewMode('grid')"
+                  @mouseenter="viewHoverIndex = 0"
+                  aria-label="Grid view"
+                  title="Grid view"
+                >
+                  <i class="ri-apps-2-line"></i>
+                </button>
+                <button
+                  class="status-chip view-chip-icon"
+                  :class="{ active: viewMode === 'table' }"
+                  @click="setViewMode('table')"
+                  @mouseenter="viewHoverIndex = 1"
+                  aria-label="Table view"
+                  title="Table view"
+                >
+                  <i class="ri-list-unordered"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
         <!-- Grid View -->
         <div v-if="viewMode === 'grid'" class="books-grid">
           <div
-            v-for="book in filteredBooks"
+            v-for="book in paginatedBooks"
             :key="book.id"
             class="book-card horizontal"
             @click="router.push(`/reader/${book.id}`)"
@@ -281,75 +324,105 @@
           </div>
         </div>
 
-        <div v-else class="books-list redesigned-list">
-          <div
-            v-for="book in filteredBooks"
-            :key="book.id"
-            class="list-row"
-            @click="router.push(`/reader/${book.id}`)"
-          >
-            <div class="list-cover-wrap">
-              <img :src="resolveBookCover(book)" :alt="book.title" class="list-cover" @error="(e) => coverFallback(e, book.title)" />
+        <div v-else class="data-table">
+            <!-- Header -->
+            <div class="data-header">
+              <div class="col-book">Book</div>
+              <div class="col-status">Status</div>
+              <div class="col-progress">Progress</div>
+              <div class="col-personal">Personal Rating</div>
+              <div class="col-goodreads">Goodreads Rating</div>
+              <div class="col-actions"></div>
             </div>
 
-            <div class="list-main">
-              <div class="list-title-row">
-                <h3 class="list-title" :title="book.title">{{ truncateWords(book.title, 9) }}</h3>
-                <span class="list-format">{{ book.format ? book.format.toUpperCase() : 'BOOK' }}</span>
+            <!-- Rows -->
+            <div
+              v-for="book in paginatedBooks"
+              :key="book.id"
+              class="data-row"
+              @click="router.push(`/reader/${book.id}`)"
+            >
+              <div class="col-book book-cell">
+                <img :src="resolveBookCover(book)" :alt="book.title" class="cell-cover" @error="(e) => coverFallback(e, book.title)" />
+                <div class="cell-book-info">
+                  <div class="cell-book-title-row">
+                    <h3 class="cell-book-title" :title="book.title">{{ truncateWords(book.title, 9) }}</h3>
+                    <span class="cell-format">{{ book.format ? book.format.toUpperCase() : 'BOOK' }}</span>
+                  </div>
+                  <p class="cell-book-author">
+                    {{ book.author || 'Unknown author' }}<span v-if="book.publishYear"> • {{ book.publishYear }}</span>
+                  </p>
+                  <div class="cell-book-tags">
+                    <span class="cell-chip" :class="{ standalone: !book.series }">{{ book.series || 'Standalone' }}</span>
+                    <span v-if="book.genre" class="cell-chip genre"><i class="ri-price-tag-3-line"></i>{{ book.genre }}</span>
+                  </div>
+                </div>
               </div>
-              <p class="list-author">
-                {{ book.author || 'Unknown author' }}
-                <span v-if="book.publishYear"> &bull; {{ book.publishYear }}</span>
-              </p>
-              <div class="list-tags">
-                <span class="list-chip" :class="{ standalone: !book.series }">
-                  {{ book.series || 'Standalone' }}
-                </span>
-                <span v-if="book.genre" class="list-chip genre">
-                  <i class="ri-price-tag-3-line"></i>
-                  {{ book.genre }}
-                </span>
-              </div>
-            </div>
 
-            <div class="list-progress-cell" :title="`${book.progress || 0}% read`">
-              <div class="list-progress-topline">
-                <span>{{ book.status || 'Unread' }}</span>
-                <strong>{{ book.progress || 0 }}%</strong>
+              <div class="col-status">
+                <span class="status-pill" :class="statusBadgeClass(book.status)">{{ book.status || 'Unread' }}</span>
               </div>
-              <div class="list-progress-bar">
-                <div class="list-progress-fill" :style="{ width: `${book.progress || 0}%` }"></div>
-              </div>
-            </div>
 
-            <div class="list-ratings">
-              <div class="list-rating-cell" title="Personal Rating">
-                <i class="ri-star-fill list-star"></i>
-                <span>{{ formatPersonalRating(book.rating) }}</span>
+              <div class="col-progress">
+                <div class="progress-wrap">
+                  <template v-if="(book.progress || 0) >= 100">
+                    <i class="ri-checkbox-circle-fill progress-complete-icon"></i>
+                    <span class="progress-complete-text">100%</span>
+                  </template>
+                  <template v-else>
+                    <div class="progress-bar">
+                      <div class="progress-fill" :style="{ width: `${book.progress || 0}%` }"></div>
+                    </div>
+                    <span class="progress-text">{{ book.progress || 0 }}%</span>
+                  </template>
+                </div>
               </div>
-              <div class="list-goodreads-cell" title="Goodreads Rating">
-                <GoodreadsRatingDisplay v-if="getGoodreadsRating(book)" :web-review="book.webReview" compact />
-                <span v-else class="rating-empty">No Goodreads rating</span>
-              </div>
-            </div>
 
-            <div class="list-actions" @click.stop>
-              <button class="list-action-btn" :class="{ active: book.isFavourite }" title="Favourite" @click="toggleFavourite(book.id)">
-                <i :class="book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line'"></i>
-              </button>
-              <button class="list-action-btn" title="Add to playlist" @click="openPlaylistModal(book)">
-                <i class="ri-play-list-2-line"></i>
-              </button>
-              <button class="list-action-btn" title="Edit" @click="router.push(`/edit/${book.id}`)">
-                <i class="ri-edit-line"></i>
-              </button>
-              <button class="list-action-btn delete" title="Delete" @click="openDeleteModal(book)">
-                <i class="ri-delete-bin-line"></i>
-              </button>
+              <div class="col-personal">
+                <div class="rating-wrap">
+                  <i class="ri-star-fill list-star"></i>
+                  <span>{{ formatPersonalRating(book.rating) }}</span>
+                </div>
+              </div>
+
+              <div class="col-goodreads">
+                <div class="goodreads-wrap" :data-tooltip="goodreadsTooltip(book) || null">
+                  <GoodreadsRatingDisplay v-if="getGoodreadsRating(book)" :web-review="book.webReview" compact />
+                  <span v-else class="rating-empty">—</span>
+                </div>
+              </div>
+
+              <div class="col-actions" @click.stop>
+                <button class="row-action-btn" :class="{ active: book.isFavourite }" title="Favourite" @click="toggleFavourite(book.id)">
+                  <i :class="book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line'"></i>
+                </button>
+                <button class="row-action-btn" title="Add to playlist" @click="openPlaylistModal(book)">
+                  <i class="ri-play-list-2-line"></i>
+                </button>
+                <button class="row-action-btn" title="Edit" @click="router.push(`/edit/${book.id}`)">
+                  <i class="ri-edit-line"></i>
+                </button>
+                <button class="row-action-btn delete" title="Delete" @click="openDeleteModal(book)">
+                  <i class="ri-delete-bin-line"></i>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
+          <!-- Pagination -->
+          <div v-if="totalPages > 1" class="pagination">
+            <button class="page-btn" :disabled="currentPage === 1" @click="currentPage--">
+              <i class="ri-arrow-left-s-line"></i>
+            </button>
+            <template v-for="(page, idx) in visiblePageNumbers" :key="idx">
+              <span v-if="page === '...'" class="page-ellipsis">...</span>
+              <button v-else class="page-btn" :class="{ active: page === currentPage }" @click="currentPage = page">{{ page }}</button>
+            </template>
+            <button class="page-btn" :disabled="currentPage === totalPages" @click="currentPage++">
+              <i class="ri-arrow-right-s-line"></i>
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Empty State -->
@@ -452,12 +525,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import DeleteConfirmModal from "./DeleteConfirmModal.vue";
 import GoodreadsRatingDisplay from "./GoodreadsRatingDisplay.vue";
 
 import { useBooks } from "~/composables/useBooks";
-import { getGoodreadsRating } from "~/composables/useGoodreadsRating";
+import { getGoodreadsRating, parseGoodreadsReview } from "~/composables/useGoodreadsRating";
 import { useTTS } from "~/composables/useTTS";
 import { useBookishSettings } from "~/composables/useBookishSettings";
 import { useToast } from "~/composables/useToast";
@@ -550,6 +623,132 @@ const filteredBooks = computed(() => {
   return filtered;
 });
 
+const bookMetrics = computed(() => {
+  const all = books.value;
+  return {
+    total: all.length,
+    unread: all.filter((b) => !b.status || b.status === 'Unread').length,
+    reading: all.filter((b) => b.status === 'Reading').length,
+    read: all.filter((b) => b.status === 'Read').length,
+  };
+});
+
+// Sliding pill for status chips (mirrors Sidebar.vue pattern)
+const chipsRef = ref(null);
+const chipHoverIndex = ref(-1);
+const chipHighlightStyle = ref({ left: '0px', width: '0px', opacity: 0 });
+const isChipHighlightActive = ref(false);
+
+const activeChipIndex = computed(() => {
+  if (selectedStatus.value === 'all') return 0;
+  const idx = readingStatuses.indexOf(selectedStatus.value);
+  return idx === -1 ? 0 : idx + 1;
+});
+
+const updateChipHighlight = async () => {
+  await nextTick();
+  if (!chipsRef.value) return;
+
+  let targetIndex = chipHoverIndex.value;
+  let isActive = false;
+
+  if (targetIndex === -1) {
+    targetIndex = activeChipIndex.value;
+    isActive = true;
+  } else if (targetIndex === activeChipIndex.value) {
+    isActive = true;
+  }
+
+  isChipHighlightActive.value = isActive;
+
+  const chips = chipsRef.value.querySelectorAll('.status-chip');
+  const targetEl = chips[targetIndex];
+  if (!targetEl) {
+    chipHighlightStyle.value = { ...chipHighlightStyle.value, opacity: 0 };
+    return;
+  }
+
+  chipHighlightStyle.value = {
+    left: `${targetEl.offsetLeft}px`,
+    width: `${targetEl.offsetWidth}px`,
+    opacity: 1,
+  };
+};
+
+watch([activeChipIndex, chipHoverIndex], updateChipHighlight);
+
+// Sliding pill for view-mode chips (Grid / Table)
+const viewChipsRef = ref(null);
+const viewHoverIndex = ref(-1);
+const viewHighlightStyle = ref({ left: '0px', width: '0px', opacity: 0 });
+const isViewHighlightActive = ref(false);
+
+const activeViewIndex = computed(() => (viewMode.value === 'grid' ? 0 : 1));
+
+const updateViewHighlight = async () => {
+  await nextTick();
+  if (!viewChipsRef.value) return;
+
+  let targetIndex = viewHoverIndex.value;
+  let isActive = false;
+
+  if (targetIndex === -1) {
+    targetIndex = activeViewIndex.value;
+    isActive = true;
+  } else if (targetIndex === activeViewIndex.value) {
+    isActive = true;
+  }
+
+  isViewHighlightActive.value = isActive;
+
+  const chips = viewChipsRef.value.querySelectorAll('.status-chip');
+  const targetEl = chips[targetIndex];
+  if (!targetEl) {
+    viewHighlightStyle.value = { ...viewHighlightStyle.value, opacity: 0 };
+    return;
+  }
+
+  viewHighlightStyle.value = {
+    left: `${targetEl.offsetLeft}px`,
+    width: `${targetEl.offsetWidth}px`,
+    opacity: 1,
+  };
+};
+
+watch([activeViewIndex, viewHoverIndex], updateViewHighlight);
+
+// Active filter count for the merged Filters dropdown badge
+const activeFilterCount = computed(() => (selectedRating.value !== 'all' ? 1 : 0));
+
+const currentPage = ref(1);
+const itemsPerPage = computed(() => Number(settings.value.libraryItemsPerPage) || 20);
+
+const totalPages = computed(() => Math.ceil(filteredBooks.value.length / itemsPerPage.value));
+
+const paginatedBooks = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value;
+  return filteredBooks.value.slice(start, start + itemsPerPage.value);
+});
+
+const visiblePageNumbers = computed(() => {
+  const total = totalPages.value;
+  const current = currentPage.value;
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  if (current <= 4) return [1, 2, 3, 4, 5, '...', total];
+  if (current >= total - 3) return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+  return [1, '...', current - 1, current, current + 1, '...', total];
+});
+
+watch([selectedStatus, selectedRating, sortBy, sortDirection, viewMode, itemsPerPage], () => {
+  currentPage.value = 1;
+});
+
+const statusBadgeClass = (status) => {
+  if (status === 'Reading') return 'status-reading';
+  if (status === 'Read') return 'status-read';
+  return 'status-unread';
+};
+
 const selectablePlaylists = computed(() => {
   const bookId = selectedPlaylistBook.value?.id;
   return collections.value
@@ -572,6 +771,14 @@ const truncateWords = (value, limit = 7) => {
 const formatPersonalRating = (rating) => {
   const score = Number(rating || 0);
   return score > 0 ? `${score}/10` : "--/10";
+};
+
+const goodreadsTooltip = (book) => {
+  const info = parseGoodreadsReview(book.webReview);
+  const parts = [];
+  if (info.ratingsCount) parts.push(`${info.ratingsCount} ratings`);
+  if (info.reviewsCount) parts.push(`${info.reviewsCount} reviews`);
+  return parts.join(" · ");
 };
 
 // Methods
@@ -719,12 +926,23 @@ const handleClickOutside = (event) => {
   }
 };
 
+const handleResize = () => {
+  updateChipHighlight();
+  updateViewHighlight();
+};
+
 onMounted(() => {
   document.addEventListener("click", handleClickOutside);
+  setTimeout(() => {
+    updateChipHighlight();
+    updateViewHighlight();
+  }, 100);
+  window.addEventListener("resize", handleResize);
 });
 
 onUnmounted(() => {
   document.removeEventListener("click", handleClickOutside);
+  window.removeEventListener("resize", handleResize);
 });
 </script>
 
@@ -738,16 +956,20 @@ onUnmounted(() => {
   margin-bottom: 2rem;
 }
 
-.books-title {
-  font-size: 1.5rem;
-  font-weight: 400;;
-  color: var(--color-brand-primary);
-  margin: 0 0 1.5rem 0;
+.books-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 
-.books-count {
-  color: var(--color-text-subtle);
-  font-weight: 400;;
+.books-title {
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: var(--color-brand-primary);
+  margin: 0;
 }
 
 .controls-row {
@@ -773,18 +995,43 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-border-card);
   border-radius: 10px;
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   color: var(--color-text-muted);
   font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .filter-button:hover {
   border-color: var(--color-brand-primary);
-  background: var(--color-surface-secondary);
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.filters-merged .filter-button i:first-child {
+  font-size: 1rem;
+  color: var(--color-text-secondary);
+}
+
+.filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.filters-menu {
+  min-width: 240px;
 }
 
 .add-book-btn {
@@ -794,19 +1041,17 @@ onUnmounted(() => {
   padding: 0.5rem 1.25rem;
   border: none;
   border-radius: 10px;
-  background:var(--color-brand-primary);
+  background: var(--color-brand-primary);
   color: var(--color-text-on-brand);
   font-size: 0.875rem;
   font-weight: 400;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: var(--shadow-brand-glow);
+  transition: background-color 0.25s ease, transform 0.25s ease;
 }
 
 .add-book-btn:hover {
-  background:var(--color-brand-primary-hover);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-brand-button-hover);
+  background: var(--color-brand-primary-hover);
+  transform: translateY(-1px);
 }
 
 .add-book-btn i {
@@ -817,10 +1062,10 @@ onUnmounted(() => {
   position: absolute;
   top: 100%;
   left: 0;
-  background: var(--color-surface-primary);
-  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-modal);
+  border: 1px solid var(--color-border-card);
   border-radius: 10px;
-  box-shadow: var(--shadow-card-hover);
+  box-shadow: 0 10px 24px -10px rgba(15, 23, 42, 0.18);
   z-index: 50;
   min-width: 200px;
   margin-top: 0.25rem;
@@ -869,50 +1114,45 @@ onUnmounted(() => {
   margin: 0.5rem 0;
 }
 
-.view-toggle {
-  display: flex;
+/* Icon-only chips inside view toggle */
+.view-chip-icon {
+  padding: 0.4rem 0.65rem;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  font-size: 1.05rem;
+  line-height: 1;
 }
 
-.view-label {
-  font-size: 0.875rem;
-  color: var(--color-text-muted);
+.view-chip-icon i {
+  display: inline-flex;
 }
 
-.toggle-buttons {
-  display: flex;
+/* View toggle (Grid / Table) — same styling as status chips */
+.view-chips {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--color-surface-primary);
   border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
-  overflow: hidden;
-}
-
-.toggle-button {
-  padding: 0.5rem 1rem;
-  border: none;
-  background: var(--color-surface-primary);
-  color: var(--color-text-muted);
-  font-size: 18px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.toggle-button:hover {
-  background: var(--color-surface-muted);
-}
-
-.toggle-button.active {
-  background: var(--color-brand-lavender);
-  color: var(--color-text-secondary);
 }
 
 .books-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-auto-rows: 276px;
   gap: 2rem;
   justify-content: start;
   align-items: stretch;
+}
+
+@media (max-width: 1100px) {
+  .books-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .book-card.horizontal {
@@ -1458,133 +1698,556 @@ onUnmounted(() => {
   color: var(--color-status-danger);
 }
 
-.redesigned-list {
-  gap: 0.85rem;
+/* === Metric Cards === */
+.metric-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
-.redesigned-list .list-row {
-  grid-template-columns: 72px minmax(230px, 1.7fr) minmax(170px, 0.8fr) minmax(210px, 1fr) auto;
-  min-height: 112px;
-  padding: 1rem;
-  background:
-    linear-gradient(135deg, var(--color-surface-primary), var(--color-surface-secondary));
-  border-color: var(--color-border-card);
+.metric-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-card);
+  border-radius: 12px;
+  transition: background-color 0.2s, transform 0.2s;
+}
+
+.metric-card:hover {
+  background: var(--color-surface-hover);
+  transform: translateY(-1px);
+}
+
+.metric-icon {
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
-  box-shadow: var(--shadow-card-subtle);
-}
-
-.redesigned-list .list-row:hover {
-  background:
-    linear-gradient(135deg, var(--color-surface-secondary), var(--color-surface-tertiary));
-  border-color: var(--color-border-focus);
-}
-
-.list-cover-wrap {
-  width: 58px;
-  height: 84px;
-  border-radius: 6px;
-  overflow: hidden;
-  box-shadow: var(--shadow-cover);
-}
-
-.redesigned-list .list-cover {
-  width: 100%;
-  height: 100%;
-  border-radius: 0;
-}
-
-.list-main {
-  min-width: 0;
-}
-
-.list-title-row {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  min-width: 0;
-  margin-bottom: 0.2rem;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
 }
 
-.redesigned-list .list-title {
-  font-size: 1rem;
+.metric-icon-total {
+  background: rgba(139, 92, 246, 0.12);
+  color: rgb(124, 58, 237);
+}
+
+.metric-icon-reading {
+  background: rgba(245, 158, 11, 0.14);
+  color: rgb(217, 119, 6);
+}
+
+.metric-icon-finished {
+  background: rgba(34, 197, 94, 0.14);
+  color: rgb(22, 163, 74);
+}
+
+.metric-icon-unread {
+  background: rgba(100, 116, 139, 0.14);
+  color: rgb(71, 85, 105);
+}
+
+.metric-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-label {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.15rem;
+}
+
+.metric-value {
+  font-size: 1.5rem;
+  font-weight: 600;
   color: var(--color-text-primary);
+  line-height: 1.1;
 }
 
-.list-tags {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.65rem;
-  min-width: 0;
-}
-
-.list-chip {
+/* === Status Chips (filter row) === */
+.status-chips {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  max-width: 160px;
-  padding: 0.22rem 0.55rem;
-  border-radius: 6px;
-  background: var(--color-surface-tertiary);
-  border: 1px solid var(--color-border-subtle);
-  color: var(--color-text-secondary);
-  font-size: 0.72rem;
+  padding: 0.25rem;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-card);
+  border-radius: 10px;
+}
+
+.chip-highlight {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 8px;
+  background: var(--color-surface-hover);
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.chip-highlight.is-active {
+  background: var(--purple-li-active);
+}
+
+.status-chip {
+  position: relative;
+  z-index: 1;
+  padding: 0.4rem 0.9rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-family: inherit;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.status-chip:hover {
+  /* color: var(--color-text-primary); */
+}
+
+.status-chip.active {
+  color: var(--color-brand-primary);
+  font-weight: 500;
+}
+
+/* === Unified View Container === */
+.view-container {
+  width: 100%;
+}
+
+.view-container.is-card {
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-card);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* Controls row inside the container */
+.controls-row.in-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.25rem;
+}
+
+.view-container.is-card .controls-row.in-container {
+  border-bottom: 1px solid var(--color-border-card);
+  background: transparent;
+}
+
+.controls-left,
+.controls-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.data-table {
+  width: 100%;
+}
+
+/* Pagination inside the container */
+.view-container .pagination {
+  margin: 0;
+  padding: 0.85rem 1rem;
+}
+
+.view-container.is-card .pagination {
+  border-top: 1px solid var(--color-border-card);
+  background: transparent;
+}
+
+/* Add some breathing room between toolbar and grid for grid view */
+.view-container:not(.is-card) .controls-row.in-container {
+  padding: 0 0 1rem 0;
+}
+
+.data-header,
+.data-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 2.2fr) 130px minmax(160px, 1fr) 120px minmax(160px, 1.1fr) 150px;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.95rem 1.25rem;
+}
+
+.data-header {
+  background: transparent;
+  border-bottom: 1px solid var(--color-border-card);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.data-header .col-status,
+.data-header .col-progress,
+.data-header .col-personal,
+.data-header .col-goodreads {
+  text-align: center;
+}
+
+.data-row {
+  border-bottom: 1px solid var(--color-border-card);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.data-row:last-child {
+  border-bottom: none;
+}
+
+.data-row:hover {
+  background: var(--color-surface-hover);
+}
+
+/* Book cell (cover + info) */
+.book-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.cell-cover {
+  width: 48px;
+  height: 70px;
+  border-radius: 5px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-control-subtle);
+}
+
+.cell-book-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.cell-book-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.cell-book-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.list-chip.standalone {
-  color: var(--color-text-muted);
-}
-
-.list-chip.genre {
+.cell-format {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--color-brand-primary);
   background: var(--color-brand-primary-faint);
-  color: var(--color-brand-primary-hover);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
 }
 
-.list-progress-topline {
+.cell-book-author {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-book-tags {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.45rem;
-  color: var(--color-text-muted);
-  font-size: 0.78rem;
-}
-
-.list-progress-topline strong {
-  color: var(--color-text-secondary);
-}
-
-.list-ratings {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
   min-width: 0;
 }
 
-.redesigned-list .list-rating-cell {
+.cell-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  max-width: 140px;
+  padding: 0.15rem 0.5rem;
+  border-radius: 5px;
+  background: transparent;
+  border: 1px solid var(--color-border-card);
   color: var(--color-text-secondary);
+  font-size: 0.68rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-chip.standalone {
+  color: var(--color-text-muted);
+}
+
+.cell-chip.genre {
+  background: var(--color-brand-primary-faint);
+  color: var(--color-brand-primary-hover);
+  border-color: transparent;
+}
+
+/* Status pill */
+.col-status {
+  display: flex;
+  justify-content: center;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-pill.status-reading {
+  background: rgba(245, 158, 11, 0.14);
+  color: rgb(180, 83, 9);
+}
+
+.status-pill.status-read {
+  background: rgba(34, 197, 94, 0.14);
+  color: rgb(21, 128, 61);
+}
+
+.status-pill.status-unread {
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+}
+
+/* Progress */
+.col-progress {
+  display: flex;
+  justify-content: center;
+}
+
+.progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.progress-bar {
+  width: 100px;
+  height: 6px;
+  background: rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--gradient-library-progress);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  min-width: 34px;
+  text-align: right;
+}
+
+.progress-complete-icon {
+  font-size: 1.1rem;
+  color: var(--color-brand-primary);
+}
+
+.progress-complete-text {
+  font-size: 0.82rem;
+  color: var(--color-brand-primary);
+  font-weight: 500;
+}
+
+/* Personal rating */
+.col-personal {
+  display: flex;
+  justify-content: center;
+}
+
+.rating-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+/* Goodreads rating */
+.col-goodreads {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.goodreads-wrap {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  position: relative;
+}
+
+/* In table view only: hide the inline ratings/reviews counts; show on hover as a tooltip */
+.data-row .goodreads-wrap :deep(.goodreads-count) {
+  display: none;
+}
+
+.data-row .goodreads-wrap[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.4rem 0.65rem;
+  background: var(--color-text-primary);
+  color: var(--color-surface-primary);
+  font-size: 0.72rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: 6px;
+  box-shadow: var(--shadow-card-hover);
+  z-index: 20;
+  pointer-events: none;
+}
+
+.data-row .goodreads-wrap[data-tooltip]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--color-text-primary);
+  z-index: 20;
+  pointer-events: none;
 }
 
 .rating-empty {
   color: var(--color-text-subtle);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
 }
 
-.redesigned-list .list-format {
-  flex: 0 0 auto;
+/* Actions */
+.col-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.15rem;
+}
+
+/* Table view only: hide action buttons until the row is hovered */
+.data-row .col-actions {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.data-row:hover .col-actions,
+.data-row:focus-within .col-actions {
+  opacity: 1;
+}
+
+.row-action-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-subtle);
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.row-action-btn:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-brand-primary-hover);
+}
+
+.row-action-btn.active i {
+  color: var(--color-status-danger-bright);
+}
+
+.row-action-btn.delete:hover {
+  background: var(--color-status-danger-soft);
+  color: var(--color-status-danger);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  margin-top: 1.5rem;
+  padding: 1rem 0;
+}
+
+.page-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 0.5rem;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--purple-li-active);
   color: var(--color-brand-primary);
 }
 
-.redesigned-list .list-actions {
-  align-self: center;
+.page-btn.active {
+  background: var(--purple-li-active);
+  color: var(--color-brand-primary);
+  font-weight: 500;
 }
 
-.redesigned-list .list-action-btn:hover {
-  background: var(--color-surface-active);
-  color: var(--color-brand-primary-hover);
+.page-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.page-ellipsis {
+  color: var(--color-text-muted);
+  padding: 0 0.35rem;
+  font-size: 0.875rem;
 }
 
 .playlist-modal-overlay {
@@ -1805,11 +2468,12 @@ onUnmounted(() => {
   }
 
   .books-grid {
-    grid-template-columns: repeat(auto-fill, 160px);
-    justify-content: center;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
   }
 
-  .list-header-row {
+  .list-header-row,
+  .redesigned-header {
     display: none;
   }
 
@@ -1818,7 +2482,13 @@ onUnmounted(() => {
     gap: 0.85rem;
   }
 
+  .redesigned-list .list-row {
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    min-height: auto;
+  }
+
   .list-meta,
+  .list-status-cell,
   .list-progress-cell,
   .list-goodreads-cell,
   .list-rating-cell,

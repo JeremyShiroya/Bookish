@@ -90,17 +90,17 @@ const router = useRouter();
   align-items: center;
   text-align: center;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background-color 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
   padding: 1.5rem;
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   border-radius: 1rem;
-  border: 1px solid transparent;
+  border: 1px solid var(--color-border-card);
 }
 
 .author-card:hover {
-  transform: translateY(-5px);
-  border-color: var(--color-brand-lavender);
-  box-shadow: var(--shadow-card-subtle);
+  transform: translateY(-3px);
+  background: var(--color-surface-hover);
+  border-color: var(--color-brand-primary);
 }
 
 .author-avatar {

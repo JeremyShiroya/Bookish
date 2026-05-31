@@ -8,6 +8,7 @@ export interface IAResult {
   seriesInstallment: string | null;
   genre: string | null;
   publishYear: number | null;
+  publisher: string | null;
 }
 
 const internetArchiveHeaders = {
@@ -99,6 +100,11 @@ function toResult(doc: any, details: any): IAResult | null {
   const title = String(metadata.title || doc.title || '').replace(/\s+/g, ' ').trim();
   if (!identifier || !title) return null;
 
+  const publisherRaw = metadata.publisher || metadata.printer || doc.publisher;
+  const publisher = Array.isArray(publisherRaw)
+    ? (publisherRaw.find((item: unknown) => typeof item === 'string' && item.trim()) as string | undefined)?.trim() || null
+    : (typeof publisherRaw === 'string' && publisherRaw.trim() ? publisherRaw.trim() : null);
+
   return {
     id: `ia:${identifier}`,
     title,
@@ -109,6 +115,7 @@ function toResult(doc: any, details: any): IAResult | null {
     seriesInstallment: null,
     genre: normalizeGenre(metadata.subject || doc.subject),
     publishYear: parseYear(metadata.year, metadata.date, doc.year),
+    publisher,
   };
 }
 

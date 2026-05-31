@@ -255,14 +255,13 @@ const coverFallback = (event, title) => {
   width: 100%;
   box-sizing: border-box;
   height: 90px;
-  background: var(--color-surface-primary);
-  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-background-app);
+  border-top: 1px solid var(--color-border-card);
   padding: 0 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   z-index: 1000;
-  box-shadow: var(--shadow-card-subtle);
   overflow: hidden;
 }
 
@@ -485,10 +484,10 @@ const coverFallback = (event, title) => {
 .voice-select {
   font-size: 0.7rem;
   color: var(--color-text-muted);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-border-card);
   border-radius: 4px;
   padding: 3px 4px;
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   cursor: pointer;
   max-width: 100px;
   white-space: nowrap;

@@ -285,6 +285,7 @@ const newBook = ref({
   series: '',
   seriesInstallment: '',
   publishYear: null,
+  publisher: '',
   webReview: '',
   format: '',
   pages: 0,
@@ -363,6 +364,7 @@ const searchBookCovers = async () => {
     const query = new URLSearchParams()
     query.append('title', newBook.value.title)
     if (newBook.value.author) query.append('author', newBook.value.author)
+    if (newBook.value.publisher) query.append('publisher', newBook.value.publisher)
 
     const response = await fetch(`/api/books/search-covers?${query.toString()}`)
     const data = await response.json()
@@ -502,6 +504,7 @@ const selectMetadata = async (result) => {
   newBook.value.author = result.author || newBook.value.author;
   newBook.value.blurb = result.blurb || newBook.value.blurb;
   newBook.value.publishYear = result.publishYear || newBook.value.publishYear;
+  newBook.value.publisher = result.publisher || newBook.value.publisher;
   newBook.value.series = result.series || newBook.value.series;
   newBook.value.seriesInstallment = result.seriesInstallment || newBook.value.seriesInstallment;
   newBook.value.webReview = result.webReview || newBook.value.webReview;
@@ -634,24 +637,24 @@ const saveBook = async () => {
 
 .btn-cancel {
   padding: 0.75rem 1.5rem;
-  background: var(--color-surface-primary);
-  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-card);
   border-radius: 10px;
   color: var(--color-text-primary);
   font-weight: 400;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, border-color 0.2s;
 }
 
 .btn-cancel:hover {
-  background: var(--color-surface-secondary);
+  background: var(--color-surface-hover);
 }
 
 .add-form {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 3rem;
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   padding: 2.5rem;
   border-radius: 20px;
   border: 1px solid var(--color-border-card);
@@ -668,7 +671,7 @@ const saveBook = async () => {
   width: 100%;
   aspect-ratio: 2 / 3;
   border-radius: 12px;
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   border: 2px dashed var(--color-border-card);
   position: relative;
   overflow: hidden;
@@ -734,16 +737,16 @@ const saveBook = async () => {
   align-items: center;
   gap: 1rem;
   padding: 1.25rem;
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   border: 1px solid var(--color-border-card);
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, border-color 0.2s;
 }
 
 .document-dropzone:hover {
   border-color: var(--color-border-focus);
-  background: var(--color-surface-secondary);
+  background: var(--color-surface-hover);
 }
 
 .document-dropzone.has-file {
@@ -815,7 +818,7 @@ const saveBook = async () => {
   align-items: center;
   justify-content: space-between;
   padding: 1.25rem;
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   border: 1px solid var(--color-brand-primary);
   border-radius: 12px;
   margin-bottom: 0.5rem;

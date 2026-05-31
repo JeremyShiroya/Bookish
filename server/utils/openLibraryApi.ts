@@ -8,7 +8,17 @@ export interface OLResult {
   seriesInstallment: string | null;
   genre: string | null;
   publishYear: number | null;
+  publisher: string | null;
   isbn13s: string[];
+}
+
+function pickPublisher(value: unknown): string | null {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    const first = value.find((item) => typeof item === 'string' && item.trim());
+    return first ? String(first).trim() : null;
+  }
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 const openLibraryHeaders = {
@@ -119,6 +129,7 @@ export async function searchOpenLibrary(title: string, author?: string): Promise
           seriesInstallment: doc.series_position?.[0] ?? null,
           genre: extractGenres([...(doc.subject || []), ...detailSubjects]),
           publishYear: doc.first_publish_year ?? null,
+          publisher: pickPublisher(doc.publisher),
           isbn13s,
         };
       })

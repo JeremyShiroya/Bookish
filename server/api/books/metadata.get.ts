@@ -38,6 +38,7 @@ function fromGoogleBooks(result: GBResult): MetadataSource {
     seriesInstallment: result.seriesInstallment,
     genre: result.genre,
     publishYear: result.publishYear,
+    publisher: result.publisher,
   };
 }
 
@@ -53,6 +54,7 @@ function fromOpenLibrary(result: OLResult): MetadataSource {
     seriesInstallment: result.seriesInstallment,
     genre: result.genre,
     publishYear: result.publishYear,
+    publisher: result.publisher,
   };
 }
 
@@ -68,6 +70,7 @@ function fromInternetArchive(result: IAResult): MetadataSource {
     seriesInstallment: result.seriesInstallment,
     genre: result.genre,
     publishYear: result.publishYear,
+    publisher: result.publisher,
   };
 }
 
@@ -83,6 +86,7 @@ function fromKobo(result: NonNullable<Awaited<ReturnType<typeof scrapeKoboBook>>
     seriesInstallment: result.seriesInstallment,
     genre: result.genre,
     publishYear: result.publishYear,
+    publisher: (result as unknown as { publisher?: string | null }).publisher ?? null,
   };
 }
 

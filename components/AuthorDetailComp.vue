@@ -351,10 +351,9 @@ const resolveBookCover = (book) => {
 
 /* Left Column / Sidebar */
 .author-sidebar {
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   padding: 3rem 2rem;
-  box-shadow: var(--shadow-card-subtle);
-  border-right: 1px solid var(--border-color);
+  border-right: 1px solid var(--color-border-card);
   position: sticky;
   top: 0;
   height: 100vh;
@@ -503,10 +502,9 @@ const resolveBookCover = (book) => {
 }
 
 .bio-content {
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   padding: 10px 0;
   border-radius: 16px;
-  /* border: 1px solid var(--color-border-subtle); */
 }
 
 .bio-text {

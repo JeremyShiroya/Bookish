@@ -11,6 +11,7 @@ export type MetadataSource = {
   seriesInstallment: string | null;
   genre: string | null;
   publishYear: number | null;
+  publisher?: string | null;
   webReview?: string | null;
 };
 
@@ -175,6 +176,13 @@ function mergeMetadata(primary: MetadataSource, matches: MetadataSource[], goodr
       ...sources.filter((item) => item.source === 'googleBooks').map((item) => item.publishYear),
       ...sources.filter((item) => item.source === 'goodreads').map((item) => item.publishYear),
       ...sources.filter((item) => item.source === 'kobo').map((item) => item.publishYear),
+    ),
+    publisher: firstValue(
+      ...sources.filter((item) => item.source === 'googleBooks').map((item) => item.publisher),
+      ...sources.filter((item) => item.source === 'openLibrary').map((item) => item.publisher),
+      ...sources.filter((item) => item.source === 'goodreads').map((item) => item.publisher),
+      ...sources.filter((item) => item.source === 'kobo').map((item) => item.publisher),
+      ...sources.filter((item) => item.source === 'internetArchive').map((item) => item.publisher),
     ),
     webReview: goodreads?.webReview ?? null,
   };

@@ -4,6 +4,7 @@ import { searchGoogleBooks } from '../../utils/googleBooksApi';
 import { searchOpenLibrary } from '../../utils/openLibraryApi';
 import { searchKobo, scrapeKoboBook } from '../../utils/koboScraper';
 import { addUniqueImage, isUsefulCoverUrl, rankCoverResult, searchGoogleImages } from '../../utils/imageSearch';
+import { resolvePublisherDomain } from '../../utils/publisherSites';
 
 function addCover(target: string[], seen: Set<string>, url?: string | null) {
   addUniqueImage(target, seen, normalizeGoodreadsImage(url) || url, isUsefulCoverUrl);
@@ -14,23 +15,38 @@ function quoteTerm(value?: string | null) {
   return cleaned ? `"${cleaned}"` : '';
 }
 
-function buildCoverQueries(title: string, author?: string) {
+function buildCoverQueries(title: string, author?: string, publisher?: string) {
   const exact = [quoteTerm(title), quoteTerm(author)].filter(Boolean).join(' ');
   const loose = [title, author].filter(Boolean).join(' ');
-  return [
+  const queries: string[] = [
     `${exact} book cover`,
     `${exact} cover art edition`,
     `${loose} paperback hardcover cover`,
     `site:goodreads.com/book/show ${exact} cover`,
     `site:amazon.com ${exact} book cover`,
     `site:penguinrandomhouse.com ${exact} book cover`,
-  ].filter((query, index, queries) => query.trim() && queries.indexOf(query) === index);
+  ];
+
+  // Publisher-aware queries: include the publisher in a generic search and,
+  // if we know the publisher's website, run a site:-restricted image search there.
+  const publisherDomain = publisher ? resolvePublisherDomain(publisher) : null;
+  if (publisher) {
+    queries.unshift(`${quoteTerm(publisher)} ${exact} book cover`);
+  }
+  if (publisherDomain) {
+    queries.unshift(`site:${publisherDomain} ${exact}`);
+    queries.unshift(`site:${publisherDomain} ${exact} cover`);
+  }
+
+  return queries.filter((query, index, list) => query.trim() && list.indexOf(query) === index);
 }
 
-async function searchGoogleCoverImages(title: string, author?: string) {
-  const queries = buildCoverQueries(title, author).slice(0, author ? 6 : 4);
+async function searchGoogleCoverImages(title: string, author?: string, publisher?: string) {
+  const queries = buildCoverQueries(title, author, publisher);
+  // Keep the publisher-aware queries even when the title-only search would be capped.
+  const cap = publisher ? Math.min(queries.length, 8) : (author ? 6 : 4);
   const results = await Promise.allSettled(
-    queries.map((query) => searchGoogleImages(query, { num: 10 })),
+    queries.slice(0, cap).map((query) => searchGoogleImages(query, { num: 10 })),
   );
   return results
     .flatMap((result) => result.status === 'fulfilled' ? result.value : [])
@@ -41,6 +57,7 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event);
   const title = query.title?.toString();
   const author = query.author?.toString();
+  const publisher = query.publisher?.toString();
 
   if (!title) {
     throw createError({ statusCode: 400, statusMessage: 'Title is required for cover search' });
@@ -51,7 +68,7 @@ export default defineEventHandler(async (event) => {
     searchGoogleBooks(title, author),
     searchOpenLibrary(title, author),
     searchKobo(title, author),
-    searchGoogleCoverImages(title, author),
+    searchGoogleCoverImages(title, author, publisher),
   ]);
 
   const goodreads = goodreadsResult.status === 'fulfilled' ? goodreadsResult.value : [];
