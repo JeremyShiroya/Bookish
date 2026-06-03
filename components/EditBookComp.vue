@@ -14,16 +14,31 @@
 
     <template v-else>
       <!-- Metadata Selection Modal -->
-      <div v-if="showMetadataModal" class="metadata-modal-overlay" @click="showMetadataModal = false">
+      <div v-if="showMetadataModal" class="metadata-modal-overlay" @click="closeMetadataModal">
         <div class="metadata-modal-container" @click.stop>
           <div class="metadata-modal-header">
             <h2>Select Metadata</h2>
-            <button class="close-button" @click="showMetadataModal = false">
+            <button class="close-button" @click="closeMetadataModal">
               <i class="ri-close-line"></i>
             </button>
           </div>
-          <div v-if="isFetchingMetadata" class="metadata-loading">
-            <SkeletonLoader variant="metadata" />
+          <div v-if="showMetadataProgress" class="metadata-loading">
+            <MultiStepLoader
+              :loading="true"
+              :loading-states="metadataLoadingStates"
+              :duration="1450"
+              :loop="false"
+              eyebrow="Metadata fetch in progress"
+              detail="Publisher-site lookup runs after the normal providers return a publisher name."
+            />
+            <div v-if="!isFetchingMetadata" class="metadata-progress-actions">
+              <p class="metadata-progress-summary">
+                {{ metadataResults.length ? `${metadataResults.length} metadata option${metadataResults.length === 1 ? '' : 's'} ready.` : 'Search finished with no metadata options.' }}
+              </p>
+              <button class="btn-primary metadata-continue-button" type="button" @click="continueToMetadataResults">
+                Continue
+              </button>
+            </div>
           </div>
           <div v-else-if="metadataResults.length === 0" class="metadata-empty">
             <p>No results found for "{{ editBook.title }}" by "{{ editBook.author || 'any' }}".</p>
@@ -39,6 +54,18 @@
               <div class="metadata-info">
                 <h4>{{ result.title }}</h4>
                 <p class="metadata-author">{{ result.author }}</p>
+                <div class="metadata-source-tags" v-if="metadataSourceTags(result).length">
+                  <span
+                    v-for="source in metadataSourceTags(result)"
+                    :key="source"
+                    class="metadata-source-tag"
+                    :class="{ publisher: source === 'publisher' }"
+                    :title="sourceTooltip(source, result)"
+                  >
+                    <i :class="source === 'publisher' ? 'ri-building-4-line' : 'ri-links-line'"></i>
+                    {{ sourceLabel(source, result) }}
+                  </span>
+                </div>
                 <p class="metadata-year" v-if="result.publishYear">{{ result.publishYear }} <span v-if="result.genre">• {{ result.genre }}</span></p>
                 <p class="metadata-series" v-if="result.series">{{ result.series }} <span v-if="result.seriesInstallment">#{{ result.seriesInstallment }}</span></p>
                 <GoodreadsRatingDisplay
@@ -62,6 +89,40 @@
         @search="searchBookCovers"
         @select="selectBookCover"
       />
+
+      <!-- Blurb chooser — opens when picking metadata reveals multiple distinct blurbs -->
+      <div v-if="showBlurbChooser" class="metadata-modal-overlay" @click="closeBlurbChooser">
+        <div class="metadata-modal-container" @click.stop>
+          <div class="metadata-modal-header">
+            <div>
+              <h2>Choose a description</h2>
+              <p class="blurb-modal-subtitle">Multiple sources had different blurbs for this book — pick the one you prefer.</p>
+            </div>
+            <button class="close-button" type="button" @click="closeBlurbChooser">
+              <i class="ri-close-line"></i>
+            </button>
+          </div>
+          <div class="blurb-options">
+            <button
+              v-for="option in blurbOptions"
+              :key="option.source + option.blurb.slice(0, 40)"
+              class="blurb-option"
+              :class="{ active: pendingBlurb === option.blurb }"
+              type="button"
+              @click="pickBlurb(option.blurb)"
+            >
+              <div class="blurb-option-source">
+                <i class="ri-quill-pen-line"></i>
+                {{ sourceLabel(option.source) }}
+              </div>
+              <p class="blurb-option-text">{{ option.blurb }}</p>
+            </button>
+          </div>
+          <div class="blurb-modal-actions">
+            <button class="btn-cancel" type="button" @click="closeBlurbChooser">Keep current</button>
+          </div>
+        </div>
+      </div>
 
       <form @submit.prevent="handleUpdateBook" class="add-form">
         <!-- Media Section -->
@@ -272,6 +333,7 @@ import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
 import { useCoverImageCache } from '~/composables/useCoverImageCache'
 import CoverImageModal from './CoverImageModal.vue'
 import GoodreadsRatingDisplay from './GoodreadsRatingDisplay.vue'
+import MultiStepLoader from './MultiStepLoader.vue'
 
 const props = defineProps({
   bookId: {
@@ -311,11 +373,48 @@ const coverInput = ref(null)
 const showMetadataModal = ref(false)
 const isFetchingMetadata = ref(false)
 const metadataResults = ref([])
+const showMetadataProgress = ref(false)
 const showCoverModal = ref(false)
 const coverModalMode = ref('choice')
 const isSearchingCovers = ref(false)
 const coverOptions = ref([])
 const bookKind = ref('standalone')
+
+const createMetadataLoadingStates = () => [
+  { id: 'core', text: 'Searching core metadata providers', status: 'pending' },
+  { id: 'publisherName', text: 'Reading publisher names from book records', status: 'pending' },
+  { id: 'publisherSearch', text: 'Finding real publisher book pages', status: 'pending' },
+  { id: 'publisherScrape', text: 'Scraping publisher blurbs and cover images', status: 'pending' },
+  { id: 'merge', text: 'Merging publisher results into choices', status: 'pending' },
+]
+
+const metadataLoadingStates = ref(createMetadataLoadingStates())
+
+const resetMetadataProgress = () => {
+  metadataLoadingStates.value = createMetadataLoadingStates()
+}
+
+const closeMetadataModal = () => {
+  showMetadataModal.value = false
+  if (!isFetchingMetadata.value) {
+    showMetadataProgress.value = false
+  }
+}
+
+const continueToMetadataResults = () => {
+  showMetadataProgress.value = false
+}
+
+const updateMetadataProgress = (event) => {
+  const index = metadataLoadingStates.value.findIndex((state) => state.id === event.id)
+  if (index === -1) return
+  const current = metadataLoadingStates.value[index]
+  metadataLoadingStates.value[index] = {
+    ...current,
+    status: event.status,
+    detail: event.detail || current.detail,
+  }
+}
 
 watch(
   () => editBook.value.status,
@@ -413,35 +512,110 @@ const searchBookCovers = async () => {
   }
 }
 
-const selectBookCover = async (imageUrl) => {
-  const cachedCover = await cacheCoverImage(imageUrl)
-  editBook.value.cover = cachedCover
-  coverPreview.value = cachedCover
+const selectBookCover = (imageUrl) => {
+  // Close immediately so the user isn't waiting on the cache round-trip.
   closeCoverModal()
+  editBook.value.cover = imageUrl
+  coverPreview.value = imageUrl
+  cacheCoverImage(imageUrl)
+    .then((cached) => {
+      if (cached) {
+        editBook.value.cover = cached
+        coverPreview.value = cached
+      }
+    })
+    .catch((error) => {
+      console.warn('Cover caching failed:', error)
+    })
 }
 
 const fetchMetadata = async () => {
   if (!editBook.value.title) return;
   
   isFetchingMetadata.value = true;
+  showMetadataProgress.value = true;
   showMetadataModal.value = true;
   metadataResults.value = [];
+  resetMetadataProgress();
 
   try {
     metadataResults.value = await fetchBookMetadataResults(
       editBook.value.title,
       editBook.value.author,
+      editBook.value.publisher,
+      { onProgress: updateMetadataProgress },
     );
   } catch (error) {
     console.error('Failed to fetch metadata:', error);
     addToast('Failed to fetch metadata from the web.', 'error');
-    showMetadataModal.value = false;
   } finally {
     isFetchingMetadata.value = false;
   }
 }
 
-const selectMetadata = async (result) => {
+const showBlurbChooser = ref(false)
+const blurbOptions = ref([])
+const pendingBlurb = ref('')
+
+const sourceLabel = (source, result = null) => {
+  switch (source) {
+    case 'googleBooks': return 'Google Books'
+    case 'goodreads': return 'Goodreads'
+    case 'openLibrary': return 'Open Library'
+    case 'internetArchive': return 'Internet Archive'
+    case 'kobo': return 'Kobo'
+    case 'publisher': {
+      const publisher = result?.publisherSource
+      const name = publisher?.name
+      const site = publisher?.site
+      if (name && site) return `Publisher site: ${name} (${site})`
+      if (site) return `Publisher site: ${site}`
+      if (name) return `Publisher site: ${name}`
+      return "Publisher's site"
+    }
+    default: return source
+  }
+}
+
+const sourceTooltip = (source, result) => {
+  if (source !== 'publisher') return sourceLabel(source, result)
+  const publisher = result?.publisherSource
+  const details = []
+  if (publisher?.url) details.push(`Publisher page: ${publisher.url}`)
+  if (publisher?.searchedName) details.push(`Found by searching publisher record: ${publisher.searchedName}`)
+  return details.length ? details.join('\n') : sourceLabel(source, result)
+}
+
+const metadataSourceTags = (result) => {
+  if (Array.isArray(result?.sourceTags) && result.sourceTags.length) return result.sourceTags
+  const id = String(result?.googleId || '')
+  if (id.startsWith('ia:')) return ['internetArchive']
+  if (id.startsWith('/works/')) return ['openLibrary']
+  if (id.startsWith('gb:')) return ['googleBooks']
+  if (id.includes('goodreads.com')) return ['goodreads']
+  if (id.includes('kobo.com')) return ['kobo']
+  return []
+}
+
+const openBlurbChooser = (options) => {
+  blurbOptions.value = options
+  pendingBlurb.value = editBook.value.blurb
+  showBlurbChooser.value = true
+}
+
+const closeBlurbChooser = () => {
+  showBlurbChooser.value = false
+  blurbOptions.value = []
+}
+
+const pickBlurb = (blurb) => {
+  pendingBlurb.value = blurb
+  editBook.value.blurb = blurb
+  closeBlurbChooser()
+  addToast('Description updated', 'success')
+}
+
+const selectMetadata = (result) => {
   editBook.value.title = result.title || editBook.value.title;
   editBook.value.author = result.author || editBook.value.author;
   editBook.value.blurb = result.blurb || editBook.value.blurb;
@@ -454,15 +628,31 @@ const selectMetadata = async (result) => {
   if (editBook.value.series || editBook.value.seriesInstallment) {
     bookKind.value = 'series';
   }
-  
-  if (result.cover) {
-    const cachedCover = await cacheCoverImage(result.cover);
-    editBook.value.cover = cachedCover;
-    coverPreview.value = cachedCover;
-  }
-  
+
+  // Close immediately; cache the cover in the background so the user doesn't wait.
   showMetadataModal.value = false;
   addToast('Metadata applied successfully', 'success');
+
+  if (result.cover) {
+    editBook.value.cover = result.cover;
+    coverPreview.value = result.cover;
+    cacheCoverImage(result.cover)
+      .then((cached) => {
+        if (cached) {
+          editBook.value.cover = cached;
+          coverPreview.value = cached;
+        }
+      })
+      .catch((error) => {
+        console.warn('Cover caching failed:', error);
+      });
+  }
+
+  // Offer a blurb chooser when sources disagreed on the description.
+  const options = Array.isArray(result.blurbOptions) ? result.blurbOptions : [];
+  if (options.length > 1) {
+    openBlurbChooser(options);
+  }
 }
 
 const handleBookKindChange = () => {
@@ -679,7 +869,6 @@ const handleUpdateBook = async () => {
   align-items: center;
   justify-content: space-between;
   padding: 1.25rem;
-  background: var(--gradient-brand-soft);
   border: 1px solid var(--color-brand-primary);
   border-radius: 12px;
   margin-bottom: 0.5rem;
@@ -996,6 +1185,73 @@ const handleUpdateBook = async () => {
   border-color: var(--color-brand-primary);
 }
 
+/* Blurb chooser */
+.blurb-modal-subtitle {
+  margin: 0.35rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.blurb-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  overflow-y: auto;
+}
+
+.blurb-option {
+  text-align: left;
+  padding: 1rem;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-card);
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-family: inherit;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.blurb-option:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-brand-primary);
+}
+
+.blurb-option.active {
+  border-color: var(--color-brand-primary);
+  background: var(--color-surface-hover);
+}
+
+.blurb-option-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-brand-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.blurb-option-text {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.blurb-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 1.25rem;
+  border-top: 1px solid var(--color-border-card);
+}
+
 .metadata-cover {
   width: 80px;
   height: 120px;
@@ -1014,6 +1270,42 @@ const handleUpdateBook = async () => {
   margin: 0 0 0.25rem 0;
 }
 
+.metadata-source-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin: 0.2rem 0 0.35rem;
+}
+
+.metadata-source-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 999px;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.metadata-source-tag.publisher {
+  border-color: var(--color-brand-primary);
+  background: var(--color-brand-primary-faint);
+  color: var(--color-brand-primary);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.metadata-source-tag i {
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+
 .metadata-year {
   font-size: 0.85rem;
   color: var(--color-text-subtle);
@@ -1022,6 +1314,26 @@ const handleUpdateBook = async () => {
 .metadata-loading, .metadata-empty {
   padding: 1.5rem;
   color: var(--color-text-muted);
+}
+
+.metadata-progress-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.5rem 1.25rem;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.metadata-progress-summary {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.metadata-continue-button {
+  min-width: 110px;
+  justify-content: center;
 }
 
 @media (max-width: 768px) {

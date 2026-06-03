@@ -277,6 +277,34 @@
             <i :class="storageLoading ? 'ri-loader-4-line spin' : 'ri-refresh-line'"></i>
           </button>
         </div>
+
+        <div class="data-portability">
+          <div class="setting-copy">
+            <h3>Import and export</h3>
+            <p>Move your full Bookish library, playlists, reading content, audio session, and settings.</p>
+          </div>
+          <div class="data-actions">
+            <button class="data-action primary" :disabled="backupLoading" @click="exportData">
+              <i :class="backupLoading ? 'ri-loader-4-line spin' : 'ri-download-2-line'"></i>
+              <span>Export</span>
+            </button>
+            <button class="data-action" :disabled="backupLoading" @click="openImportPicker">
+              <i class="ri-upload-2-line"></i>
+              <span>Import</span>
+            </button>
+            <button class="data-action danger" :disabled="wipeLoading" @click="wipeData">
+              <i :class="wipeLoading ? 'ri-loader-4-line spin' : 'ri-delete-bin-6-line'"></i>
+              <span>Wipe</span>
+            </button>
+            <input
+              ref="importInputRef"
+              class="sr-only"
+              type="file"
+              accept="application/json,.json"
+              @change="importData"
+            />
+          </div>
+        </div>
       </article>
     </section>
 
@@ -299,14 +327,21 @@ import { computed, onMounted, ref } from 'vue'
 import { useBooks } from '~/composables/useBooks'
 import { useBookishSettings, LIBRARY_ITEMS_PER_PAGE_OPTIONS } from '~/composables/useBookishSettings'
 import { useBookStorage } from '~/composables/useBookStorage'
+import { useLibraryBackup } from '~/composables/useLibraryBackup'
 import { useTTS } from '~/composables/useTTS'
+import { useToast } from '~/composables/useToast'
 
-const { books, authors, collections, genres, recentlyAddedBooks } = useBooks()
-const { settings, updateSettings } = useBookishSettings()
+const { books, authors, collections, genres, recentlyAddedBooks, fetchAllData } = useBooks()
+const { settings, updateSettings, loadSettings } = useBookishSettings()
 const { getStorageSummary } = useBookStorage()
-const { ttsVoices, setSpeed, setVolume, setVoice } = useTTS()
+const { createDownload, importBookishData, wipeBookishData } = useLibraryBackup()
+const { ttsVoices, setSpeed, setVolume, setVoice, stop: stopTTS } = useTTS()
+const { addToast } = useToast()
 
 const storageLoading = ref(false)
+const backupLoading = ref(false)
+const wipeLoading = ref(false)
+const importInputRef = ref(null)
 const storageSummary = ref({
   available: true,
   contentCount: 0,
@@ -379,6 +414,77 @@ const refreshStorageSummary = async () => {
     storageSummary.value = await getStorageSummary()
   } finally {
     storageLoading.value = false
+  }
+}
+
+const exportData = async () => {
+  backupLoading.value = true
+  let url = null
+  try {
+    const download = await createDownload()
+    url = download.url
+    const link = document.createElement('a')
+    link.href = download.url
+    link.download = download.filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    addToast('Bookish backup exported', 'success')
+  } catch (error) {
+    console.error('[Settings] Failed to export Bookish data:', error)
+    addToast(error?.message || 'Could not export Bookish data', 'error')
+  } finally {
+    if (url) setTimeout(() => URL.revokeObjectURL(url), 0)
+    backupLoading.value = false
+  }
+}
+
+const openImportPicker = () => {
+  importInputRef.value?.click()
+}
+
+const importData = async (event) => {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+
+  const confirmed = window.confirm('Importing a backup will replace the current Bookish data in this browser. Continue?')
+  if (!confirmed) return
+
+  backupLoading.value = true
+  try {
+    const backup = JSON.parse(await file.text())
+    stopTTS()
+    await importBookishData(backup)
+    loadSettings()
+    await fetchAllData(true)
+    await refreshStorageSummary()
+    addToast('Bookish backup imported', 'success')
+  } catch (error) {
+    console.error('[Settings] Failed to import Bookish data:', error)
+    addToast(error?.message || 'Could not import Bookish backup', 'error')
+  } finally {
+    backupLoading.value = false
+  }
+}
+
+const wipeData = async () => {
+  const confirmed = window.confirm('This will permanently remove all Bookish books, playlists, reading content, progress, audio state, and settings from this browser. Continue?')
+  if (!confirmed) return
+
+  wipeLoading.value = true
+  try {
+    stopTTS()
+    await wipeBookishData()
+    loadSettings()
+    await fetchAllData(true)
+    await refreshStorageSummary()
+    addToast('Bookish data wiped from this browser', 'success')
+  } catch (error) {
+    console.error('[Settings] Failed to wipe Bookish data:', error)
+    addToast(error?.message || 'Could not wipe Bookish data', 'error')
+  } finally {
+    wipeLoading.value = false
   }
 }
 
@@ -590,7 +696,7 @@ onMounted(refreshStorageSummary)
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-brand-primary-soft);
+  background: var(--color-brand-primary-muted);
   color: var(--color-brand-primary);
   font-size: 1.2rem;
   flex-shrink: 0;
@@ -748,7 +854,6 @@ onMounted(refreshStorageSummary)
   min-height: 64px;
   border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
-  background: var(--color-surface-secondary);
   padding: 0.8rem;
 }
 
@@ -818,14 +923,80 @@ onMounted(refreshStorageSummary)
   margin-top: 1rem;
   min-height: 42px;
   padding: 0.65rem 0.75rem;
+  /* background-color: var(--color-status-success-soft); */
   border-radius: 8px;
-  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-border-card);
   color: var(--color-status-success);
   font-size: 0.85rem;
 }
 
 .storage-status-line.warning {
   color: var(--color-status-warning);
+}
+
+.data-portability {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border-subtle);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+.data-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.data-action {
+  min-height: 36px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  background: var(--color-surface-card);
+  color: var(--color-text-secondary);
+  padding: 0 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.data-action:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--color-brand-primary-hover);
+}
+
+.data-action.primary {
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+  border-color: var(--color-brand-primary);
+}
+
+.data-action.danger {
+  color: var(--color-status-danger);
+}
+
+.data-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .icon-action {
@@ -1008,6 +1179,16 @@ onMounted(refreshStorageSummary)
 
   .storage-status-line {
     align-items: flex-start;
+  }
+
+  .data-portability {
+    grid-template-columns: 1fr;
+  }
+
+  .data-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .about-section {

@@ -195,15 +195,69 @@ const mergeResults = (title, author, sources) => {
     .slice(0, 8);
 };
 
-export const fetchBookMetadataResults = async (title, author) => {
+const readStreamingMetadataResponse = async (response, onProgress) => {
+  if (!response.body) {
+    const data = await response.json();
+    return data.results || [];
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let results = [];
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line);
+      if (event.type === 'step') {
+        onProgress?.(event);
+      } else if (event.type === 'result') {
+        results = event.results || [];
+      } else if (event.type === 'error') {
+        throw new Error(event.message || 'Failed to fetch metadata from the web.');
+      }
+    }
+  }
+
+  if (buffer.trim()) {
+    const event = JSON.parse(buffer);
+    if (event.type === 'result') results = event.results || [];
+    if (event.type === 'step') onProgress?.(event);
+    if (event.type === 'error') throw new Error(event.message || 'Failed to fetch metadata from the web.');
+  }
+
+  return results;
+};
+
+export const fetchBookMetadataResults = async (title, author, publisher, options = {}) => {
   const params = new URLSearchParams({ title });
   if (author) params.set('author', author);
+  if (publisher) params.set('publisher', publisher);
+  if (options.onProgress) params.set('stream', '1');
 
   try {
     const response = await fetch(`/api/books/metadata?${params.toString()}`);
-    const data = await response.json();
-    if (data.results?.length) return data.results;
-  } catch {}
+    if (!response.ok) throw new Error(`Metadata request failed with ${response.status}`);
+    if (options.onProgress) {
+      const streamedResults = await readStreamingMetadataResponse(response, options.onProgress);
+      return streamedResults;
+    } else {
+      const data = await response.json();
+      if (data.results?.length) return data.results;
+    }
+  } catch (error) {
+    options.onProgress?.({ type: 'step', id: 'core', status: 'error', detail: error?.message || 'Metadata endpoint failed' });
+    options.onProgress?.({ type: 'step', id: 'publisherSearch', status: 'skipped', detail: 'Skipped because the metadata endpoint failed' });
+    options.onProgress?.({ type: 'step', id: 'publisherScrape', status: 'skipped', detail: 'Skipped because the metadata endpoint failed' });
+  }
 
   const [internetArchiveResults, openLibraryResults] = await Promise.all([
     searchInternetArchive(title, author),

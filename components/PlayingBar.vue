@@ -150,7 +150,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useTTS } from '~/composables/useTTS'
 import { useBooks } from '~/composables/useBooks'
 
@@ -158,7 +158,7 @@ const {
   ttsBook, ttsStatus, ttsSpeed, ttsVolume,
   ttsVoiceId, ttsVoices, ttsProgress,
   elapsedTime, totalTime,
-  play, togglePlay, skipChunks, skipSeconds, setSpeed, setVolume, setVoice,
+  play, togglePlay, skipChunks, skipSeconds, setSpeed, setVolume, setVoice, restoreLastSession,
 } = useTTS()
 
 const { books, toggleFavourite } = useBooks()
@@ -193,6 +193,13 @@ const handlePlayPause = () => {
   if (ttsStatus.value === 'loading') return
   togglePlay()
 }
+
+const hydrateLastSession = () => {
+  if (books.value.length) restoreLastSession(books.value)
+}
+
+onMounted(hydrateLastSession)
+watch(books, hydrateLastSession, { immediate: true })
 
 const playAdjacentBook = (delta) => {
   const nextBook = books.value[currentBookIndex.value + delta]

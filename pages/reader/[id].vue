@@ -36,6 +36,23 @@
       <div class="tb-section tb-right">
         <button
           class="tb-btn"
+          :disabled="!book || !allReadableChunks.length"
+          @click="readCurrentPosition"
+          title="Read from here"
+        >
+          <i class="ri-speak-line"></i>
+        </button>
+        <button
+          class="tb-btn"
+          :disabled="!isCurrentBookNarrating"
+          @click="jumpToNarration"
+          title="Jump to narration"
+        >
+          <i class="ri-focus-3-line"></i>
+        </button>
+        <span class="tb-sep" />
+        <button
+          class="tb-btn"
           @click="toggleTheme"
           :title="readerTheme === 'light' ? 'Dark mode' : 'Light mode'"
         >
@@ -97,7 +114,7 @@
           :text-content="rawContent"
           :active-chunk-index="activeTtsChunkIndex"
           :active-chunk-text="activeTtsChunkText"
-          @page-change="currentPdfPage = $event"
+          @page-change="handlePdfPageChange"
           @loaded="handlePdfLoaded"
         />
 
@@ -157,7 +174,7 @@ const router = useRouter()
 const { books, fetchBookById, updateBook } = useBooks()
 const { getBookContent, saveBookContent } = useBookStorage()
 const { settings, updateSettings } = useBookishSettings()
-const { ttsBook, ttsChunkIdx, ttsCurrentChunk, ttsStatus } = useTTS()
+const { ttsBook, ttsChunkIdx, ttsCurrentChunk, ttsStatus, play: playTTS } = useTTS()
 
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2.5
@@ -183,6 +200,7 @@ const currentChapterIdx = ref(0)
 const currentPdfPage = ref(1)
 const totalPages = ref(0)
 const restoredInitialPdfScroll = ref(false)
+const readerReady = ref(false)
 
 const bookFormat = computed(() => (book.value?.format || '').toLowerCase())
 const isPdfBook = computed(() => bookFormat.value === 'pdf')
@@ -294,6 +312,12 @@ const activeTtsChunkText = computed(() => {
   return ttsCurrentChunk.value || ''
 })
 
+const isCurrentBookNarrating = computed(() => (
+  ttsBook.value?.id === book.value?.id && ttsStatus.value !== 'idle'
+))
+
+const allReadableChunks = computed(() => splitToChunks(stripHtml(rawContent.value || '')))
+
 function tocItemLabel(item, index) {
   if (item.type === 'pdf') return item.page
   return index + 1
@@ -316,6 +340,40 @@ function goToTocItem(item) {
 function scrollToChapter(index) {
   const el = document.getElementById(`ch-${index}`)
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function chunkIndexForCurrentPosition() {
+  const chunks = allReadableChunks.value
+  if (!chunks.length) return 0
+
+  if (isPdfBook.value) {
+    const pages = totalPages.value || book.value?.pages || 1
+    const pageProgress = pages > 1 ? (currentPdfPage.value - 1) / (pages - 1) : 0
+    return Math.max(0, Math.min(chunks.length - 1, Math.floor(pageProgress * chunks.length)))
+  }
+
+  let chunkIndex = 0
+  const chapterIndex = Math.max(0, Math.min(currentChapterIdx.value, chapterList.value.length - 1))
+  for (let i = 0; i < chapterIndex; i += 1) {
+    chunkIndex += splitToChunks(stripHtml(chapterList.value[i]?.html || '')).length
+  }
+
+  return Math.max(0, Math.min(chunks.length - 1, chunkIndex))
+}
+
+function readCurrentPosition() {
+  if (!book.value || !allReadableChunks.value.length) return
+  playTTS(book.value, { startChunkIdx: chunkIndexForCurrentPosition() })
+  queueProgressSave()
+}
+
+function jumpToNarration() {
+  if (!isCurrentBookNarrating.value) return
+  if (isPdfRenderable.value) {
+    pdfViewerRef.value?.scrollToActiveHighlight?.()
+    return
+  }
+  _highlightChunk(ttsChunkIdx.value)
 }
 
 function observeChapters() {
@@ -560,6 +618,50 @@ async function ensurePdfToc(bookId) {
   }
 }
 
+function readingProgressSnapshot() {
+  let progress = 0
+  let status = 'Unread'
+
+  if (isPdfRenderable.value && totalPages.value > 0) {
+    progress = totalPages.value > 1
+      ? Math.round(((currentPdfPage.value - 1) / (totalPages.value - 1)) * 100)
+      : 100
+    status = progress > 95 ? 'Read' : currentPdfPage.value > 1 ? 'Reading' : 'Unread'
+  } else if (!isPdfBook.value && chapterList.value.length > 0) {
+    const idx = Math.max(0, currentChapterIdx.value)
+    progress = chapterList.value.length > 1
+      ? Math.round((idx / (chapterList.value.length - 1)) * 100)
+      : 100
+    status = progress > 95 ? 'Read' : idx > 0 ? 'Reading' : 'Unread'
+  }
+
+  return {
+    progress: Math.max(0, Math.min(100, progress)),
+    status,
+  }
+}
+
+let _progressSaveTimer = null
+
+async function saveReadingProgress() {
+  if (!readerReady.value || !book.value) return
+  const next = readingProgressSnapshot()
+  if (next.progress === (book.value.progress || 0) && next.status === (book.value.status || 'Unread')) return
+
+  const updated = { ...book.value, ...next }
+  book.value = updated
+  await updateBook(updated)
+}
+
+function queueProgressSave() {
+  if (!readerReady.value) return
+  if (_progressSaveTimer) clearTimeout(_progressSaveTimer)
+  _progressSaveTimer = setTimeout(() => {
+    _progressSaveTimer = null
+    saveReadingProgress()
+  }, 450)
+}
+
 function updateBookEdge() {
   if (!import.meta.client) return
 
@@ -589,6 +691,47 @@ function updateBookEdge() {
   readerPageRef.value?.style.setProperty('--toc-backdrop-left', `${tocLeft + tocWidth}px`)
 }
 
+let _scrollRaf = null
+
+function updateCurrentChapterFromScroll() {
+  if (isPdfBook.value || !chapterList.value.length) return
+
+  const sections = chapterList.value
+    .map((_, index) => document.getElementById(`ch-${index}`))
+    .filter(Boolean)
+  if (!sections.length) return
+
+  const anchorY = 72
+  let bestIndex = currentChapterIdx.value
+  let bestDistance = Number.POSITIVE_INFINITY
+
+  sections.forEach((section) => {
+    const rect = section.getBoundingClientRect()
+    const distance = rect.top <= anchorY
+      ? Math.abs(anchorY - rect.top) * 0.5
+      : Math.abs(rect.top - anchorY)
+    const index = Number(section.id.slice(3))
+    if (!Number.isNaN(index) && distance < bestDistance) {
+      bestDistance = distance
+      bestIndex = index
+    }
+  })
+
+  if (bestIndex !== currentChapterIdx.value) currentChapterIdx.value = bestIndex
+}
+
+function onReaderScroll() {
+  if (_scrollRaf !== null) return
+  _scrollRaf = requestAnimationFrame(() => {
+    _scrollRaf = null
+    updateCurrentChapterFromScroll()
+  })
+}
+
+function handlePdfPageChange(page) {
+  currentPdfPage.value = page
+}
+
 function handlePdfLoaded(payload) {
   totalPages.value = payload.pages || totalPages.value || book.value?.pages || 0
   updateBookEdge()
@@ -599,11 +742,16 @@ function handlePdfLoaded(payload) {
       totalPages.value,
       Math.round((book.value.progress / 100) * Math.max(1, totalPages.value - 1)) + 1
     ))
+    currentPdfPage.value = targetPage
     nextTick(() => pdfViewerRef.value?.scrollToPage(targetPage, 'instant'))
   }
+
+  readerReady.value = true
 }
 
 async function loadBook(id) {
+  readerReady.value = false
+  restoredInitialPdfScroll.value = false
   const cached = books.value.find(b => b.id === id)
   if (cached) {
     book.value = cached
@@ -645,8 +793,15 @@ async function loadBook(id) {
 
   if (!isPdfBook.value && book.value?.progress > 0 && chapterList.value.length > 0) {
     const targetIdx = Math.round((book.value.progress / 100) * (chapterList.value.length - 1))
-    const el = document.getElementById(`ch-${Math.max(0, Math.min(targetIdx, chapterList.value.length - 1))}`)
+    const safeIndex = Math.max(0, Math.min(targetIdx, chapterList.value.length - 1))
+    currentChapterIdx.value = safeIndex
+    const el = document.getElementById(`ch-${safeIndex}`)
     if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' })
+  }
+
+  if (!isPdfRenderable.value) {
+    readerReady.value = true
+    updateCurrentChapterFromScroll()
   }
 }
 
@@ -664,6 +819,8 @@ watch(activeTtsChunkIndex, (index) => {
   else _highlightChunk(index)
 })
 
+watch([currentPdfPage, currentChapterIdx], queueProgressSave)
+
 watch(tocOpen, (open) => {
   if (open) updateBookEdge()
 })
@@ -676,37 +833,20 @@ watch(isPdfRenderable, async () => {
 onMounted(async () => {
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('resize', updateBookEdge)
+  window.addEventListener('scroll', onReaderScroll, { passive: true })
   await loadBook(route.params.id)
 })
 
 onUnmounted(async () => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('resize', updateBookEdge)
+  window.removeEventListener('scroll', onReaderScroll)
+  if (_scrollRaf !== null) cancelAnimationFrame(_scrollRaf)
+  if (_progressSaveTimer) clearTimeout(_progressSaveTimer)
   if (_observer) _observer.disconnect()
 
   if (!book.value) return
-
-  let progress = 0
-  let status = 'Unread'
-
-  if (isPdfRenderable.value && totalPages.value > 0) {
-    progress = totalPages.value > 1
-      ? Math.round(((currentPdfPage.value - 1) / (totalPages.value - 1)) * 100)
-      : 100
-    status = progress > 95 ? 'Completed' : currentPdfPage.value > 1 ? 'Reading' : 'Unread'
-  } else if (!isPdfBook.value && chapterList.value.length > 0) {
-    const idx = Math.max(0, currentChapterIdx.value)
-    progress = chapterList.value.length > 1
-      ? Math.round((idx / (chapterList.value.length - 1)) * 100)
-      : 100
-    status = progress > 95 ? 'Completed' : idx > 0 ? 'Reading' : 'Unread'
-  }
-
-  await updateBook({
-    ...book.value,
-    progress: Math.max(0, Math.min(100, progress)),
-    status,
-  })
+  await saveReadingProgress()
 })
 </script>
 

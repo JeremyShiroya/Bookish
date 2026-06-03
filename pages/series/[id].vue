@@ -1,28 +1,25 @@
 <template>
   <div class="detail-page">
     <header class="detail-header">
-      <button class="back-btn" @click="router.push('/playlists')">
+      <button class="back-btn" @click="router.push('/series')">
         <i class="ri-arrow-left-line"></i>
         <span>Back</span>
       </button>
 
       <div class="detail-heading">
-        <h1>{{ playlist?.name || 'Playlist' }}</h1>
-        <p>
-          {{ playlistBooks.length }} {{ playlistBooks.length === 1 ? 'book' : 'books' }}
-          <span v-if="playlist?.description"> &bull; {{ playlist.description }}</span>
-        </p>
+        <h1>{{ seriesName }}</h1>
+        <p>{{ seriesBooks.length }} {{ seriesBooks.length === 1 ? 'book' : 'books' }}</p>
       </div>
     </header>
 
     <EmptyState
-      v-if="!playlistBooks.length"
-      title="No books here yet"
-      description="Add books to this playlist from the Books page."
-      icon="ri-play-list-2-line"
+      v-if="!seriesBooks.length"
+      title="Series not found"
+      description="Books with matching series metadata will appear here."
+      icon="ri-book-shelf-line"
     />
 
-    <section v-else class="detail-table" aria-label="Playlist books">
+    <section v-else class="detail-table" aria-label="Series books">
       <div class="data-header">
         <div class="col-book">Book</div>
         <div class="col-status">Status</div>
@@ -32,7 +29,7 @@
       </div>
 
       <article
-        v-for="book in playlistBooks"
+        v-for="book in seriesBooks"
         :key="book.id"
         class="data-row"
         @click="router.push(`/reader/${book.id}`)"
@@ -46,8 +43,8 @@
             </div>
             <p>{{ book.author || 'Unknown author' }}<template v-if="book.publishYear"> &bull; {{ book.publishYear }}</template></p>
             <div class="cell-tags">
-              <span :class="{ muted: !book.series }">{{ book.series || 'Standalone' }}</span>
               <span v-if="book.genre"><i class="ri-price-tag-3-line"></i>{{ book.genre }}</span>
+              <span v-if="book.pages">{{ book.pages }} pages</span>
             </div>
           </div>
         </div>
@@ -91,19 +88,22 @@ import { useTTS } from '~/composables/useTTS'
 
 const route = useRoute()
 const router = useRouter()
-const { books, collections } = useBooks()
+const { books } = useBooks()
 const { play: playTTS } = useTTS()
 
-const playlist = computed(() => (
-  collections.value.find((item) => String(item.id) === String(route.params.id))
-))
-
-const playlistBooks = computed(() => {
-  const ids = playlist.value?.bookIds || []
-  return ids
-    .map((id) => books.value.find((book) => String(book.id) === String(id)))
-    .filter(Boolean)
+const seriesName = computed(() => {
+  try {
+    return decodeURIComponent(String(route.params.id || 'Series'))
+  } catch {
+    return String(route.params.id || 'Series')
+  }
 })
+
+const seriesBooks = computed(() => (
+  books.value
+    .filter((book) => String(book.series || '') === seriesName.value)
+    .sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')))
+))
 
 const truncateWords = (value, limit = 7) => {
   const words = String(value || '').trim().split(/\s+/).filter(Boolean)
@@ -302,10 +302,6 @@ const coverFallback = (event, title) => {
   text-overflow: ellipsis;
   background: transparent;
   color: var(--color-text-secondary);
-}
-
-.cell-tags .muted {
-  color: var(--color-text-muted);
 }
 
 .col-status,

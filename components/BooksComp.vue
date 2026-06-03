@@ -40,11 +40,11 @@
           </div>
         </div>
         <div class="metric-card">
-          <div class="metric-icon metric-icon-finished">
+          <div class="metric-icon metric-icon-completed">
             <i class="ri-checkbox-circle-line"></i>
           </div>
           <div class="metric-text">
-            <div class="metric-label">Finished</div>
+            <div class="metric-label">Completed</div>
             <div class="metric-value">{{ bookMetrics.read }}</div>
           </div>
         </div>
@@ -550,7 +550,7 @@ const {
   addBookToPlaylist,
   fetchAllData,
 } = useBooks();
-const { play: playTTS, ttsBook, ttsStatus } = useTTS()
+const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS()
 const { settings, updateSettings } = useBookishSettings();
 const { addToast } = useToast();
 
@@ -558,6 +558,10 @@ const isBookActive = (book) =>
   ttsBook.value?.id === book.id && ttsStatus.value !== 'idle'
 
 const handlePlay = (book) => {
+  if (ttsBook.value?.id === book.id && ttsStatus.value !== 'idle') {
+    toggleTTS()
+    return
+  }
   playTTS(book)
 }
 
@@ -1135,7 +1139,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem;
-  background: var(--color-surface-primary);
+  background: var(--color-surface-card);
   border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
 }
@@ -1714,12 +1718,11 @@ onUnmounted(() => {
   background: var(--color-surface-card);
   border: 1px solid var(--color-border-card);
   border-radius: 12px;
-  transition: background-color 0.2s, transform 0.2s;
+  transition: transform 0.2s;
 }
 
 .metric-card:hover {
-  background: var(--color-surface-hover);
-  transform: translateY(-1px);
+  transform: translateY(-5px);
 }
 
 .metric-icon {
@@ -1734,8 +1737,8 @@ onUnmounted(() => {
 }
 
 .metric-icon-total {
-  background: rgba(139, 92, 246, 0.12);
-  color: rgb(124, 58, 237);
+  background: rgba(34, 197, 94, 0.14);
+  color: rgb(22, 163, 74);
 }
 
 .metric-icon-reading {
@@ -1743,9 +1746,9 @@ onUnmounted(() => {
   color: rgb(217, 119, 6);
 }
 
-.metric-icon-finished {
-  background: rgba(34, 197, 94, 0.14);
-  color: rgb(22, 163, 74);
+.metric-icon-completed {
+  background: rgba(139, 92, 246, 0.12);
+  color: rgb(124, 58, 237);
 }
 
 .metric-icon-unread {
@@ -1844,7 +1847,6 @@ onUnmounted(() => {
 }
 
 .view-container.is-card .controls-row.in-container {
-  border-bottom: 1px solid var(--color-border-card);
   background: transparent;
 }
 
@@ -2033,13 +2035,13 @@ onUnmounted(() => {
 }
 
 .status-pill.status-read {
-  background: rgba(34, 197, 94, 0.14);
-  color: rgb(21, 128, 61);
+  background: var(--color-surface-hover);
+  color: var(--color-brand-primary);
 }
 
 .status-pill.status-unread {
-  background: var(--color-surface-hover);
-  color: var(--color-text-muted);
+  background: rgba(100, 116, 139, 0.14);
+  color: rgb(71, 85, 105);
 }
 
 /* Progress */

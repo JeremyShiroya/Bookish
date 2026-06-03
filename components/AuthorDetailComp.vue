@@ -196,7 +196,7 @@ import { fetchAuthorImageResults } from '~/composables/useAuthorImageSearch';
 
 const route = useRoute();
 const router = useRouter();
-const { play: playTTS } = useTTS();
+const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const { addToast } = useToast();
 const { fetchAllData, authors: globalAuthors, books: globalBooks, initialized } = useBooks();
 
@@ -312,6 +312,10 @@ const totalPages = computed(() => {
 });
 
 const handlePlay = (book) => {
+  if (ttsBook.value?.id === book.id && ttsStatus.value !== 'idle') {
+    toggleTTS();
+    return;
+  }
   playTTS(book);
 };
 

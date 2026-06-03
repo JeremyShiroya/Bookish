@@ -14,6 +14,7 @@ let _rafId = null                // requestAnimationFrame handle for word-highli
 const DEFAULT_SENTENCE_MAX_CHARS = 480
 const AUDIO_CACHE_LIMIT = 8
 const WORDS_PER_MIN = 145
+export const BOOKISH_TTS_SESSION_KEY = 'bookish:tts-session'
 
 const EDGE_VOICES = [
   { id: 'en-US-ChristopherNeural', name: 'Christopher (US)' },
@@ -36,6 +37,62 @@ const normalizeAvailableVoice = (voiceId) => {
   const nextVoice = String(voiceId || '').trim()
   if (isKokoroVoice(nextVoice)) return DEFAULT_TTS_VOICE
   return EDGE_VOICES.some(voice => voice.id === nextVoice) ? nextVoice : DEFAULT_TTS_VOICE
+}
+
+const resolveStorage = () => {
+  if (typeof localStorage === 'undefined') return null
+  return localStorage
+}
+
+export function readStoredTtsSession(storage = resolveStorage()) {
+  if (!storage) return null
+
+  try {
+    const raw = storage.getItem(BOOKISH_TTS_SESSION_KEY)
+    if (!raw) return null
+    const session = JSON.parse(raw)
+    if (!session?.bookId) return null
+
+    return {
+      bookId: session.bookId,
+      chunkIdx: Math.max(0, Number(session.chunkIdx) || 0),
+      totalChunks: Math.max(0, Number(session.totalChunks) || 0),
+      progress: Math.max(0, Math.min(100, Number(session.progress) || 0)),
+      elapsedSeconds: Math.max(0, Number(session.elapsedSeconds) || 0),
+      totalSeconds: Math.max(0, Number(session.totalSeconds) || 0),
+      currentChunk: typeof session.currentChunk === 'string' ? session.currentChunk : '',
+      updatedAt: session.updatedAt || null,
+    }
+  } catch {
+    return null
+  }
+}
+
+export function writeStoredTtsSession(session, storage = resolveStorage()) {
+  if (!storage || !session?.bookId) return null
+
+  const normalized = {
+    bookId: session.bookId,
+    chunkIdx: Math.max(0, Number(session.chunkIdx) || 0),
+    totalChunks: Math.max(0, Number(session.totalChunks) || 0),
+    progress: Math.max(0, Math.min(100, Number(session.progress) || 0)),
+    elapsedSeconds: Math.max(0, Number(session.elapsedSeconds) || 0),
+    totalSeconds: Math.max(0, Number(session.totalSeconds) || 0),
+    currentChunk: typeof session.currentChunk === 'string' ? session.currentChunk : '',
+    updatedAt: session.updatedAt || new Date().toISOString(),
+  }
+
+  try {
+    storage.setItem(BOOKISH_TTS_SESSION_KEY, JSON.stringify(normalized))
+  } catch {
+    // localStorage can fail in private browsing or quota-limited contexts.
+  }
+
+  return normalized
+}
+
+export function clearStoredTtsSession(storage = resolveStorage()) {
+  storage?.removeItem?.(BOOKISH_TTS_SESSION_KEY)
 }
 
 if (import.meta.hot) {
@@ -286,6 +343,21 @@ export const useTTS = () => {
     return (words / WORDS_PER_MIN) * 60 / ttsSpeed.value
   }
 
+  const _persistSession = () => {
+    if (!ttsBook.value?.id) return
+
+    writeStoredTtsSession({
+      bookId: ttsBook.value.id,
+      chunkIdx: _chunks.length ? _chunkIdx : ttsChunkIdx.value,
+      totalChunks: ttsTotalChunks.value,
+      progress: ttsProgress.value,
+      elapsedSeconds: ttsElapsedSeconds.value,
+      totalSeconds: ttsTotalSeconds.value,
+      currentChunk: ttsCurrentChunk.value,
+      updatedAt: new Date().toISOString(),
+    })
+  }
+
   const elapsedTime = computed(() => {
     return formatDuration(ttsElapsedSeconds.value)
   })
@@ -307,6 +379,7 @@ export const useTTS = () => {
     ttsProgress.value = ttsTotalChunks.value > 0
       ? Math.round((_chunkIdx / ttsTotalChunks.value) * 100)
       : 0
+    _persistSession()
   }
 
   const _audioCacheKey = (chunkIdx) => `${chunkIdx}:${ttsVoiceId.value}:${ttsSpeed.value}`
@@ -411,6 +484,7 @@ export const useTTS = () => {
       ttsStatus.value = 'idle'
       ttsProgress.value = 100
       ttsCurrentChunk.value = ''
+      _persistSession()
       return
     }
     _updateProgress()
@@ -458,7 +532,11 @@ export const useTTS = () => {
     audio.onended = () => {
       if (_currentAudio !== audio) return
       _currentAudio = null
-      if (ttsStatus.value === 'playing') { _chunkIdx++; _speakNextEdge() }
+      if (ttsStatus.value === 'playing') {
+        _chunkIdx++
+        _updateProgress()
+        _speakNextEdge()
+      }
     }
 
     audio.onerror = () => {
@@ -490,7 +568,7 @@ export const useTTS = () => {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  const play = async (book) => {
+  const play = async (book, options = {}) => {
     _stopInternal()
     ttsBook.value = book
     ttsStatus.value = 'loading'
@@ -522,12 +600,20 @@ export const useTTS = () => {
 
     const sentenceChunks = splitToChunks(text)
     const contentStart = findContentStart(sentenceChunks)
+    const savedSession = readStoredTtsSession()
+    const savedChunkIdx = savedSession?.bookId === book?.id ? savedSession.chunkIdx : null
+    const requestedChunkIdx = Number.isFinite(Number(options.startChunkIdx))
+      ? Number(options.startChunkIdx)
+      : savedChunkIdx
     _chunks = sentenceChunks
-    _chunkIdx = contentStart
+    _chunkIdx = Math.max(
+      contentStart,
+      Math.min(_chunks.length - 1, requestedChunkIdx ?? contentStart)
+    )
     ttsTotalChunks.value = _chunks.length
     _updateProgress()
 
-    if (contentStart > 0) {
+    if (contentStart > 0 && _chunkIdx === contentStart) {
       const { addToast } = useToast()
       addToast('Skipped copyright page — starting at content.', 'info')
     }
@@ -540,6 +626,7 @@ export const useTTS = () => {
     if (ttsStatus.value !== 'playing') return
     ttsStatus.value = 'paused'
     _currentAudio?.pause()
+    _persistSession()
   }
 
   const resume = () => {
@@ -553,14 +640,17 @@ export const useTTS = () => {
           ttsStatus.value = 'idle'
         }
       })
-    } else {
+    } else if (_chunks.length) {
       _speakNextEdge()
+    } else if (ttsBook.value) {
+      play(ttsBook.value, { startChunkIdx: ttsChunkIdx.value })
     }
   }
 
   const togglePlay = () => {
     if (ttsStatus.value === 'playing') pause()
     else if (ttsStatus.value === 'paused') resume()
+    else if (ttsBook.value) play(ttsBook.value, { startChunkIdx: ttsChunkIdx.value })
   }
 
   const stop = () => {
@@ -572,6 +662,7 @@ export const useTTS = () => {
     ttsElapsedSeconds.value = 0
     ttsTotalSeconds.value = 0
     ttsBook.value = null
+    clearStoredTtsSession()
   }
 
   const setSpeed = (rate) => {
@@ -579,6 +670,7 @@ export const useTTS = () => {
     ttsSpeed.value = nextSettings.ttsSpeed
     _clearAudioCache()
     if (_chunks.length) _updateProgress()
+    else _persistSession()
     if (ttsStatus.value === 'playing') {
       _cancelAudio()
       _speakNextEdge()
@@ -592,12 +684,14 @@ export const useTTS = () => {
     const nextSettings = updateSettings({ ttsVolume: Number(vol) })
     ttsVolume.value = nextSettings.ttsVolume
     if (_currentAudio) _currentAudio.volume = ttsVolume.value
+    _persistSession()
   }
 
   const setVoice = (voiceId) => {
     const nextSettings = updateSettings({ ttsVoice: normalizeAvailableVoice(voiceId) })
     ttsVoiceId.value = nextSettings.ttsVoice
     _clearAudioCache()
+    _persistSession()
     if (ttsStatus.value === 'playing') {
       _cancelAudio()
       _speakNextEdge()
@@ -645,11 +739,32 @@ export const useTTS = () => {
       if (target >= 0 && target < _currentAudio.duration) {
         _currentAudio.currentTime = target
         _syncWordIndexForTime(target)
+        _persistSession()
         return
       }
     }
 
     skipChunks(seconds < 0 ? -1 : 1)
+  }
+
+  const restoreLastSession = (availableBooks = []) => {
+    if (ttsBook.value || ttsStatus.value === 'playing' || ttsStatus.value === 'loading') return false
+
+    const session = readStoredTtsSession()
+    if (!session?.bookId) return false
+
+    const restoredBook = availableBooks.find(book => String(book.id) === String(session.bookId))
+    if (!restoredBook) return false
+
+    ttsBook.value = restoredBook
+    ttsStatus.value = 'paused'
+    ttsChunkIdx.value = session.chunkIdx
+    ttsTotalChunks.value = session.totalChunks
+    ttsProgress.value = session.progress
+    ttsElapsedSeconds.value = session.elapsedSeconds
+    ttsTotalSeconds.value = session.totalSeconds
+    ttsCurrentChunk.value = session.currentChunk
+    return true
   }
 
   return {
@@ -658,7 +773,7 @@ export const useTTS = () => {
     ttsSpeed, ttsVolume, ttsVoiceId, ttsVoices, ttsCurrentChunk,
     ttsWordIdx, ttsBoundaries,
     elapsedTime, totalTime,
-    play, pause, resume, togglePlay, stop, restart,
+    play, pause, resume, togglePlay, stop, restart, restoreLastSession,
     setSpeed, setVolume, setVoice, seekToProgress, skipChunks, skipSeconds,
   }
 }

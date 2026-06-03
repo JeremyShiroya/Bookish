@@ -26,6 +26,11 @@ describe('image search helpers', () => {
     expect(images).toEqual(['https://example.com/dune.jpg?utm_source=x']);
   });
 
+  it('keeps known publisher cover CDN URLs without file extensions', () => {
+    expect(isUsefulCoverUrl('https://images.penguinrandomhouse.com/cover/9780593099322')).toBe(true);
+    expect(isUsefulCoverUrl('https://example.com/cover/9780593099322')).toBe(false);
+  });
+
   it('keeps author portraits but rejects book covers and logos', () => {
     expect(isUsefulAuthorImageUrl('https://example.com/gillian-flynn-portrait.jpg')).toBe(true);
     expect(isUsefulAuthorImageUrl('https://covers.openlibrary.org/a/id/12345-L.jpg')).toBe(true);

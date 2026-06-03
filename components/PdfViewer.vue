@@ -178,6 +178,8 @@ const buildPages = async () => {
   pages.value = pageRecords
   ready.value = true
   await nextTick()
+  setupPageObserver()
+  emit('loaded', { pages: pdfDocument.numPages })
 
   const generation = renderGeneration
   flatPdfText = ''
@@ -188,8 +190,6 @@ const buildPages = async () => {
   }
 
   updateHighlights()
-  setupPageObserver()
-  emit('loaded', { pages: pdfDocument.numPages })
 }
 
 const renderPdf = async () => {
@@ -307,7 +307,11 @@ const scrollToPage = (pageNumber, behavior = 'smooth', block = 'start') => {
   if (page) page.scrollIntoView({ behavior, block })
 }
 
-defineExpose({ scrollToPage })
+const scrollToActiveHighlight = () => {
+  updateHighlights()
+}
+
+defineExpose({ scrollToPage, scrollToActiveHighlight })
 
 onMounted(renderPdf)
 onUnmounted(() => {

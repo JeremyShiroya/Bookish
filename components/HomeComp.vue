@@ -173,10 +173,14 @@ const {
   error,
   fetchAllData,
 } = useBooks();
-const { play: playTTS } = useTTS();
+const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const router = useRouter();
 
 const handlePlay = (book) => {
+  if (ttsBook.value?.id === book.id && ttsStatus.value !== 'idle') {
+    toggleTTS();
+    return;
+  }
   playTTS(book);
 };
 

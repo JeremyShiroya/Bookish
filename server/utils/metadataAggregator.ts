@@ -1,4 +1,4 @@
-export type MetadataSourceName = 'goodreads' | 'googleBooks' | 'openLibrary' | 'internetArchive' | 'kobo';
+export type MetadataSourceName = 'goodreads' | 'googleBooks' | 'openLibrary' | 'internetArchive' | 'kobo' | 'publisher';
 
 export type MetadataSource = {
   id: string;
@@ -12,7 +12,18 @@ export type MetadataSource = {
   genre: string | null;
   publishYear: number | null;
   publisher?: string | null;
+  searchedPublisher?: string | null;
+  publisherSite?: string | null;
   webReview?: string | null;
+};
+
+export type MetadataSourceGroups = {
+  goodreadsSources: MetadataSource[];
+  googleBooksSources: MetadataSource[];
+  openLibrarySources: MetadataSource[];
+  internetArchiveSources: MetadataSource[];
+  koboSources: MetadataSource[];
+  publisherSources?: MetadataSource[];
 };
 
 const importantWords = new Set([
@@ -108,6 +119,7 @@ function completenessScore(source: MetadataSource) {
     source.series,
     source.seriesInstallment,
     source.webReview,
+    source.publisher,
   ].filter(hasValue).length;
 }
 
@@ -127,12 +139,65 @@ function matchSource(primary: MetadataSource, candidates: MetadataSource[]) {
   return ranked[0]?.candidate ?? null;
 }
 
+function collectBlurbOptions(sources: MetadataSource[]) {
+  const seen = new Set<string>();
+  const result: Array<{ source: MetadataSourceName; blurb: string }> = [];
+  for (const item of sources) {
+    if (!item.blurb) continue;
+    const cleaned = item.blurb.trim();
+    if (!cleaned) continue;
+    // Dedupe by the first 80 chars so near-identical blurbs collapse.
+    const key = cleaned.slice(0, 80).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ source: item.source, blurb: cleaned });
+  }
+  return result;
+}
+
+function collectSourceTags(sources: MetadataSource[]) {
+  const priority: MetadataSourceName[] = ['publisher', 'googleBooks', 'goodreads', 'kobo', 'openLibrary', 'internetArchive'];
+  const seen = new Set<MetadataSourceName>();
+  for (const source of sources) {
+    seen.add(source.source);
+  }
+
+  return priority.filter((source) => seen.has(source));
+}
+
+function sourceHostname(source: MetadataSource) {
+  if (source.publisherSite) return source.publisherSite.replace(/^www\./, '');
+  try {
+    return new URL(source.id).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+function collectPublisherSource(sources: MetadataSource[]) {
+  const publisher = sources.find((item) => item.source === 'publisher');
+  if (!publisher) return null;
+
+  return {
+    name: publisher.publisher || null,
+    searchedName: publisher.searchedPublisher || null,
+    site: sourceHostname(publisher),
+    url: /^https?:\/\//i.test(publisher.id) ? publisher.id : null,
+  };
+}
+
 function mergeMetadata(primary: MetadataSource, matches: MetadataSource[], goodreadsMatch: MetadataSource | null) {
   const sources = [primary, ...matches.filter((item) => item.id !== primary.id)];
   const goodreads = goodreadsMatch?.webReview ? goodreadsMatch : null;
+  const blurbOptions = collectBlurbOptions(sources);
+  const sourceTags = collectSourceTags(sources);
+  const publisherSource = collectPublisherSource(sources);
 
   return {
     googleId: primary.id,
+    sourceTags,
+    publisherSource,
+    primarySource: primary.source,
     title: firstValue(primary.title, ...sources.map((item) => item.title)),
     author: firstValue(primary.author, ...sources.map((item) => item.author)),
     cover: firstValue(
@@ -141,11 +206,13 @@ function mergeMetadata(primary: MetadataSource, matches: MetadataSource[], goodr
       ...sources.filter((item) => item.source === 'openLibrary').map((item) => item.cover),
       ...sources.filter((item) => item.source === 'internetArchive').map((item) => item.cover),
       ...sources.filter((item) => item.source === 'goodreads').map((item) => item.cover),
+      ...sources.filter((item) => item.source === 'publisher').map((item) => item.cover),
     ),
     blurb: firstValue(
       ...sources.filter((item) => item.source === 'googleBooks').map((item) => item.blurb),
       ...sources.filter((item) => item.source === 'goodreads').map((item) => item.blurb),
       ...sources.filter((item) => item.source === 'kobo').map((item) => item.blurb),
+      ...sources.filter((item) => item.source === 'publisher').map((item) => item.blurb),
       ...sources.filter((item) => item.source === 'internetArchive').map((item) => item.blurb),
       ...sources.filter((item) => item.source === 'openLibrary').map((item) => item.blurb),
     ),
@@ -178,12 +245,14 @@ function mergeMetadata(primary: MetadataSource, matches: MetadataSource[], goodr
       ...sources.filter((item) => item.source === 'kobo').map((item) => item.publishYear),
     ),
     publisher: firstValue(
+      ...sources.filter((item) => item.source === 'publisher').map((item) => item.publisher),
       ...sources.filter((item) => item.source === 'googleBooks').map((item) => item.publisher),
       ...sources.filter((item) => item.source === 'openLibrary').map((item) => item.publisher),
       ...sources.filter((item) => item.source === 'goodreads').map((item) => item.publisher),
       ...sources.filter((item) => item.source === 'kobo').map((item) => item.publisher),
       ...sources.filter((item) => item.source === 'internetArchive').map((item) => item.publisher),
     ),
+    blurbOptions,
     webReview: goodreads?.webReview ?? null,
   };
 }
@@ -191,13 +260,15 @@ function mergeMetadata(primary: MetadataSource, matches: MetadataSource[], goodr
 export function buildMetadataResults(
   targetTitle: string,
   targetAuthor: string | undefined,
-  sources: Record<`${MetadataSourceName}Sources`, MetadataSource[]>,
+  sources: MetadataSourceGroups,
 ) {
+  const publisherSources = sources.publisherSources ?? [];
   const allSources = [
     ...sources.internetArchiveSources,
     ...sources.openLibrarySources,
     ...sources.googleBooksSources,
     ...sources.koboSources,
+    ...publisherSources,
     ...sources.goodreadsSources,
   ];
   if (!allSources.length) return [];
@@ -211,7 +282,7 @@ export function buildMetadataResults(
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
       if (a.source.source !== b.source.source) {
-        const priority = ['internetArchive', 'openLibrary', 'googleBooks', 'kobo', 'goodreads'];
+        const priority = ['internetArchive', 'openLibrary', 'googleBooks', 'kobo', 'publisher', 'goodreads'];
         return priority.indexOf(a.source.source) - priority.indexOf(b.source.source);
       }
       return completenessScore(b.source) - completenessScore(a.source);
@@ -238,8 +309,9 @@ export function buildMetadataResults(
       const openLibrary = primary.source === 'openLibrary' ? primary : matchSource(primary, sources.openLibrarySources);
       const internetArchive = primary.source === 'internetArchive' ? primary : matchSource(primary, sources.internetArchiveSources);
       const kobo = primary.source === 'kobo' ? primary : matchSource(primary, sources.koboSources);
+      const publisher = primary.source === 'publisher' ? primary : matchSource(primary, publisherSources);
 
-      return mergeMetadata(primary, [goodreads, googleBooks, openLibrary, internetArchive, kobo].filter(Boolean) as MetadataSource[], goodreads);
+      return mergeMetadata(primary, [goodreads, googleBooks, openLibrary, internetArchive, kobo, publisher].filter(Boolean) as MetadataSource[], goodreads);
     })
     .filter((item) => {
       const key = `${normalizedKey(item.title)}:${normalizedKey(item.author)}`;

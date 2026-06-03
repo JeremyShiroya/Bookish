@@ -90,6 +90,16 @@ function isGoogleImageProxyUrl(url: string) {
     || url.includes('googleusercontent.com');
 }
 
+function isKnownBookCoverCdnUrl(url: string) {
+  return url.includes('images.penguinrandomhouse.com/cover')
+    || url.includes('images.randomhouse.com/cover')
+    || url.includes('prodimage.images-bn.com')
+    || url.includes('dynamic.indigoimages.ca/books')
+    || url.includes('covers.harpercollins.com')
+    || url.includes('d28hgpri8am2if.cloudfront.net/book_images')
+    || url.includes('d1w7fb2mkkr3kw.cloudfront.net/assets/images/book');
+}
+
 function isLikelyImageSearchUrl(url?: string | null) {
   const normalized = normalizeImageUrl(url);
   if (!normalized || normalized.startsWith('data:')) return false;
@@ -104,6 +114,7 @@ function isLikelyImageSearchUrl(url?: string | null) {
       || lower.includes('i.gr-assets.com')
       || lower.includes('wikimedia.org')
       || lower.includes('kbimages')
+      || isKnownBookCoverCdnUrl(lower)
     )
     && !/(favicon|sprite|spacer|pixel|blank|placeholder|default|logo|icon)/i.test(lower)
   );
@@ -120,6 +131,7 @@ export function isUsefulCoverUrl(url?: string | null) {
       || isGoogleImageProxyUrl(lower)
       || lower.includes('covers.openlibrary.org')
       || lower.includes('kbimages')
+      || isKnownBookCoverCdnUrl(lower)
     )
     && !/(nophoto|no_cover|nocover|placeholder|default|sprite|icon|logo|avatar|profile|author)/i.test(lower)
   );
