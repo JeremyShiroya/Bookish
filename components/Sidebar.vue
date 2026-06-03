@@ -92,6 +92,12 @@ const getActiveRouteIndex = () => {
   if (route.path.startsWith("/author/")) {
     return menuItems.findIndex((item) => item.path === "/authors");
   }
+  if (route.path.startsWith("/playlist/")) {
+    return menuItems.findIndex((item) => item.path === "/playlists");
+  }
+  if (route.path.startsWith("/serie/")) {
+    return menuItems.findIndex((item) => item.path === "/series");
+  }
   const idx = menuItems.findIndex(
     (item) => item.path !== "/" && route.path.startsWith(item.path),
   );

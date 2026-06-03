@@ -1,78 +1,205 @@
 <template>
-  <div class="series-container">
-    <div class="series-header">
-      <h1 class="series-title">
-        Series <span class="series-count">({{ seriesList.length }})</span>
-      </h1>
+  <div class="book-group-detail-page">
+    <div class="detail-back-row">
+      <button type="button" class="back-btn" @click="router.push(backTo)">
+        <i class="ri-arrow-left-line"></i>
+        <span>Back</span>
+      </button>
     </div>
 
-    <div v-if="seriesList.length > 0" class="series-grid">
-      <div
-        v-for="series in seriesList"
-        :key="series.id"
-        class="series-card"
-        @click="openSeries(series)"
-      >
-        <div class="stacked-covers">
-          <!-- Always render 3 layers -->
-          <div 
-            v-for="i in 3" 
-            :key="i"
-            class="cover-item"
-            :class="{ 'placeholder-cover': i > series.books.length }"
-            :style="getStackStyle(i - 1)"
+    <EmptyState
+      v-if="!books.length"
+      :title="emptyTitle"
+      :description="emptyDescription"
+      :icon="emptyIcon"
+    />
+
+    <template v-else>
+      <div class="detail-hero">
+        <div class="detail-cover-stack" aria-hidden="true">
+          <div
+            v-for="(book, index) in previewBooks"
+            :key="`${book.id || book.title}-${index}`"
+            class="detail-cover-item"
+            :style="getDetailStackStyle(index, previewBooks.length)"
           >
-            <!-- Real book cover if available -->
-            <img v-if="i <= series.books.length" :src="series.books[i-1].cover" :alt="series.books[i-1].title" />
-            <!-- Placeholder content -->
-            <div v-else class="placeholder-content">
-              <i class="ri-book-line"></i>
-            </div>
+            <img :src="resolveBookCover(book)" :alt="book.title" @error="(event) => coverFallback(event, book.title)" />
           </div>
         </div>
-        
-        <div class="series-info">
-          <h3 class="series-name">{{ series.name }}</h3>
-          <p class="series-author">by {{ series.author }}</p>
-          <div class="series-meta">
-            <span class="book-count">
-              <i class="ri-book-3-line"></i>
-              {{ series.books.length }} books
-            </span>
-          </div>
+        <div class="detail-copy">
+          <p class="detail-kicker">{{ kicker }}</p>
+          <h1>{{ title }}</h1>
+          <p>
+            {{ books.length }} {{ books.length === 1 ? 'Book' : 'Books' }}
+            <span v-if="description"> &bull; {{ description }}</span>
+          </p>
         </div>
       </div>
-    </div>
 
-    <!-- Empty State -->
-    <EmptyState
-      v-else
-      title="No series detected"
-      description="Books that share series metadata will automatically group here."
-      icon="ri-book-shelf-line"
-    >
-      <template #action>
-        <NuxtLink to="/books" class="add-btn">
-          <i class="ri-add-line"></i>
-          Explore Library
-        </NuxtLink>
-      </template>
-    </EmptyState>
+      <section class="detail-table" :aria-label="`${title} books`">
+        <div class="data-header">
+          <div class="col-book">Book</div>
+          <div class="col-status">Status</div>
+          <div class="col-progress">Progress</div>
+          <div class="col-personal">Personal Rating</div>
+          <div class="col-goodreads">Goodreads Rating</div>
+          <div class="col-actions"></div>
+        </div>
+
+        <div
+          v-for="book in books"
+          :key="book.id"
+          class="data-row"
+          tabindex="0"
+          @click="router.push(`/reader/${book.id}`)"
+          @keydown.enter="router.push(`/reader/${book.id}`)"
+        >
+          <div class="col-book book-cell">
+            <img :src="resolveBookCover(book)" :alt="book.title" class="cell-cover" @error="(event) => coverFallback(event, book.title)" />
+            <div class="cell-book-info">
+              <div class="cell-book-title-row">
+                <h2 class="cell-book-title" :title="book.title">{{ truncateWords(book.title, 9) }}</h2>
+                <span class="cell-format">{{ book.format ? book.format.toUpperCase() : 'BOOK' }}</span>
+              </div>
+              <p class="cell-book-author">
+                {{ book.author || 'Unknown author' }}<span v-if="book.publishYear"> &bull; {{ book.publishYear }}</span>
+              </p>
+              <div class="cell-book-tags">
+                <span class="cell-chip" :class="{ standalone: !book.series }">{{ book.series || 'Standalone' }}</span>
+                <span v-if="book.genre" class="cell-chip genre"><i class="ri-price-tag-3-line"></i>{{ book.genre }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-status">
+            <span class="status-pill" :class="statusBadgeClass(book.status)">{{ book.status || 'Unread' }}</span>
+          </div>
+
+          <div class="col-progress">
+            <div class="progress-wrap">
+              <template v-if="(book.progress || 0) >= 100">
+                <i class="ri-checkbox-circle-fill progress-complete-icon"></i>
+                <span class="progress-complete-text">100%</span>
+              </template>
+              <template v-else>
+                <div class="progress-bar">
+                  <div class="progress-fill" :style="{ width: `${book.progress || 0}%` }"></div>
+                </div>
+                <span class="progress-text">{{ book.progress || 0 }}%</span>
+              </template>
+            </div>
+          </div>
+
+          <div class="col-personal">
+            <div class="rating-wrap">
+              <i class="ri-star-fill list-star"></i>
+              <span>{{ formatPersonalRating(book.rating) }}</span>
+            </div>
+          </div>
+
+          <div class="col-goodreads">
+            <div class="goodreads-wrap" :data-tooltip="goodreadsTooltip(book) || null">
+              <GoodreadsRatingDisplay v-if="getGoodreadsRating(book)" :web-review="book.webReview" compact />
+              <span v-else class="rating-empty">--</span>
+            </div>
+          </div>
+
+          <div class="col-actions" @click.stop>
+            <button type="button" class="row-action-btn" :class="{ active: book.isFavourite }" title="Favourite" @click="toggleFavourite(book.id)">
+              <i :class="book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line'"></i>
+            </button>
+            <button type="button" class="row-action-btn muted" title="Add to playlist from Books page">
+              <i class="ri-play-list-2-line"></i>
+            </button>
+            <button type="button" class="row-action-btn" title="Edit" @click="router.push(`/edit/${book.id}`)">
+              <i class="ri-edit-line"></i>
+            </button>
+            <button type="button" class="row-action-btn delete" title="Delete" @click="handleDeleteBook(book)">
+              <i class="ri-delete-bin-line"></i>
+            </button>
+          </div>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { useRouter } from "vue-router";
-import { useBooks } from "~/composables/useBooks";
-import EmptyState from "./EmptyState.vue";
+import { computed } from 'vue';
+import EmptyState from './EmptyState.vue';
+import GoodreadsRatingDisplay from './GoodreadsRatingDisplay.vue';
+import { useBooks } from '~/composables/useBooks';
+import { getGoodreadsRating, parseGoodreadsReview } from '~/composables/useGoodreadsRating';
 
-const { seriesList } = useBooks();
+const props = defineProps({
+  backTo: {
+    type: String,
+    required: true,
+  },
+  books: {
+    type: Array,
+    default: () => [],
+  },
+  title: {
+    type: String,
+    required: true,
+  },
+  kicker: {
+    type: String,
+    required: true,
+  },
+  description: {
+    type: String,
+    default: '',
+  },
+  emptyTitle: {
+    type: String,
+    default: 'No books found',
+  },
+  emptyDescription: {
+    type: String,
+    default: 'Books will appear here when they are available.',
+  },
+  emptyIcon: {
+    type: String,
+    default: 'ri-book-open-line',
+  },
+});
+
 const router = useRouter();
+const { deleteBook, toggleFavourite } = useBooks();
 
-const seriesHref = (series) => `/serie/${series.id}`;
+const previewBooks = computed(() => props.books.slice(0, 3));
 
-const openSeries = (series) => {
-  router.push(seriesHref(series));
+const statusBadgeClass = (status) => {
+  if (status === 'Reading') return 'status-reading';
+  if (status === 'Read' || status === 'Completed') return 'status-read';
+  return 'status-unread';
+};
+
+const formatPersonalRating = (rating) => {
+  const score = Number(rating || 0);
+  return score > 0 ? `${score}/10` : '--/10';
+};
+
+const goodreadsTooltip = (book) => {
+  const info = parseGoodreadsReview(book.webReview);
+  const parts = [];
+  if (info.ratingsCount) parts.push(`${info.ratingsCount} ratings`);
+  if (info.reviewsCount) parts.push(`${info.reviewsCount} reviews`);
+  return parts.join(' / ');
+};
+
+const truncateWords = (text, maxWords = 9) => {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return String(text || '');
+  return `${words.slice(0, maxWords).join(' ')}...`;
+};
+
+const handleDeleteBook = async (book) => {
+  if (!import.meta.client) return;
+  const confirmed = window.confirm(`Delete "${book.title}" from your library?`);
+  if (confirmed) await deleteBook(book.id);
 };
 
 const generateCoverPlaceholder = (title) => {
@@ -81,13 +208,13 @@ const generateCoverPlaceholder = (title) => {
     { name: '--color-book-cover-placeholder-two', fallback: '#6A0DAD' },
     { name: '--color-book-cover-placeholder-three', fallback: '#2f7d62' },
     { name: '--color-book-cover-placeholder-four', fallback: '#b45309' },
-  ])
-  const safeTitle = String(title || 'Book')
-  const hash = [...safeTitle].reduce((acc, c) => acc + c.charCodeAt(0), 0)
-  const color = colors[hash % colors.length]
-  const initial = safeTitle.trim()[0]?.toUpperCase() || '?'
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="145" font-family="serif" font-size="96" fill="rgba(255,255,255,0.48)" text-anchor="middle" dominant-baseline="middle">${initial}</text></svg>`
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+  ]);
+  const safeTitle = String(title || 'Book');
+  const hash = [...safeTitle].reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const color = colors[hash % colors.length];
+  const initial = safeTitle.trim()[0]?.toUpperCase() || '?';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="145" font-family="serif" font-size="96" fill="rgba(255,255,255,0.48)" text-anchor="middle" dominant-baseline="middle">${initial}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 };
 
 const resolveBookCover = (book) => book.cover || generateCoverPlaceholder(book.title);
@@ -95,186 +222,66 @@ const coverFallback = (event, title) => {
   event.target.src = generateCoverPlaceholder(title);
 };
 
-const getStackStyle = (index) => {
+const getDetailStackStyle = (index, total = 3) => {
+  if (total === 1) {
+    return {
+      transform: 'translate(86px, 0) rotate(0deg)',
+      zIndex: 1,
+    };
+  }
+  if (total === 2) {
+    const pairOffsets = [
+      { x: 44, y: 12, rotate: -7, z: 1 },
+      { x: 132, y: 12, rotate: 7, z: 2 },
+    ];
+    const pairStyle = pairOffsets[index] || pairOffsets[0];
+    return {
+      transform: `translate(${pairStyle.x}px, ${pairStyle.y}px) rotate(${pairStyle.rotate}deg)`,
+      zIndex: pairStyle.z,
+    };
+  }
   const offsets = [
-    { x: 0, y: 0, rotate: 0, z: 3 },
-    { x: 12, y: -8, rotate: 4, z: 2 },
-    { x: 24, y: -16, rotate: 8, z: 1 }
+    { x: 0, y: 18, rotate: -10, z: 1 },
+    { x: 86, y: 0, rotate: 1, z: 3 },
+    { x: 170, y: 18, rotate: 10, z: 2 },
   ];
-  
   const style = offsets[index] || offsets[0];
-  
   return {
     transform: `translate(${style.x}px, ${style.y}px) rotate(${style.rotate}deg)`,
-    zIndex: style.z
+    zIndex: style.z,
   };
 };
-
 </script>
 
 <style scoped>
-.series-container {
-  padding: 0rem;
-  margin: 0 auto;
-}
-
-.series-header {
-  margin-bottom: 2.5rem;
-}
-
-.series-title {
-  font-size: 1.5rem;
-  font-weight: 400;
-  color: var(--color-brand-primary);
-  margin: 0;
-}
-
-.series-count {
-  color: var(--color-text-subtle);
-  font-weight: normal;
-  font-size: 1.25rem;
-}
-
-.series-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1.5rem;
-  justify-content: start;
-}
-
-.series-card {
-  display: flex;
-  flex-direction: column;
-  cursor: pointer;
-  text-decoration: none;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  text-align: left;
-  font: inherit;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.series-card:hover {
-  transform: translateY(-8px);
-}
-
-.stacked-covers {
-  position: relative;
-  width: 168px;
-  height: 240px;
-  margin-bottom: 1.5rem;
-  margin-left: 10px;
-}
-
-.cover-item {
-  position: absolute;
-  top: 0;
-  left: 0;
+.book-group-detail-page {
   width: 100%;
-  height: 100%;
-  border-radius: 0.75rem;
-  overflow: hidden;
-  box-shadow: var(--shadow-card-hover);
-  background: var(--color-surface-muted);
-  transition: all 0.4s ease;
-}
-
-.series-card:hover .cover-item:nth-child(2) {
-  transform: translate(25px, -15px) rotate(8deg) !important;
-}
-
-.series-card:hover .cover-item:nth-child(3) {
-  transform: translate(50px, -30px) rotate(16deg) !important;
-}
-
-.cover-item img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: all 0.3s ease;
-}
-
-.placeholder-cover {
-  background: var(--color-surface-secondary);
-  border: 2px dashed var(--color-border-strong);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: none;
-}
-
-.placeholder-content {
-  color: var(--color-text-subtle);
-  font-size: 2.5rem;
-  opacity: 0.5;
-}
-
-.series-info {
-  margin-top: 0.5rem;
-}
-
-.series-name {
-  font-size: 1.25rem;
-  font-weight: 400;
-  color: var(--color-text-secondary);
-  margin: 0 0 0.25rem 0;
-}
-
-.series-card:hover .series-name {
-  color: var(--color-brand-primary);
-}
-
-.series-author {
-  font-size: 0.875rem;
-  color: var(--color-text-muted);
-  margin: 0 0 1rem 0;
-}
-
-.series-meta {
-  display: flex;
-}
-
-.book-count {
-  font-size: 0.75rem;
-  font-weight: 400;
-  color: var(--color-brand-primary);
-  background: var(--color-surface-active);
-  padding: 0.25rem 0.75rem;
-  border-radius: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.add-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.875rem 1.5rem;
-  background: var(--gradient-brand-primary);
-  color: var(--color-text-on-brand);
-  border-radius: 0.5rem;
-  font-weight: 400;
-  text-decoration: none;
-  transition: all 0.2s;
-}
-
-.add-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px -1px var(--shadow-brand-glow);
-}
-
-.series-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 1.2rem;
+  min-width: 0;
 }
 
 .detail-back-row {
   display: flex;
   align-items: center;
   min-height: 38px;
+  margin-bottom: 1.2rem;
+}
+
+.back-btn {
+  min-height: 38px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  background: var(--color-surface-card);
+  color: var(--color-text-secondary);
+  padding: 0 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+}
+
+.back-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-brand-primary-hover);
 }
 
 .detail-hero {
@@ -322,7 +329,7 @@ const getStackStyle = (index) => {
   font-size: 0.82rem;
 }
 
-.detail-copy h2 {
+.detail-copy h1 {
   margin: 0;
   color: var(--color-text-primary);
   font-size: clamp(2rem, 4vw, 3.1rem);
@@ -334,19 +341,6 @@ const getStackStyle = (index) => {
   margin: 0.35rem 0 0;
   color: var(--color-text-muted);
   font-size: 0.95rem;
-}
-
-.back-btn {
-  min-height: 38px;
-  border: 1px solid var(--color-border-card);
-  border-radius: 8px;
-  background: var(--color-surface-card);
-  color: var(--color-text-secondary);
-  padding: 0 0.85rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  cursor: pointer;
 }
 
 .detail-table {
@@ -703,7 +697,7 @@ const getStackStyle = (index) => {
     text-align: center;
   }
 
-  .detail-copy h2 {
+  .detail-copy h1 {
     font-size: 2rem;
   }
 

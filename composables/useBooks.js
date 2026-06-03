@@ -122,7 +122,7 @@ export const useBooks = () => {
     books.value.forEach(book => {
       if (book.series) {
         if (!grouped[book.series]) {
-          grouped[book.series] = { name: book.series, author: book.author, books: [] };
+          grouped[book.series] = { id: encodeURIComponent(book.series), name: book.series, author: book.author, books: [] };
         }
         grouped[book.series].books.push(book);
       }

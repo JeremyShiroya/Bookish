@@ -600,16 +600,15 @@ export const useTTS = () => {
 
     const sentenceChunks = splitToChunks(text)
     const contentStart = findContentStart(sentenceChunks)
-    const savedSession = readStoredTtsSession()
+    const hasRequestedChunkIdx = Number.isFinite(Number(options.startChunkIdx))
+    const savedSession = options.ignoreSavedSession ? null : readStoredTtsSession()
     const savedChunkIdx = savedSession?.bookId === book?.id ? savedSession.chunkIdx : null
-    const requestedChunkIdx = Number.isFinite(Number(options.startChunkIdx))
+    const requestedChunkIdx = hasRequestedChunkIdx
       ? Number(options.startChunkIdx)
       : savedChunkIdx
     _chunks = sentenceChunks
-    _chunkIdx = Math.max(
-      contentStart,
-      Math.min(_chunks.length - 1, requestedChunkIdx ?? contentStart)
-    )
+    const startChunkIdx = Math.max(0, Math.min(_chunks.length - 1, requestedChunkIdx ?? contentStart))
+    _chunkIdx = hasRequestedChunkIdx ? startChunkIdx : Math.max(contentStart, startChunkIdx)
     ttsTotalChunks.value = _chunks.length
     _updateProgress()
 

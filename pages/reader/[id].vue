@@ -37,7 +37,7 @@
         <button
           class="tb-btn"
           :disabled="!book || !allReadableChunks.length"
-          @click="readCurrentPosition"
+          @click="requestReadCurrentPosition"
           title="Read from here"
         >
           <i class="ri-speak-line"></i>
@@ -156,6 +156,31 @@
         </div>
       </template>
     </main>
+
+    <div
+      v-if="confirmReadFromHereOpen"
+      class="read-confirm-backdrop"
+      @click="cancelReadFromHere"
+    >
+      <section
+        class="read-confirm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="read-confirm-title"
+        @click.stop
+      >
+        <h2 id="read-confirm-title">Read from here?</h2>
+        <p>This will stop the current narration and start from the position currently on screen.</p>
+        <div class="read-confirm-actions">
+          <button type="button" class="read-confirm-btn secondary" @click="cancelReadFromHere">
+            Cancel
+          </button>
+          <button type="button" class="read-confirm-btn primary" @click="confirmReadFromHere">
+            Read from here
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -201,6 +226,8 @@ const currentPdfPage = ref(1)
 const totalPages = ref(0)
 const restoredInitialPdfScroll = ref(false)
 const readerReady = ref(false)
+const confirmReadFromHereOpen = ref(false)
+const pendingReadFromHereChunk = ref(0)
 
 const bookFormat = computed(() => (book.value?.format || '').toLowerCase())
 const isPdfBook = computed(() => bookFormat.value === 'pdf')
@@ -358,12 +385,39 @@ function chunkIndexForCurrentPosition() {
     chunkIndex += splitToChunks(stripHtml(chapterList.value[i]?.html || '')).length
   }
 
-  return Math.max(0, Math.min(chunks.length - 1, chunkIndex))
+  const chapterChunks = splitToChunks(stripHtml(chapterList.value[chapterIndex]?.html || ''))
+  const chapterEl = import.meta.client ? document.getElementById(`ch-${chapterIndex}`) : null
+  let intraChapterIndex = 0
+
+  if (chapterEl && chapterChunks.length > 1) {
+    const anchorY = 72
+    const rect = chapterEl.getBoundingClientRect()
+    const visibleOffset = Math.max(0, anchorY - rect.top)
+    const readableHeight = Math.max(1, rect.height - window.innerHeight * 0.2)
+    const chapterProgress = Math.max(0, Math.min(1, visibleOffset / readableHeight))
+    intraChapterIndex = Math.floor(chapterProgress * chapterChunks.length)
+  }
+
+  return Math.max(0, Math.min(chunks.length - 1, chunkIndex + intraChapterIndex))
 }
 
-function readCurrentPosition() {
+function requestReadCurrentPosition() {
   if (!book.value || !allReadableChunks.value.length) return
-  playTTS(book.value, { startChunkIdx: chunkIndexForCurrentPosition() })
+  pendingReadFromHereChunk.value = chunkIndexForCurrentPosition()
+  confirmReadFromHereOpen.value = true
+}
+
+function cancelReadFromHere() {
+  confirmReadFromHereOpen.value = false
+}
+
+function confirmReadFromHere() {
+  if (!book.value || !allReadableChunks.value.length) return
+  confirmReadFromHereOpen.value = false
+  playTTS(book.value, {
+    startChunkIdx: pendingReadFromHereChunk.value,
+    ignoreSavedSession: true,
+  })
   queueProgressSave()
 }
 
@@ -425,7 +479,13 @@ const toggleTheme = () => {
 
 function onKeydown(event) {
   if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return
-  if (event.key === 'Escape') tocOpen.value = false
+  if (event.key === 'Escape') {
+    if (confirmReadFromHereOpen.value) {
+      cancelReadFromHere()
+      return
+    }
+    tocOpen.value = false
+  }
 }
 
 function sanitizeHtml(html) {
@@ -1209,6 +1269,81 @@ onUnmounted(async () => {
 .chapter-content :deep(pre code) { background: none; padding: 0; }
 .chapter-content :deep(svg) { max-width: 100%; height: auto; display: block; margin: 1.5rem auto; }
 .chapter-content :deep(.epub-content) { margin: 0; padding: 0; }
+
+.read-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: var(--color-background-overlay-faint);
+  backdrop-filter: blur(6px);
+}
+
+.read-confirm-modal {
+  width: min(420px, 100%);
+  background: var(--page-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-modal);
+  padding: 1.25rem;
+}
+
+.read-confirm-modal h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.read-confirm-modal p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.read-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+
+.read-confirm-btn {
+  min-height: 36px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  padding: 0 0.95rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.read-confirm-btn.secondary {
+  background: transparent;
+  color: var(--muted);
+}
+
+.read-confirm-btn.secondary:hover {
+  background: var(--btn-hover);
+  color: var(--text);
+}
+
+.read-confirm-btn.primary {
+  background: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+}
+
+.read-confirm-btn.primary:hover {
+  background: var(--color-brand-primary-hover);
+  border-color: var(--color-brand-primary-hover);
+}
 
 .pdf-unavailable-card {
   width: min(100%, 760px);
