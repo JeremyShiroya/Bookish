@@ -1,49 +1,56 @@
 <template>
   <div class="authors-container">
+
     <div class="authors-header">
-      <h1 class="authors-title">
-        Authors <span class="authors-count">({{ allAuthors.length }})</span>
-      </h1>
+      <h1 class="authors-title">Authors</h1>
     </div>
 
     <div v-if="loading && !initialized" class="authors-loading">
-        <SkeletonLoader variant="authors-grid" :count="8" />
+      <SkeletonLoader variant="authors-grid" :count="8" />
     </div>
 
     <template v-else-if="initialized">
-        <div v-if="allAuthors.length > 0" class="authors-grid">
-          <div 
-            v-for="author in allAuthors" 
-            :key="author.id" 
-            class="author-card"
-            @click="router.push(`/author/${author.id}`)"
-          >
-            <div class="author-avatar">
-              <img v-if="author.image" :src="author.image" :alt="author.name" />
-              <div v-else class="initial-avatar">{{ author.name.charAt(0) }}</div>
-            </div>
-            <div class="author-info">
-              <h3 class="author-name">{{ author.name }}</h3>
-              <p class="book-count">{{ author.bookCount }} {{ author.bookCount === 1 ? 'book' : 'books' }}</p>
+      <div v-if="allAuthors.length > 0" class="authors-grid">
+        <div
+          v-for="author in allAuthors"
+          :key="author.id"
+          class="author-card"
+          @click="router.push(`/author/${author.id}`)"
+        >
+          <div class="author-avatar">
+            <img
+              v-if="author.image"
+              :src="author.image"
+              :alt="author.name"
+            />
+            <div v-else class="initial-avatar">
+              {{ author.name.charAt(0).toUpperCase() }}
             </div>
           </div>
-        </div>
 
-        <!-- Empty State -->
-        <EmptyState
-          v-else
-          title="No authors found"
-          description="Start adding books and their authors will appear here automatically."
-          icon="ri-team-line"
-        >
-          <template #action>
-            <NuxtLink to="/books" class="add-btn">
-              <i class="ri-add-line"></i>
-              Explore Library
-            </NuxtLink>
-          </template>
-        </EmptyState>
+          <div class="author-info">
+            <h3 class="author-name">{{ author.name }}</h3>
+            <p class="book-count">{{ author.bookCount }} {{ author.bookCount === 1 ? 'book' : 'books' }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <EmptyState
+        v-else
+        title="No authors found"
+        description="Start adding books and their authors will appear here automatically."
+        icon="ri-team-line"
+      >
+        <template #action>
+          <NuxtLink to="/books" class="add-btn">
+            <i class="ri-add-line"></i>
+            Explore Library
+          </NuxtLink>
+        </template>
+      </EmptyState>
     </template>
+
   </div>
 </template>
 
@@ -58,12 +65,13 @@ const router = useRouter();
 
 <style scoped>
 .authors-container {
-  padding: 0rem;
   margin: 0 auto;
 }
 
+/* ── Header ──────────────────────────────────────────────────── */
+
 .authors-header {
-  margin-bottom: 2.5rem;
+  margin-bottom: 2rem;
 }
 
 .authors-title {
@@ -73,16 +81,15 @@ const router = useRouter();
   margin: 0;
 }
 
-.authors-count {
-  color: var(--color-text-subtle);
-  font-weight: normal;
-}
+/* ── Grid ────────────────────────────────────────────────────── */
 
 .authors-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.5rem;
 }
+
+/* ── Card ────────────────────────────────────────────────────── */
 
 .author-card {
   display: flex;
@@ -90,49 +97,73 @@ const router = useRouter();
   align-items: center;
   text-align: center;
   cursor: pointer;
-  transition: background-color 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
-  padding: 1.5rem;
-  background: var(--color-surface-card);
-  border-radius: 1rem;
-  border: 1px solid var(--color-border-card);
+  padding: 0.85rem 0.75rem;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  transition: background 0.18s ease;
 }
 
 .author-card:hover {
-  transform: translateY(-3px);
   background: var(--color-surface-hover);
-  border-color: var(--color-brand-primary);
 }
 
+/* ── Avatar circle ───────────────────────────────────────────── */
+
 .author-avatar {
-  width: 120px;
-  height: 120px;
+  width: 100%;
+  aspect-ratio: 1;
   border-radius: 50%;
   overflow: hidden;
-  margin-bottom: 1rem;
-  box-shadow: var(--shadow-control-subtle);
+  margin-bottom: 0.9rem;
   background: var(--color-surface-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-shrink: 0;
+  transition:
+    transform 0.25s cubic-bezier(0.34, 1.46, 0.64, 1),
+    box-shadow 0.25s ease;
+}
+
+.author-card:hover .author-avatar {
+  transform: scale(1.06);
+  box-shadow: 0 8px 28px rgba(138, 43, 226, 0.25);
 }
 
 .author-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .initial-avatar {
-  font-size: 3rem;
-  font-weight: 400;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-brand-primary-soft);
   color: var(--color-brand-primary);
+  font-size: 2.2rem;
+  font-weight: 600 !important;
+  line-height: 1;
+}
+
+/* ── Info ────────────────────────────────────────────────────── */
+
+.author-info {
+  width: 100%;
+  min-width: 0;
 }
 
 .author-name {
-  font-size: 1.125rem;
+  font-size: 0.9rem;
   font-weight: 400;
   color: var(--color-text-primary);
-  margin: 0 0 0.25rem 0;
+  margin: 0 0 0.18rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.18s;
 }
 
 .author-card:hover .author-name {
@@ -140,26 +171,30 @@ const router = useRouter();
 }
 
 .book-count {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   color: var(--color-text-muted);
   margin: 0;
+  white-space: nowrap;
 }
 
+/* ── Empty state ─────────────────────────────────────────────── */
+
 .add-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.875rem 1.5rem;
+  padding: 0.75rem 1.5rem;
   background: var(--gradient-brand-primary);
   color: var(--color-text-on-brand);
-  border-radius: 0.5rem;
-  font-weight: 400;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
   text-decoration: none;
-  transition: all 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .add-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px -1px var(--shadow-brand-glow);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-brand-button-hover);
 }
 </style>

@@ -42,7 +42,7 @@
 
         <!-- Book count badge — expands on hover -->
         <div class="card-badge">
-          <i class="ri-book-open-line"></i>
+          <i class="ri-book-shelf-line"></i>
           <span>{{ playlist.bookCount }} {{ playlist.bookCount === 1 ? 'book' : 'books' }}</span>
           <span class="badge-details">
             <span class="badge-sep">·</span>

@@ -43,7 +43,7 @@
 
         <!-- Book count badge — expands on hover -->
         <div class="card-badge">
-          <i class="ri-book-3-line"></i>
+          <i class="ri-book-shelf-line"></i>
           <span>{{ series.books.length }} {{ series.books.length === 1 ? 'book' : 'books' }}</span>
           <span class="badge-details">
             <span class="badge-sep">·</span>
