@@ -114,7 +114,6 @@
                   :class="{ open: activeDropdown === 'sort-filter' }"
                   @click="toggleDropdown('sort-filter')"
                 >
-                  <i class="ri-sliders-3-line"></i>
                   <i class="ri-filter-3-line"></i>
                   <span class="sort-filter-label-text">Filter</span>
                   <span v-if="sortBy !== 'name' || sortDirection !== 'asc'" class="sort-active-dot"></span>
