@@ -40,10 +40,18 @@
           />
         </div>
 
-        <!-- Book count badge -->
+        <!-- Book count badge — expands on hover -->
         <div class="card-badge">
           <i class="ri-book-open-line"></i>
-          {{ playlist.bookCount }} {{ playlist.bookCount === 1 ? 'book' : 'books' }}
+          <span>{{ playlist.bookCount }} {{ playlist.bookCount === 1 ? 'book' : 'books' }}</span>
+          <span class="badge-details">
+            <span class="badge-sep">·</span>
+            <span>{{ playlist.unreadCount }} unread</span>
+            <span class="badge-sep">·</span>
+            <span>{{ playlist.readingCount }} reading</span>
+            <span class="badge-sep">·</span>
+            <span>{{ playlist.readCount }} read</span>
+          </span>
         </div>
       </div>
     </div>
@@ -82,13 +90,17 @@ const openPlaylist = (playlist) => {
 const playlistsWithBooks = computed(() => {
   return collections.value.map((playlist) => {
     const bookIds = playlist.bookIds || [];
-    const previewBooks = books.value
+    const allBooks = books.value.filter((b) => bookIds.includes(b.id));
+    const previewBooks = allBooks
       .filter((b) => bookIds.slice(0, 3).includes(b.id))
       .sort((a, b) => bookIds.indexOf(a.id) - bookIds.indexOf(b.id));
     return {
       ...playlist,
       bookCount: bookIds.length,
       previewBooks,
+      unreadCount:  allBooks.filter(b => !b.status || b.status === 'Unread').length,
+      readingCount: allBooks.filter(b => b.status === 'Reading').length,
+      readCount:    allBooks.filter(b => b.status === 'Read').length,
     };
   });
 });
@@ -150,15 +162,26 @@ const coverFallback = (event, title) => {
   overflow: hidden;
   cursor: pointer;
   background: #0f0a1a;
-  transition:
-    transform 0.2s ease,
-    filter 0.2s ease;
+  transition: transform 0.2s ease;
   user-select: none;
+}
+
+.playlist-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: transparent;
+  transition: background 0.2s ease;
+  pointer-events: none;
+}
+
+.playlist-card:hover::after {
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .playlist-card:hover {
   transform: scale(1.03);
-  filter: brightness(1.08);
 }
 
 /* ── Blurred background ──────────────────────────────────────── */
@@ -233,13 +256,13 @@ const coverFallback = (event, title) => {
   opacity: 0.85;
 }
 
-/* ── Book count badge ────────────────────────────────────────── */
+/* ── Badge ───────────────────────────────────────────────────── */
 
 .card-badge {
   position: absolute;
   bottom: 10px;
   left: 12px;
-  z-index: 3;
+  z-index: 4;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -252,10 +275,40 @@ const coverFallback = (event, title) => {
   color: rgba(255, 255, 255, 0.88);
   font-size: 0.7rem;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background 0.25s ease, border-color 0.25s ease;
 }
 
 .card-badge i {
   font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.badge-details {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition:
+    max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.25s ease;
+}
+
+.badge-sep {
+  opacity: 0.45;
+}
+
+.playlist-card:hover .card-badge {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.playlist-card:hover .badge-details {
+  max-width: 220px;
+  opacity: 1;
 }
 
 /* ── Empty state ─────────────────────────────────────────────── */

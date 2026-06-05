@@ -40,6 +40,20 @@
             @error="(e) => coverFallback(e, series.books[0].title)"
           />
         </div>
+
+        <!-- Book count badge — expands on hover -->
+        <div class="card-badge">
+          <i class="ri-book-3-line"></i>
+          <span>{{ series.books.length }} {{ series.books.length === 1 ? 'book' : 'books' }}</span>
+          <span class="badge-details">
+            <span class="badge-sep">·</span>
+            <span>{{ bookStats(series.books).unread }} unread</span>
+            <span class="badge-sep">·</span>
+            <span>{{ bookStats(series.books).reading }} reading</span>
+            <span class="badge-sep">·</span>
+            <span>{{ bookStats(series.books).read }} read</span>
+          </span>
+        </div>
       </div>
     </div>
 
@@ -93,6 +107,12 @@ const resolveBookCover = (book) =>
 const coverFallback = (event, title) => {
   event.target.src = generateCoverPlaceholder(title);
 };
+
+const bookStats = (books) => ({
+  unread:  books.filter(b => !b.status || b.status === 'Unread').length,
+  reading: books.filter(b => b.status === 'Reading').length,
+  read:    books.filter(b => b.status === 'Read').length,
+});
 </script>
 
 <style scoped>
@@ -130,10 +150,22 @@ const coverFallback = (event, title) => {
   overflow: hidden;
   cursor: pointer;
   background: #0f0a1a;
-  transition:
-    transform 0.2s ease,
-    filter 0.2s ease;
+  transition: transform 0.2s ease;
   user-select: none;
+}
+
+.series-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: transparent;
+  transition: background 0.2s ease;
+  pointer-events: none;
+}
+
+.series-card:hover::after {
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .card-bg {
@@ -155,7 +187,6 @@ const coverFallback = (event, title) => {
 
 .series-card:hover {
   transform: scale(1.03);
-  filter: brightness(1.08);
 }
 
 /* ── Name ────────────────────────────────────────────────────── */
@@ -209,6 +240,61 @@ const coverFallback = (event, title) => {
   transform: rotate(28deg);
   z-index: 1;
   opacity: 0.85;
+}
+
+/* ── Badge ───────────────────────────────────────────────────── */
+
+.card-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.22rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.7rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+
+.card-badge i {
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.badge-details {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition:
+    max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.25s ease;
+}
+
+.badge-sep {
+  opacity: 0.45;
+}
+
+.series-card:hover .card-badge {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.series-card:hover .badge-details {
+  max-width: 220px;
+  opacity: 1;
 }
 
 /* ── Empty state ─────────────────────────────────────────────── */
