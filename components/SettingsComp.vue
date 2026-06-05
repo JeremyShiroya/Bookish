@@ -166,17 +166,29 @@
           </div>
         </div>
 
-        <div class="setting-row">
+        <div class="setting-row setting-row--sort">
           <div class="setting-copy">
             <h3>Default sort</h3>
-            <p>{{ settings.librarySort === 'name' ? 'Alphabetical by title' : 'Highest rating first' }}</p>
+            <p>{{ defaultSortDescription }}</p>
           </div>
-          <div class="chip-group" aria-label="Library sort">
-            <button :class="{ active: settings.librarySort === 'name' }" @click="setLibrarySort('name')">
-              Name
+          <div class="chip-group chip-group--wrap" aria-label="Library sort">
+            <button :class="{ active: settings.librarySort === 'name' && settings.librarySortDirection === 'asc' }" @click="setLibrarySort('name', 'asc')">
+              A to Z
             </button>
-            <button :class="{ active: settings.librarySort === 'rating' }" @click="setLibrarySort('rating')">
-              Rating
+            <button :class="{ active: settings.librarySort === 'name' && settings.librarySortDirection === 'desc' }" @click="setLibrarySort('name', 'desc')">
+              Z to A
+            </button>
+            <button :class="{ active: settings.librarySort === 'rating' && settings.librarySortDirection === 'desc' }" @click="setLibrarySort('rating', 'desc')">
+              Rating ↓
+            </button>
+            <button :class="{ active: settings.librarySort === 'rating' && settings.librarySortDirection === 'asc' }" @click="setLibrarySort('rating', 'asc')">
+              Rating ↑
+            </button>
+            <button :class="{ active: settings.librarySort === 'year' && settings.librarySortDirection === 'desc' }" @click="setLibrarySort('year', 'desc')">
+              Year ↓
+            </button>
+            <button :class="{ active: settings.librarySort === 'year' && settings.librarySortDirection === 'asc' }" @click="setLibrarySort('year', 'asc')">
+              Year ↑
             </button>
           </div>
         </div>
@@ -507,11 +519,18 @@ const setAudioVolume = (value) => {
 }
 
 const setLibraryView = (libraryView) => updateSettings({ libraryView })
-const setLibrarySort = (librarySort) => updateSettings({ librarySort })
+const setLibrarySort = (librarySort, librarySortDirection) => updateSettings({ librarySort, librarySortDirection })
 const setLibraryItemsPerPage = (libraryItemsPerPage) => updateSettings({ libraryItemsPerPage })
 const setMetadataAutoFill = (metadataAutoFill) => updateSettings({ metadataAutoFill })
 
 const itemsPerPageOptions = LIBRARY_ITEMS_PER_PAGE_OPTIONS
+
+const defaultSortDescription = computed(() => {
+  const { librarySort, librarySortDirection } = settings.value
+  if (librarySort === 'name') return librarySortDirection === 'asc' ? 'Title A to Z' : 'Title Z to A'
+  if (librarySort === 'rating') return librarySortDirection === 'desc' ? 'Highest rated first' : 'Lowest rated first'
+  return librarySortDirection === 'desc' ? 'Newest releases first' : 'Oldest releases first'
+})
 
 const formatBytes = (bytes) => {
   if (!bytes) return '0 B'

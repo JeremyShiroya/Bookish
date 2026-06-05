@@ -107,110 +107,96 @@
             </div>
             
             <div class="controls-right">
-              <!-- Combined Filters Dropdown -->
-              <div class="filter-dropdown filters-merged" ref="filtersDropdown">
-                <button class="filter-button" @click="toggleDropdown('filters')">
+              <!-- Unified Sort & Filter Panel -->
+              <div class="filter-dropdown" ref="sortFilterRef">
+                <button
+                  class="filter-button sort-filter-btn"
+                  :class="{ open: activeDropdown === 'sort-filter' }"
+                  @click="toggleDropdown('sort-filter')"
+                >
+                  <i class="ri-sliders-3-line"></i>
                   <i class="ri-filter-3-line"></i>
-                  Filters
-                  <span v-if="activeFilterCount > 0" class="filter-count">{{ activeFilterCount }}</span>
-                  <i class="ri-arrow-down-s-line"></i>
+                  <span class="sort-filter-label-text">Filter</span>
+                  <span v-if="sortBy !== 'name' || sortDirection !== 'asc'" class="sort-active-dot"></span>
+                  <i class="ri-arrow-down-s-line dropdown-arrow" :class="{ rotated: activeDropdown === 'sort-filter' }"></i>
                 </button>
-                <div class="dropdown-menu filters-menu" v-show="activeDropdown === 'filters'">
-                  <div class="dropdown-section">
-                    <h4>Sort by</h4>
-                    <div
-                      class="dropdown-option"
-                      :class="{ active: sortBy === 'name' }"
-                      @click="setSortBy('name')"
-                    >
-                      <i class="ri-check-line" v-if="sortBy === 'name'"></i>
-                      Name
+
+                <div class="dropdown-menu sort-filter-panel" v-show="activeDropdown === 'sort-filter'">
+
+                  <!-- Title section -->
+                  <div class="sfp-section">
+                    <div class="sfp-section-header">
+                      <i class="ri-text-snippet"></i>
+                      Title
                     </div>
-                    <div
-                      class="dropdown-option"
-                      :class="{ active: sortBy === 'rating' }"
-                      @click="setSortBy('rating')"
-                    >
-                      <i class="ri-check-line" v-if="sortBy === 'rating'"></i>
+                    <div class="sfp-pills">
+                      <button
+                        class="sfp-pill"
+                        :class="{ active: sortBy === 'name' && sortDirection === 'asc' }"
+                        @click="setSort('name', 'asc')"
+                      >A to Z</button>
+                      <button
+                        class="sfp-pill"
+                        :class="{ active: sortBy === 'name' && sortDirection === 'desc' }"
+                        @click="setSort('name', 'desc')"
+                      >Z to A</button>
+                    </div>
+                  </div>
+
+                  <div class="sfp-divider"></div>
+
+                  <!-- Rating section -->
+                  <div class="sfp-section">
+                    <div class="sfp-section-header">
+                      <i class="ri-star-line"></i>
                       Rating
                     </div>
-                  </div>
-                  <div class="dropdown-divider"></div>
-                  <div class="dropdown-section">
-                    <h4>Sort direction</h4>
-                    <template v-if="sortBy === 'name'">
-                      <div
-                        class="dropdown-option"
-                        :class="{ active: sortDirection === 'asc' }"
-                        @click="setSortDirection('asc')"
-                      >
-                        <i class="ri-check-line" v-if="sortDirection === 'asc'"></i>
-                        A to Z
-                      </div>
-                      <div
-                        class="dropdown-option"
-                        :class="{ active: sortDirection === 'desc' }"
-                        @click="setSortDirection('desc')"
-                      >
-                        <i class="ri-check-line" v-if="sortDirection === 'desc'"></i>
-                        Z to A
-                      </div>
-                    </template>
-                    <template v-else-if="sortBy === 'rating'">
-                      <div
-                        class="dropdown-option"
-                        :class="{ active: sortDirection === 'desc' }"
-                        @click="setSortDirection('desc')"
-                      >
-                        <i class="ri-check-line" v-if="sortDirection === 'desc'"></i>
-                        Good - Bad
-                      </div>
-                      <div
-                        class="dropdown-option"
-                        :class="{ active: sortDirection === 'asc' }"
-                        @click="setSortDirection('asc')"
-                      >
-                        <i class="ri-check-line" v-if="sortDirection === 'asc'"></i>
-                        Bad - Good
-                      </div>
-                    </template>
-                  </div>
-                  <div class="dropdown-divider"></div>
-                  <div class="dropdown-section">
-                    <h4>Rating</h4>
-                    <div
-                      class="dropdown-option"
-                      :class="{ active: selectedRating === 'all' }"
-                      @click="setRating('all')"
-                    >
-                      <i class="ri-check-line" v-if="selectedRating === 'all'"></i>
-                      All Ratings
-                    </div>
-                    <div
-                      class="dropdown-option"
-                      :class="{ active: selectedRating === 'good' }"
-                      @click="setRating('good')"
-                    >
-                      <i class="ri-check-line" v-if="selectedRating === 'good'"></i>
-                      Good (6-10)
-                    </div>
-                    <div
-                      class="dropdown-option"
-                      :class="{ active: selectedRating === 'mid' }"
-                      @click="setRating('mid')"
-                    >
-                      <i class="ri-check-line" v-if="selectedRating === 'mid'"></i>
-                      Mid (5)
-                    </div>
-                    <div
-                      class="dropdown-option"
-                      :class="{ active: selectedRating === 'bad' }"
-                      @click="setRating('bad')"
-                    >
-                      <i class="ri-check-line" v-if="selectedRating === 'bad'"></i>
-                      Bad (1-4)
+                    <div class="sfp-pills">
+                      <button
+                        class="sfp-pill"
+                        :class="{ active: sortBy !== 'rating' }"
+                        @click="sortBy === 'rating' && setSort('name', 'asc')"
+                      >All</button>
+                      <button
+                        class="sfp-pill"
+                        :class="{ active: sortBy === 'rating' && sortDirection === 'desc' }"
+                        @click="setSort('rating', 'desc')"
+                      >High to Low</button>
+                      <button
+                        class="sfp-pill"
+                        :class="{ active: sortBy === 'rating' && sortDirection === 'asc' }"
+                        @click="setSort('rating', 'asc')"
+                      >Low to High</button>
                     </div>
                   </div>
+
+                  <div class="sfp-divider"></div>
+
+                  <!-- Year section -->
+                  <div class="sfp-section">
+                    <div class="sfp-section-header">
+                      <i class="ri-calendar-line"></i>
+                      Year
+                    </div>
+                    <div class="sfp-pills">
+                      <button
+                        class="sfp-pill"
+                        :class="{ active: sortBy !== 'year' }"
+                        @click="sortBy === 'year' && setSort('name', 'asc')"
+                      >All</button>
+                      <button
+                        class="sfp-pill"
+                        :class="{ active: sortBy === 'year' && sortDirection === 'desc' }"
+                        @click="setSort('year', 'desc')"
+                      >Newest</button>
+                      <button
+                        class="sfp-pill"
+                        :class="{ active: sortBy === 'year' && sortDirection === 'asc' }"
+                        @click="setSort('year', 'asc')"
+                      >Oldest</button>
+                    </div>
+                  </div>
+
                 </div>
               </div>
 
@@ -572,9 +558,8 @@ const readingStatuses = ["Unread", "Reading", "Read"];
 
 // Filter states
 const sortBy = ref(settings.value.librarySort);
-const sortDirection = ref(settings.value.librarySort === "rating" ? "desc" : "asc");
+const sortDirection = ref(settings.value.librarySortDirection);
 const selectedStatus = ref("all");
-const selectedRating = ref("all");
 const viewMode = ref(settings.value.libraryView);
 
 // Dropdown states
@@ -601,18 +586,6 @@ const filteredBooks = computed(() => {
     filtered = filtered.filter((book) => book.status === selectedStatus.value);
   }
 
-  // Filter by rating
-  if (selectedRating.value !== "all") {
-    filtered = filtered.filter((book) => {
-      if (selectedRating.value === "good")
-        return book.rating >= 6 && book.rating <= 10;
-      if (selectedRating.value === "mid") return book.rating === 5;
-      if (selectedRating.value === "bad")
-        return book.rating >= 1 && book.rating <= 4;
-      return true;
-    });
-  }
-
   // Sort books
   filtered.sort((a, b) => {
     let comparison = 0;
@@ -620,6 +593,8 @@ const filteredBooks = computed(() => {
       comparison = a.title.localeCompare(b.title);
     } else if (sortBy.value === "rating") {
       comparison = getGoodreadsRating(a) - getGoodreadsRating(b);
+    } else if (sortBy.value === "year") {
+      comparison = (a.publishYear || 0) - (b.publishYear || 0);
     }
     return sortDirection.value === "asc" ? comparison : -comparison;
   });
@@ -721,8 +696,11 @@ const updateViewHighlight = async () => {
 
 watch([activeViewIndex, viewHoverIndex], updateViewHighlight);
 
-// Active filter count for the merged Filters dropdown badge
-const activeFilterCount = computed(() => (selectedRating.value !== 'all' ? 1 : 0));
+const sortSummaryLabel = computed(() => {
+  if (sortBy.value === 'name') return sortDirection.value === 'asc' ? 'A → Z' : 'Z → A'
+  if (sortBy.value === 'rating') return sortDirection.value === 'desc' ? 'Rating ↓' : 'Rating ↑'
+  return sortDirection.value === 'desc' ? 'Newest' : 'Oldest'
+});
 
 const currentPage = ref(1);
 const itemsPerPage = computed(() => Number(settings.value.libraryItemsPerPage) || 20);
@@ -743,7 +721,7 @@ const visiblePageNumbers = computed(() => {
   return [1, '...', current - 1, current, current + 1, '...', total];
 });
 
-watch([selectedStatus, selectedRating, sortBy, sortDirection, viewMode, itemsPerPage], () => {
+watch([selectedStatus, sortBy, sortDirection, viewMode, itemsPerPage], () => {
   currentPage.value = 1;
 });
 
@@ -794,18 +772,10 @@ const toggleActionsMenu = (bookId) => {
   activeActionsMenu.value = activeActionsMenu.value === bookId ? null : bookId;
 };
 
-const setSortBy = (value) => {
-  sortBy.value = value;
-  updateSettings({ librarySort: value });
-  // When switching to rating sort, default to Good - Bad (desc)
-  if (value === "rating" && sortDirection.value === "asc") {
-    sortDirection.value = "desc";
-  }
-  activeDropdown.value = null;
-};
-
-const setSortDirection = (value) => {
-  sortDirection.value = value;
+const setSort = (field, direction) => {
+  sortBy.value = field;
+  sortDirection.value = direction;
+  updateSettings({ librarySort: field, librarySortDirection: direction });
   activeDropdown.value = null;
 };
 
@@ -814,10 +784,6 @@ const setStatus = (value) => {
   activeDropdown.value = null;
 };
 
-const setRating = (value) => {
-  selectedRating.value = value;
-  activeDropdown.value = null;
-};
 
 const setViewMode = (mode) => {
   viewMode.value = mode;
@@ -1014,29 +980,49 @@ onUnmounted(() => {
   color: var(--color-text-primary);
 }
 
-.filters-merged .filter-button i:first-child {
+.filter-button.open {
+  border-color: var(--color-brand-primary);
+  color: var(--color-text-primary);
+  background: var(--color-brand-primary-faint);
+}
+
+.filter-button i:first-child {
   font-size: 1rem;
   color: var(--color-text-secondary);
 }
 
-.filter-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: var(--color-brand-primary);
-  color: var(--color-text-on-brand);
-  font-size: 0.7rem;
-  font-weight: 500;
-  line-height: 1;
+.filter-button.open i:first-child {
+  color: var(--color-brand-primary);
 }
 
-.filters-menu {
-  min-width: 240px;
+.sort-filter-btn {
+  gap: 0.45rem;
 }
+
+.sort-filter-label-text {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.sort-active-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-brand-primary);
+  flex-shrink: 0;
+}
+
+.dropdown-arrow {
+  font-size: 1rem;
+  transition: transform 0.2s ease;
+  color: var(--color-text-muted);
+}
+
+.dropdown-arrow.rotated {
+  transform: rotate(180deg);
+}
+
 
 .add-book-btn {
   display: flex;
@@ -1066,7 +1052,7 @@ onUnmounted(() => {
   position: absolute;
   top: 100%;
   left: 0;
-  background: var(--color-surface-modal);
+  background: var(--color-background-app);
   border: 1px solid var(--color-border-card);
   border-radius: 10px;
   box-shadow: 0 10px 24px -10px rgba(15, 23, 42, 0.18);
@@ -1075,47 +1061,78 @@ onUnmounted(() => {
   margin-top: 0.25rem;
 }
 
-.dropdown-section {
-  padding: 0.75rem;
+/* ── Sort & Filter Panel ──────────────────────────────────────── */
+
+.sort-filter-panel {
+  min-width: 260px;
+  padding: 0.5rem;
+  border-radius: 14px;
+  box-shadow: var(--shadow-modal);
+  left: auto;
+  right: 0;
 }
 
-.dropdown-section h4 {
-  font-size: 0.75rem;
-  font-weight: 400;
-  color: var(--color-text-muted);
-  margin: 0 0 0.5rem 0;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.sfp-section {
+  padding: 0.6rem 0.5rem;
 }
 
-.dropdown-option {
+.sfp-section-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background-color 0.2s;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.55rem;
 }
 
-.dropdown-option:hover {
-  background: var(--color-surface-muted);
-}
-
-.dropdown-option.active {
-  background: var(--color-surface-active);
+.sfp-section-header i {
+  font-size: 0.85rem;
   color: var(--color-brand-primary);
+  opacity: 0.75;
 }
 
-.dropdown-option i {
-  width: 1rem;
-  font-size: 0.875rem;
+.sfp-pills {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
 }
 
-.dropdown-divider {
+.sfp-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.75rem;
+  border-radius: 20px;
+  border: 1px solid var(--color-border-card);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.sfp-pill:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+  border-color: var(--color-brand-primary);
+}
+
+.sfp-pill.active {
+  background: var(--color-surface-hover);
+  color: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+  font-weight: 500;
+}
+
+.sfp-divider {
   height: 1px;
   background: var(--color-border-subtle);
-  margin: 0.5rem 0;
+  margin: 0.1rem 0.5rem;
 }
 
 /* Icon-only chips inside view toggle */

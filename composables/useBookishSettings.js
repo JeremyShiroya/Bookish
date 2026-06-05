@@ -7,6 +7,7 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   readerZoom: 1.0,
   libraryView: 'grid',
   librarySort: 'name',
+  librarySortDirection: 'asc',
   libraryItemsPerPage: 20,
   ttsVoice: 'en-US-ChristopherNeural',
   ttsSpeed: 1.0,
@@ -58,9 +59,12 @@ export function normalizeBookishSettings(value) {
     libraryView: ['grid', 'table'].includes(source.libraryView)
       ? source.libraryView
       : DEFAULT_BOOKISH_SETTINGS.libraryView,
-    librarySort: ['name', 'rating'].includes(source.librarySort)
+    librarySort: ['name', 'rating', 'year'].includes(source.librarySort)
       ? source.librarySort
       : DEFAULT_BOOKISH_SETTINGS.librarySort,
+    librarySortDirection: ['asc', 'desc'].includes(source.librarySortDirection)
+      ? source.librarySortDirection
+      : DEFAULT_BOOKISH_SETTINGS.librarySortDirection,
     libraryItemsPerPage: LIBRARY_ITEMS_PER_PAGE_OPTIONS.includes(Number(source.libraryItemsPerPage))
       ? Number(source.libraryItemsPerPage)
       : DEFAULT_BOOKISH_SETTINGS.libraryItemsPerPage,
