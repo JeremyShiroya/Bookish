@@ -126,7 +126,7 @@ const coverFallback = (event, title) => {
 .series-card {
   position: relative;
   aspect-ratio: 3 / 2;
-  border-radius: 10px;
+  border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
   background: #0f0a1a;
