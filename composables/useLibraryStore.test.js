@@ -90,9 +90,27 @@ describe('useLibraryStore — collections', () => {
 
   it('updateCollection saves changes', async () => {
     const { addCollection, updateCollection, getCollections } = useLibraryStore()
-    const col = await addCollection({ name: 'Original' })
+    const col = await addCollection({
+      name: 'Original',
+      description: 'Keep this data',
+      bookIds: ['book-1'],
+    })
     await updateCollection({ ...col, name: 'Updated' })
     const collections = await getCollections()
     expect(collections[0].name).toBe('Updated')
+    expect(collections[0].bookIds).toEqual(['book-1'])
+    expect(collections[0].description).toBe('Keep this data')
+  })
+
+  it('deleteCollection removes only the selected collection', async () => {
+    const { addCollection, deleteCollection, getCollections } = useLibraryStore()
+    const keep = await addCollection({ name: 'Keep' })
+    const remove = await addCollection({ name: 'Remove' })
+
+    await deleteCollection(remove.id)
+
+    const collections = await getCollections()
+    expect(collections).toHaveLength(1)
+    expect(collections[0].id).toBe(keep.id)
   })
 })

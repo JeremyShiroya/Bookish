@@ -115,6 +115,7 @@ const searchInternetArchive = async (title, author) => {
       blurb: normalizeDescription(metadata.description || doc.description),
       series: null,
       seriesInstallment: null,
+      seriesTotal: null,
       genre: normalizeGenre(metadata.subject || doc.subject),
       publishYear: parseYear(metadata.year, metadata.date, doc.year),
       publisher: publisher || null,
@@ -152,6 +153,7 @@ const searchOpenLibrary = async (title, author) => {
         : details[index]?.description?.value || null,
       series: doc.series_name?.[0] || null,
       seriesInstallment: doc.series_position?.[0] || null,
+      seriesTotal: null,
       genre: normalizeGenre([...(doc.subject || []), ...(details[index]?.subjects || [])]),
       publishYear: doc.first_publish_year || null,
       publisher: Array.isArray(doc.publisher) ? compact(doc.publisher[0]) : compact(doc.publisher) || null,
@@ -180,6 +182,7 @@ const mergeResults = (title, author, sources) => {
         blurb: firstValue(item.blurb, ...matches.map((match) => match.blurb)),
         series: firstValue(item.series, ...matches.map((match) => match.series)),
         seriesInstallment: firstValue(item.seriesInstallment, ...matches.map((match) => match.seriesInstallment)),
+        seriesTotal: firstValue(item.seriesTotal, ...matches.map((match) => match.seriesTotal)),
         genre: firstValue(item.genre, ...matches.map((match) => match.genre)),
         publishYear: firstValue(item.publishYear, ...matches.map((match) => match.publishYear)),
         publisher: firstValue(item.publisher, ...matches.map((match) => match.publisher)),
@@ -264,4 +267,14 @@ export const fetchBookMetadataResults = async (title, author, publisher, options
     searchOpenLibrary(title, author),
   ]);
   return mergeResults(title, author, [internetArchiveResults, openLibraryResults]);
+};
+
+export const fetchSeriesTotalResults = async (title, author) => {
+  const params = new URLSearchParams({ title });
+  if (author) params.set('author', author);
+
+  const response = await fetch(`/api/books/series-total?${params.toString()}`);
+  if (!response.ok) throw new Error(`Series metadata request failed with ${response.status}`);
+  const data = await response.json();
+  return data.results || [];
 };

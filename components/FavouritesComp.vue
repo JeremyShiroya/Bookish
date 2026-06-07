@@ -12,30 +12,18 @@
 
     <template v-else-if="initialized">
         <div v-if="favourites.length > 0" class="books-grid">
-          <div
+          <LibraryBookCard
             v-for="book in favourites"
             :key="book.id"
-            class="book-card"
-            @click="router.push(`/reader/${book.id}`)"
-          >
-            <div class="book-cover">
-              <img :src="book.cover" :alt="book.title" />
-              <button 
-                class="heart-btn active" 
-                title="Remove from favorites"
-                @click.stop="toggleFavourite(book.id)"
-              >
-                <i class="ri-heart-fill"></i>
-              </button>
-              <button class="play-btn" title="Play">
-                <i class="ri-play-fill"></i>
-              </button>
-            </div>
-            <div class="book-info">
-              <h3 class="book-title">{{ book.title }}</h3>
-              <p class="book-author">{{ book.author }}</p>
-            </div>
-          </div>
+            :book="book"
+            :active="isBookActive(book)"
+            @open="router.push(`/reader/${book.id}`)"
+            @play="handlePlay"
+            @favourite="toggleFavourite(book.id)"
+            @playlist="selectedPlaylistBook = book"
+            @edit="router.push(`/edit/${book.id}`)"
+            @delete="deleteFavouriteBook(book)"
+          />
         </div>
         
         <EmptyState
@@ -51,15 +39,41 @@
           </template>
         </EmptyState>
     </template>
+
+    <AddToPlaylistModal
+      v-if="selectedPlaylistBook"
+      :book="selectedPlaylistBook"
+      @close="selectedPlaylistBook = null"
+    />
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import { useBooks } from "~/composables/useBooks";
+import { useTTS } from '~/composables/useTTS';
 import EmptyState from "./EmptyState.vue";
+import LibraryBookCard from './LibraryBookCard.vue';
+import AddToPlaylistModal from './AddToPlaylistModal.vue';
 
-const { favourites, toggleFavourite, loading, initialized } = useBooks();
+const { favourites, toggleFavourite, deleteBook, loading, initialized } = useBooks();
+const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const router = useRouter();
+const selectedPlaylistBook = ref(null);
+
+const isBookActive = (book) => ttsBook.value?.id === book.id && ttsStatus.value !== 'idle';
+const handlePlay = (book) => {
+  if (isBookActive(book)) {
+    toggleTTS();
+    return;
+  }
+  playTTS(book);
+};
+
+const deleteFavouriteBook = async (book) => {
+  if (!window.confirm(`Delete "${book.title}" from your library?`)) return;
+  await deleteBook(book.id);
+};
 </script>
 
 <style scoped>
@@ -86,14 +100,21 @@ const router = useRouter();
 
 .books-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 200px);
-  gap: 1.5rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: 276px;
+  gap: 2rem;
   justify-content: start;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 1100px) {
   .books-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .books-grid {
+    grid-template-columns: 1fr;
   }
 }
 

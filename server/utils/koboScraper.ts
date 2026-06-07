@@ -10,6 +10,7 @@ export interface KoboBookData {
   blurb: string | null;
   series: string | null;
   seriesInstallment: string | null;
+  seriesTotal: string | null;
   genre: string | null;
   publishYear: number | null;
 }
@@ -176,5 +177,5 @@ export async function scrapeKoboBook(url: string): Promise<KoboBookData | null> 
     if (m) publishYear = parseInt(m[0], 10);
   }
 
-  return { url, title, author, cover, blurb, series, seriesInstallment, genre, publishYear };
+  return { url, title, author, cover, blurb, series, seriesInstallment, seriesTotal: null, genre, publishYear };
 }

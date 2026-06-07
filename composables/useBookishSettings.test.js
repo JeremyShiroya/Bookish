@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BOOKISH_SETTINGS_KEY,
   DEFAULT_BOOKISH_SETTINGS,
+  normalizeBookishSettings,
   readBookishSettings,
   writeBookishSettings,
 } from './useBookishSettings.js'
@@ -52,5 +53,46 @@ describe('useBookishSettings storage helpers', () => {
     writeBookishSettings({ ttsVoice: 'kokoro:af_heart' }, storage)
 
     expect(readBookishSettings(storage).ttsVoice).toBe(DEFAULT_BOOKISH_SETTINGS.ttsVoice)
+  })
+
+  it('uses separate grid and table pagination defaults', () => {
+    expect(DEFAULT_BOOKISH_SETTINGS.libraryGridItemsPerPage).toBe(12)
+    expect(DEFAULT_BOOKISH_SETTINGS.libraryTableItemsPerPage).toBe(10)
+  })
+
+  it('migrates the legacy shared page size without exceeding the new defaults', () => {
+    expect(normalizeBookishSettings({ libraryItemsPerPage: 20 })).toMatchObject({
+      libraryGridItemsPerPage: 12,
+      libraryTableItemsPerPage: 10,
+    })
+
+    expect(normalizeBookishSettings({ libraryItemsPerPage: 8 })).toMatchObject({
+      libraryGridItemsPerPage: 8,
+      libraryTableItemsPerPage: 8,
+    })
+  })
+
+  it('migrates legacy pagination values when reading stored settings', () => {
+    const storage = createMemoryStorage()
+    storage.setItem(BOOKISH_SETTINGS_KEY, JSON.stringify({ libraryItemsPerPage: 20 }))
+
+    expect(readBookishSettings(storage)).toMatchObject({
+      libraryGridItemsPerPage: 12,
+      libraryTableItemsPerPage: 10,
+    })
+  })
+
+  it('persists independent grid and table page sizes', () => {
+    const storage = createMemoryStorage()
+
+    writeBookishSettings({
+      libraryGridItemsPerPage: 10,
+      libraryTableItemsPerPage: 30,
+    }, storage)
+
+    expect(readBookishSettings(storage)).toMatchObject({
+      libraryGridItemsPerPage: 10,
+      libraryTableItemsPerPage: 30,
+    })
   })
 })

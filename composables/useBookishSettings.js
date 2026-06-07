@@ -8,14 +8,16 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   libraryView: 'grid',
   librarySort: 'name',
   librarySortDirection: 'asc',
-  libraryItemsPerPage: 20,
+  libraryGridItemsPerPage: 12,
+  libraryTableItemsPerPage: 10,
   ttsVoice: 'en-US-ChristopherNeural',
   ttsSpeed: 1.0,
   ttsVolume: 1.0,
   metadataAutoFill: true,
 })
 
-export const LIBRARY_ITEMS_PER_PAGE_OPTIONS = Object.freeze([10, 20, 30, 50, 100])
+export const LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS = Object.freeze([6, 8, 10, 12])
+export const LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS = Object.freeze([8, 10, 20, 30, 50, 100])
 
 const TTS_VOICE_IDS = new Set([
   'en-US-ChristopherNeural',
@@ -45,6 +47,14 @@ const voiceOrDefault = (value) => {
 
 export function normalizeBookishSettings(value) {
   const source = value && typeof value === 'object' ? value : {}
+  const legacyPageSize = Number(source.libraryItemsPerPage)
+  const legacyGridPageSize = LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS.includes(legacyPageSize)
+    ? legacyPageSize
+    : DEFAULT_BOOKISH_SETTINGS.libraryGridItemsPerPage
+  const legacyTablePageSize = LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS.includes(legacyPageSize)
+    && legacyPageSize <= DEFAULT_BOOKISH_SETTINGS.libraryTableItemsPerPage
+    ? legacyPageSize
+    : DEFAULT_BOOKISH_SETTINGS.libraryTableItemsPerPage
 
   return {
     readerTheme: ['light', 'dark'].includes(source.readerTheme)
@@ -65,9 +75,12 @@ export function normalizeBookishSettings(value) {
     librarySortDirection: ['asc', 'desc'].includes(source.librarySortDirection)
       ? source.librarySortDirection
       : DEFAULT_BOOKISH_SETTINGS.librarySortDirection,
-    libraryItemsPerPage: LIBRARY_ITEMS_PER_PAGE_OPTIONS.includes(Number(source.libraryItemsPerPage))
-      ? Number(source.libraryItemsPerPage)
-      : DEFAULT_BOOKISH_SETTINGS.libraryItemsPerPage,
+    libraryGridItemsPerPage: LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS.includes(Number(source.libraryGridItemsPerPage))
+      ? Number(source.libraryGridItemsPerPage)
+      : legacyGridPageSize,
+    libraryTableItemsPerPage: LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS.includes(Number(source.libraryTableItemsPerPage))
+      ? Number(source.libraryTableItemsPerPage)
+      : legacyTablePageSize,
     ttsVoice: voiceOrDefault(source.ttsVoice),
     ttsSpeed: numberOrDefault(
       source.ttsSpeed,
@@ -108,10 +121,7 @@ export function readBookishSettings(storage) {
   try {
     const raw = targetStorage.getItem(BOOKISH_SETTINGS_KEY)
     if (!raw) return { ...DEFAULT_BOOKISH_SETTINGS }
-    return normalizeBookishSettings({
-      ...DEFAULT_BOOKISH_SETTINGS,
-      ...JSON.parse(raw),
-    })
+    return normalizeBookishSettings(JSON.parse(raw))
   } catch {
     return { ...DEFAULT_BOOKISH_SETTINGS }
   }

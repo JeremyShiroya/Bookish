@@ -238,12 +238,23 @@
             </div>
             <div class="form-group">
               <label for="seriesInstallment">Number / Installment</label>
-              <input 
-                type="text" 
-                id="seriesInstallment" 
-                v-model="editBook.seriesInstallment" 
+              <input
+                type="text"
+                id="seriesInstallment"
+                v-model="editBook.seriesInstallment"
                 placeholder="e.g. 1"
                 class="form-input"
+              />
+            </div>
+            <div class="form-group">
+              <label for="seriesTotal">Total in Series</label>
+              <input
+                type="number"
+                id="seriesTotal"
+                v-model.number="editBook.seriesTotal"
+                placeholder="e.g. 6"
+                class="form-input"
+                min="1"
               />
             </div>
           </div>
@@ -330,6 +341,7 @@ import { useRouter } from 'vue-router'
 import { useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
+import { propagateSeriesTotal } from '~/composables/useSeriesProgress'
 import { useCoverImageCache } from '~/composables/useCoverImageCache'
 import CoverImageModal from './CoverImageModal.vue'
 import GoodreadsRatingDisplay from './GoodreadsRatingDisplay.vue'
@@ -353,6 +365,7 @@ const editBook = ref({
   blurb: '',
   series: '',
   seriesInstallment: '',
+  seriesTotal: null,
   publishYear: null,
   publisher: '',
   webReview: '',
@@ -623,6 +636,7 @@ const selectMetadata = (result) => {
   editBook.value.publisher = result.publisher || editBook.value.publisher;
   editBook.value.series = result.series || editBook.value.series;
   editBook.value.seriesInstallment = result.seriesInstallment || editBook.value.seriesInstallment;
+  editBook.value.seriesTotal = result.seriesTotal ? Number(result.seriesTotal) : (editBook.value.seriesTotal || null);
   editBook.value.webReview = result.webReview || editBook.value.webReview;
   editBook.value.genre = result.genre || editBook.value.genre;
   if (editBook.value.series || editBook.value.seriesInstallment) {
@@ -659,6 +673,7 @@ const handleBookKindChange = () => {
   if (bookKind.value === 'standalone') {
     editBook.value.series = ''
     editBook.value.seriesInstallment = ''
+    editBook.value.seriesTotal = null
   }
 }
 
@@ -677,10 +692,19 @@ const handleUpdateBook = async () => {
   if (bookKind.value === 'standalone' || !bookToUpdate.series || bookToUpdate.series.trim() === '') {
     bookToUpdate.series = null
     bookToUpdate.seriesInstallment = null
+    bookToUpdate.seriesTotal = null
   }
   
   try {
     await updateBook(bookToUpdate);
+    if (bookToUpdate.series && Number(bookToUpdate.seriesTotal) > 0) {
+      await propagateSeriesTotal({
+        seriesName: bookToUpdate.series,
+        seriesTotal: bookToUpdate.seriesTotal,
+        books: books.value,
+        updateBook,
+      });
+    }
     addToast('Book updated successfully', 'success');
     router.push('/books');
   } catch (error) {

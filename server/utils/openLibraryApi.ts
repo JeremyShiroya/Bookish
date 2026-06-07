@@ -6,6 +6,7 @@ export interface OLResult {
   blurb: string | null;
   series: string | null;
   seriesInstallment: string | null;
+  seriesTotal: string | null;
   genre: string | null;
   publishYear: number | null;
   publisher: string | null;
@@ -127,6 +128,7 @@ export async function searchOpenLibrary(title: string, author?: string): Promise
           blurb,
           series: doc.series_name?.[0] ?? null,
           seriesInstallment: doc.series_position?.[0] ?? null,
+          seriesTotal: null,
           genre: extractGenres([...(doc.subject || []), ...detailSubjects]),
           publishYear: doc.first_publish_year ?? null,
           publisher: pickPublisher(doc.publisher),

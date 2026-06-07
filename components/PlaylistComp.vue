@@ -11,6 +11,7 @@
         :key="playlist.id"
         class="playlist-card"
         @click="openPlaylist(playlist)"
+        @contextmenu.prevent.stop="openContextMenu($event, playlist)"
       >
         <!-- Blurred cover background -->
         <div
@@ -56,9 +57,33 @@
       </div>
     </div>
 
+    <div
+      v-if="contextMenu.playlist"
+      class="playlist-context-menu"
+      :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+      @click.stop
+    >
+      <button type="button" @click="openEditor(contextMenu.playlist)">
+        <i class="ri-edit-line"></i>
+        Edit
+      </button>
+      <button type="button" class="danger" @click="confirmDelete(contextMenu.playlist)">
+        <i class="ri-delete-bin-line"></i>
+        Delete
+      </button>
+    </div>
+
+    <PlaylistEditModal
+      v-if="editingPlaylist"
+      :playlist="editingPlaylist"
+      :saving="savingPlaylist"
+      @close="closeEditor"
+      @save="savePlaylist"
+    />
+
     <!-- Empty State -->
     <EmptyState
-      v-else
+      v-if="playlistsWithBooks.length === 0"
       title="No playlists yet"
       description="Organize your library by creating playlists for favorites, moods, genres, or reading plans."
       icon="ri-play-list-2-line"
@@ -75,25 +100,97 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
+import { useToast } from "~/composables/useToast";
 import EmptyState from "./EmptyState.vue";
+import PlaylistEditModal from "./PlaylistEditModal.vue";
 
-const { collections, books } = useBooks();
+const { collections, books, updatePlaylist, deletePlaylist } = useBooks();
+const { addToast } = useToast();
 const router = useRouter();
+const editingPlaylist = ref(null);
+const savingPlaylist = ref(false);
+const contextMenu = reactive({ playlist: null, x: 0, y: 0 });
 
 const openPlaylist = (playlist) => {
+  closeContextMenu();
   router.push(`/playlist/${playlist.id}`);
 };
+
+const closeContextMenu = () => {
+  contextMenu.playlist = null;
+};
+
+const openContextMenu = (event, playlist) => {
+  const menuWidth = 170;
+  const menuHeight = 92;
+  contextMenu.playlist = playlist;
+  contextMenu.x = Math.min(event.clientX, window.innerWidth - menuWidth - 12);
+  contextMenu.y = Math.min(event.clientY, window.innerHeight - menuHeight - 12);
+};
+
+const openEditor = (playlist) => {
+  editingPlaylist.value = playlist;
+  closeContextMenu();
+};
+
+const closeEditor = () => {
+  editingPlaylist.value = null;
+  savingPlaylist.value = false;
+};
+
+const savePlaylist = async (playlist) => {
+  savingPlaylist.value = true;
+  try {
+    await updatePlaylist(playlist);
+    addToast('Playlist updated', 'success');
+    closeEditor();
+  } catch {
+    addToast('Could not update playlist', 'error');
+    savingPlaylist.value = false;
+  }
+};
+
+const confirmDelete = async (playlist) => {
+  closeContextMenu();
+  if (!window.confirm(`Delete the playlist "${playlist.name}"? The books will remain in your library.`)) return;
+  try {
+    await deletePlaylist(playlist.id);
+    addToast('Playlist deleted', 'success');
+  } catch {
+    addToast('Could not delete playlist', 'error');
+  }
+};
+
+const handleWindowKeydown = (event) => {
+  if (event.key !== 'Escape') return;
+  closeContextMenu();
+  closeEditor();
+};
+
+onMounted(() => {
+  window.addEventListener('click', closeContextMenu);
+  window.addEventListener('keydown', handleWindowKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('click', closeContextMenu);
+  window.removeEventListener('keydown', handleWindowKeydown);
+});
 
 const playlistsWithBooks = computed(() => {
   return collections.value.map((playlist) => {
     const bookIds = playlist.bookIds || [];
-    const allBooks = books.value.filter((b) => bookIds.includes(b.id));
+    const hasBook = (bookId) => bookIds.some(id => String(id) === String(bookId));
+    const allBooks = books.value.filter((book) => hasBook(book.id));
     const previewBooks = allBooks
-      .filter((b) => bookIds.slice(0, 3).includes(b.id))
-      .sort((a, b) => bookIds.indexOf(a.id) - bookIds.indexOf(b.id));
+      .filter((book) => bookIds.slice(0, 3).some(id => String(id) === String(book.id)))
+      .sort((a, b) => (
+        bookIds.findIndex(id => String(id) === String(a.id))
+        - bookIds.findIndex(id => String(id) === String(b.id))
+      ));
     return {
       ...playlist,
       bookCount: bookIds.length,
@@ -184,6 +281,47 @@ const coverFallback = (event, title) => {
   transform: scale(1.03);
 }
 
+.playlist-context-menu {
+  position: fixed;
+  z-index: 3100;
+  width: 160px;
+  padding: 0.35rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 11px;
+  background: var(--color-surface-glass);
+  box-shadow: var(--shadow-modal);
+  backdrop-filter: blur(12px);
+}
+
+.playlist-context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.65rem 0.7rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 0.84rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.playlist-context-menu button:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.playlist-context-menu button.danger {
+  color: var(--color-status-danger);
+}
+
+.playlist-context-menu button.danger:hover {
+  background: var(--color-status-danger-soft);
+}
+
 /* ── Blurred background ──────────────────────────────────────── */
 
 .card-bg {
@@ -207,7 +345,7 @@ const coverFallback = (event, title) => {
 
 .card-name {
   position: absolute;
-  top: 2rem;
+  top: 2.2rem;
   left: 1rem;
   right: 50%;
   z-index: 3;

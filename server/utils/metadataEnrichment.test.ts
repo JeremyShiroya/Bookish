@@ -43,6 +43,7 @@ describe('books metadata enrichment', () => {
         blurb: null,
         series: 'Dune',
         seriesInstallment: '1',
+        seriesTotal: '6',
         genre: null,
         publishYear: null,
         webReview: 'Goodreads Rating: 4.28/5 (based on 1,511,111 reviews).',
@@ -56,6 +57,7 @@ describe('books metadata enrichment', () => {
         blurb: 'Set on the desert planet Arrakis.',
         series: null,
         seriesInstallment: null,
+        seriesTotal: null,
         genre: 'Science Fiction',
         publishYear: 1965,
         webReview: 'Not a Goodreads rating',
@@ -72,11 +74,50 @@ describe('books metadata enrichment', () => {
       blurb: 'Set on the desert planet Arrakis.',
       series: 'Dune',
       seriesInstallment: '1',
+      seriesTotal: '6',
       genre: 'Science Fiction',
       publishYear: 1965,
       webReview: 'Goodreads Rating: 4.28/5 (based on 1,511,111 reviews).',
       sourceTags: ['googleBooks', 'goodreads'],
     });
+  });
+
+  it('uses the highest valid series total from matching metadata sources', () => {
+    const results = buildMetadataResults('Blindsighted', 'Karin Slaughter', {
+      goodreadsSources: [{
+        id: 'gr:blindsighted',
+        source: 'goodreads',
+        title: 'Blindsighted',
+        author: 'Karin Slaughter',
+        cover: null,
+        blurb: null,
+        series: 'Grant County',
+        seriesInstallment: '1',
+        seriesTotal: '5',
+        genre: null,
+        publishYear: 2001,
+        webReview: null,
+      }],
+      googleBooksSources: [{
+        id: 'gb:blindsighted',
+        source: 'googleBooks',
+        title: 'Blindsighted',
+        author: 'Karin Slaughter',
+        cover: null,
+        blurb: null,
+        series: 'Grant County',
+        seriesInstallment: '1',
+        seriesTotal: '6',
+        genre: null,
+        publishYear: 2001,
+        webReview: null,
+      }],
+      internetArchiveSources: [],
+      openLibrarySources: [],
+      koboSources: [],
+    });
+
+    expect(results[0]?.seriesTotal).toBe('6');
   });
 
   it('returns non-Goodreads matches when Goodreads fails without inventing a web review', () => {

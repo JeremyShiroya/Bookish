@@ -195,10 +195,47 @@ export const useBooks = () => {
     }
   };
 
+  const updatePlaylist = async (updatedPlaylist) => {
+    const index = collections.value.findIndex(item => String(item.id) === String(updatedPlaylist.id));
+    if (index === -1) throw new Error(`Playlist ${updatedPlaylist.id} not found`);
+
+    const previousPlaylist = { ...collections.value[index] };
+    const playlistToSave = {
+      ...previousPlaylist,
+      name: String(updatedPlaylist.name || '').trim(),
+    };
+    if (!playlistToSave.name) throw new Error('Playlist name is required');
+    collections.value[index] = playlistToSave;
+    try {
+      const store = useLibraryStore();
+      const savedPlaylist = await store.updateCollection(playlistToSave);
+      collections.value[index] = savedPlaylist;
+      return savedPlaylist;
+    } catch (err) {
+      collections.value[index] = previousPlaylist;
+      console.error('Failed to update playlist:', err);
+      throw err;
+    }
+  };
+
+  const deletePlaylist = async (playlistId) => {
+    const previousCollections = [...collections.value];
+    collections.value = collections.value.filter(item => String(item.id) !== String(playlistId));
+    try {
+      const store = useLibraryStore();
+      await store.deleteCollection(playlistId);
+    } catch (err) {
+      collections.value = previousCollections;
+      console.error('Failed to delete playlist:', err);
+      throw err;
+    }
+  };
+
   const addBookToPlaylist = async (playlistId, bookId) => {
     try {
       const store = useLibraryStore();
-      await store.addBookToCollection(playlistId, bookId);
+      const storedPlaylist = collections.value.find(item => String(item.id) === String(playlistId));
+      await store.addBookToCollection(storedPlaylist?.id ?? playlistId, bookId);
       await fetchAllData(true);
     } catch (err) {
       console.error('Failed to add book to playlist:', err);
@@ -237,6 +274,8 @@ export const useBooks = () => {
     updateBook,
     deleteBook,
     createPlaylist,
+    updatePlaylist,
+    deletePlaylist,
     addBookToPlaylist,
     fetchAllData,
     fetchBookById,

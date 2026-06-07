@@ -98,16 +98,41 @@ export const useLibraryStore = () => {
   }
 
   const updateCollection = async (collection) => {
-    const updated = { ...collection, updatedAt: new Date().toISOString() }
     const db = await openLibraryDB()
-    await new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const tx = db.transaction('collections', 'readwrite')
-      tx.objectStore('collections').put(updated)
+      const store = tx.objectStore('collections')
+      const request = store.get(collection.id)
+      let updated = null
+      request.onsuccess = (event) => {
+        const existing = event.target.result
+        if (!existing) {
+          reject(new Error(`Collection ${collection.id} not found`))
+          tx.abort()
+          return
+        }
+        updated = {
+          ...existing,
+          name: String(collection.name || '').trim(),
+          updatedAt: new Date().toISOString(),
+        }
+        store.put(updated)
+      }
+      tx.oncomplete = () => resolve(updated)
+      tx.onerror = (e) => reject(e.target.error)
+      tx.onabort = (e) => reject(e.target.error ?? new DOMException('Transaction aborted'))
+    })
+  }
+
+  const deleteCollection = async (id) => {
+    const db = await openLibraryDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('collections', 'readwrite')
+      tx.objectStore('collections').delete(id)
       tx.oncomplete = () => resolve()
       tx.onerror = (e) => reject(e.target.error)
       tx.onabort = (e) => reject(e.target.error ?? new DOMException('Transaction aborted'))
     })
-    return updated
   }
 
   const addBookToCollection = async (collectionId, bookId) => {
@@ -163,6 +188,7 @@ export const useLibraryStore = () => {
     getCollections,
     addCollection,
     updateCollection,
+    deleteCollection,
     addBookToCollection,
     updateAuthorImage,
   }

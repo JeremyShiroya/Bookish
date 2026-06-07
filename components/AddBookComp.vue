@@ -252,12 +252,23 @@
           </div>
           <div class="form-group">
             <label for="seriesInstallment">Number / Installment</label>
-            <input 
-              type="text" 
-              id="seriesInstallment" 
-              v-model="newBook.seriesInstallment" 
+            <input
+              type="text"
+              id="seriesInstallment"
+              v-model="newBook.seriesInstallment"
               placeholder="e.g. 1"
               class="form-input"
+            />
+          </div>
+          <div class="form-group">
+            <label for="seriesTotal">Total in Series</label>
+            <input
+              type="number"
+              id="seriesTotal"
+              v-model.number="newBook.seriesTotal"
+              placeholder="e.g. 6"
+              class="form-input"
+              min="1"
             />
           </div>
         </div>
@@ -344,13 +355,14 @@ import { useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
 import { useBookStorage } from '~/composables/useBookStorage'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
+import { propagateSeriesTotal } from '~/composables/useSeriesProgress'
 import { useCoverImageCache } from '~/composables/useCoverImageCache'
 import CoverImageModal from './CoverImageModal.vue'
 import GoodreadsRatingDisplay from './GoodreadsRatingDisplay.vue'
 import MultiStepLoader from './MultiStepLoader.vue'
 
 const router = useRouter()
-const { addBook } = useBooks()
+const { addBook, books, updateBook } = useBooks()
 const { addToast } = useToast()
 const { saveBookContent } = useBookStorage()
 const { cacheCoverImage } = useCoverImageCache()
@@ -365,6 +377,7 @@ const newBook = ref({
   blurb: '',
   series: '',
   seriesInstallment: '',
+  seriesTotal: null,
   publishYear: null,
   publisher: '',
   webReview: '',
@@ -699,6 +712,7 @@ const selectMetadata = (result) => {
   newBook.value.publisher = result.publisher || newBook.value.publisher;
   newBook.value.series = result.series || newBook.value.series;
   newBook.value.seriesInstallment = result.seriesInstallment || newBook.value.seriesInstallment;
+  newBook.value.seriesTotal = result.seriesTotal ? Number(result.seriesTotal) : (newBook.value.seriesTotal || null);
   newBook.value.webReview = result.webReview || newBook.value.webReview;
   newBook.value.genre = result.genre || newBook.value.genre;
   if (newBook.value.series || newBook.value.seriesInstallment) {
@@ -733,6 +747,7 @@ const handleBookKindChange = () => {
   if (bookKind.value === 'standalone') {
     newBook.value.series = ''
     newBook.value.seriesInstallment = ''
+    newBook.value.seriesTotal = null
   }
 }
 
@@ -759,10 +774,19 @@ const saveBook = async () => {
   if (bookKind.value === 'standalone' || !bookToSave.series || bookToSave.series.trim() === '') {
     bookToSave.series = null
     bookToSave.seriesInstallment = null
+    bookToSave.seriesTotal = null
   }
   
   try {
     const savedBook = await addBook(bookToSave);
+    if (savedBook.series && Number(savedBook.seriesTotal) > 0) {
+      await propagateSeriesTotal({
+        seriesName: savedBook.series,
+        seriesTotal: savedBook.seriesTotal,
+        books: books.value,
+        updateBook,
+      });
+    }
     const pdfSourceForStorage = bookToSave.format === 'pdf'
       ? await getPdfSourceForStorage()
       : extractedSource.value

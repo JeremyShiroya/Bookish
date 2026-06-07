@@ -195,15 +195,32 @@
 
         <div class="setting-row">
           <div class="setting-copy">
-            <h3>Items per page</h3>
-            <p>{{ settings.libraryItemsPerPage }} books per pagination page.</p>
+            <h3>Grid items per page</h3>
+            <p>{{ settings.libraryGridItemsPerPage }} book cards per page.</p>
           </div>
-          <div class="chip-group" aria-label="Items per page">
+          <div class="chip-group" aria-label="Grid items per page">
             <button
-              v-for="option in itemsPerPageOptions"
+              v-for="option in gridItemsPerPageOptions"
               :key="option"
-              :class="{ active: settings.libraryItemsPerPage === option }"
-              @click="setLibraryItemsPerPage(option)"
+              :class="{ active: settings.libraryGridItemsPerPage === option }"
+              @click="setLibraryGridItemsPerPage(option)"
+            >
+              {{ option }}
+            </button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-copy">
+            <h3>Table items per page</h3>
+            <p>{{ settings.libraryTableItemsPerPage }} book rows per page.</p>
+          </div>
+          <div class="chip-group" aria-label="Table items per page">
+            <button
+              v-for="option in tableItemsPerPageOptions"
+              :key="option"
+              :class="{ active: settings.libraryTableItemsPerPage === option }"
+              @click="setLibraryTableItemsPerPage(option)"
             >
               {{ option }}
             </button>
@@ -323,7 +340,7 @@
     <section class="about-section" aria-labelledby="about-title">
       <img src="/Images/Logo.png" alt="Bookish" class="about-logo" />
       <h2 id="about-title">Bookish</h2>
-      <p>Version 1.2.0 • Build 42</p>
+      <p>Version {{ appVersion }} &bull; Build {{ buildNumber }}</p>
       <nav class="about-links" aria-label="Bookish links">
         <a href="#">Support Center</a>
         <a href="#">Release Notes</a>
@@ -337,7 +354,11 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useBooks } from '~/composables/useBooks'
-import { useBookishSettings, LIBRARY_ITEMS_PER_PAGE_OPTIONS } from '~/composables/useBookishSettings'
+import {
+  useBookishSettings,
+  LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS,
+  LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS,
+} from '~/composables/useBookishSettings'
 import { useBookStorage } from '~/composables/useBookStorage'
 import { useLibraryBackup } from '~/composables/useLibraryBackup'
 import { useTTS } from '~/composables/useTTS'
@@ -349,6 +370,9 @@ const { getStorageSummary } = useBookStorage()
 const { createDownload, importBookishData, wipeBookishData } = useLibraryBackup()
 const { ttsVoices, setSpeed, setVolume, setVoice, stop: stopTTS } = useTTS()
 const { addToast } = useToast()
+const runtimeConfig = useRuntimeConfig()
+const appVersion = runtimeConfig.public.appVersion || '0.0.0'
+const buildNumber = runtimeConfig.public.buildNumber || 'dev'
 
 const storageLoading = ref(false)
 const backupLoading = ref(false)
@@ -520,10 +544,12 @@ const setAudioVolume = (value) => {
 
 const setLibraryView = (libraryView) => updateSettings({ libraryView })
 const setLibrarySort = (librarySort, librarySortDirection) => updateSettings({ librarySort, librarySortDirection })
-const setLibraryItemsPerPage = (libraryItemsPerPage) => updateSettings({ libraryItemsPerPage })
+const setLibraryGridItemsPerPage = (libraryGridItemsPerPage) => updateSettings({ libraryGridItemsPerPage })
+const setLibraryTableItemsPerPage = (libraryTableItemsPerPage) => updateSettings({ libraryTableItemsPerPage })
 const setMetadataAutoFill = (metadataAutoFill) => updateSettings({ metadataAutoFill })
 
-const itemsPerPageOptions = LIBRARY_ITEMS_PER_PAGE_OPTIONS
+const gridItemsPerPageOptions = LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS
+const tableItemsPerPageOptions = LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS
 
 const defaultSortDescription = computed(() => {
   const { librarySort, librarySortDirection } = settings.value

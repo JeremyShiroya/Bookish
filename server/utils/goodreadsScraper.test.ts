@@ -3,7 +3,9 @@ import {
   parseGoodreadsBookHtml,
   parseGoodreadsDiscoveryHtml,
   parseGoodreadsSearchHtml,
+  parseGoodreadsSeriesTotal,
   parseSeriesFromText,
+  scrapeGoodreadsBook,
   searchGoodreads,
   splitGoodreadsTitle,
 } from './goodreadsScraper';
@@ -19,6 +21,7 @@ describe('goodreadsScraper parsing helpers', () => {
       rawSeriesTitle: 'Dune, #1',
       series: 'Dune',
       seriesInstallment: '1',
+      seriesTotal: null,
     });
   });
 
@@ -26,7 +29,24 @@ describe('goodreadsScraper parsing helpers', () => {
     expect(parseSeriesFromText('Book 2 in the Grant County series')).toEqual({
       series: 'Grant County',
       seriesInstallment: '2',
+      seriesTotal: null,
     });
+  });
+
+  it('extracts the primary-work count from a Goodreads series page', () => {
+    expect(parseGoodreadsSeriesTotal(`
+      <html>
+        <body>
+          <div class="recommendation">12 primary works • 24 total works</div>
+          <h1>Grant County Series</h1>
+          <div class="responsiveSeriesHeader__subtitle">6 primary works • 9 total works</div>
+        </body>
+      </html>
+    `)).toBe('6');
+  });
+
+  it('does not use total works when the primary-work count is absent', () => {
+    expect(parseGoodreadsSeriesTotal('<div>9 total works</div>')).toBeNull();
   });
 
   it('parses modern Goodreads book details with JSON-LD and visible metadata', () => {
@@ -47,7 +67,9 @@ describe('goodreadsScraper parsing helpers', () => {
           </script>
         </head>
         <body>
+          <a href="/series/116525-will-trent">Will Trent</a>
           <h3 aria-label="Book 1 in the Camille Preaker series"></h3>
+          <a href="/series/81050-camille-preaker">Camille Preaker</a>
           <div data-testid="genresList">
             <a class="Button--tag"><span class="Button__labelItem">Mystery</span></a>
             <a class="Button--tag"><span class="Button__labelItem">Crime</span></a>
@@ -63,6 +85,7 @@ describe('goodreadsScraper parsing helpers', () => {
       cover: 'https://images.example/book.jpg',
       series: 'Camille Preaker',
       seriesInstallment: '1',
+      seriesUrl: 'https://www.goodreads.com/series/81050-camille-preaker',
       publishYear: 2006,
       genre: 'Mystery, Thriller, Crime',
       ratingValue: '4.02',
@@ -185,6 +208,44 @@ describe('goodreadsScraper parsing helpers', () => {
       title: 'Dune',
       author: 'Frank Herbert',
       webReview: 'Goodreads Rating: 4.29/5 (1670353 ratings, 86099 reviews).',
+    });
+  });
+
+  it('enriches book details with the Goodreads primary-work series count', async () => {
+    const bookHtml = `
+      <html>
+        <head>
+          <script type="application/ld+json">
+            { "@type": "Book", "name": "Blindsighted", "author": { "name": "Karin Slaughter" } }
+          </script>
+        </head>
+        <body>
+          <a href="/series/116525-will-trent">Will Trent</a>
+          <h3 aria-label="Book 1 in the Grant County series"></h3>
+          <a href="/series/43676-grant-county">Grant County</a>
+        </body>
+      </html>
+    `;
+    const seriesHtml = '<div class="responsiveSeriesHeader__subtitle">6 primary works • 8 total works</div>';
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === 'https://www.goodreads.com/book/show/1-blindsighted') {
+        return new Response(bookHtml, { status: 200 });
+      }
+      if (url === 'https://www.goodreads.com/series/43676-grant-county') {
+        return new Response(seriesHtml, { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const details = await scrapeGoodreadsBook('https://www.goodreads.com/book/show/1-blindsighted');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(details).toMatchObject({
+      series: 'Grant County',
+      seriesInstallment: '1',
+      seriesTotal: '6',
     });
   });
 });

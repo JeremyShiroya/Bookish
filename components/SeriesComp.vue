@@ -4,9 +4,9 @@
       <h1 class="series-title">Series</h1>
     </div>
 
-    <div v-if="seriesList.length > 0" class="series-grid">
+    <div v-if="sortedSeriesList.length > 0" class="series-grid">
       <div
-        v-for="(series, idx) in seriesList"
+        v-for="series in sortedSeriesList"
         :key="series.id"
         class="series-card"
         @click="openSeries(series)"
@@ -75,12 +75,25 @@
 </template>
 
 <script setup>
+import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import EmptyState from "./EmptyState.vue";
 
 const { seriesList } = useBooks();
 const router = useRouter();
+
+// Sort books within each series by seriesInstallment
+const sortedSeriesList = computed(() =>
+  seriesList.value.map(series => ({
+    ...series,
+    books: [...series.books].sort((a, b) => {
+      const aIdx = Number(a.seriesInstallment) || Infinity;
+      const bIdx = Number(b.seriesInstallment) || Infinity;
+      return aIdx - bIdx;
+    }),
+  }))
+);
 
 const openSeries = (series) => {
   router.push(`/serie/${series.id}`);
@@ -193,7 +206,7 @@ const bookStats = (books) => ({
 
 .card-name {
   position: absolute;
-  top: 2rem;
+  top: 2.2rem;
   left: 1rem;
   right: 50%;
   z-index: 3;

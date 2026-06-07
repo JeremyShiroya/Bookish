@@ -61,48 +61,18 @@
         </header>
 
         <div class="books-grid-modern">
-          <div 
+          <LibraryBookCard
             v-for="book in author.books" 
             :key="book.id" 
-            class="book-card-horizontal"
-            @click="router.push(`/reader/${book.id}`)"
-          >
-            <div class="book-card-bg-container">
-              <div class="book-bg" :style="{ backgroundImage: `url(${resolveBookCover(book)})` }"></div>
-              <div class="book-bg-overlay"></div>
-            </div>
-            <div class="book-cover">
-              <img :src="resolveBookCover(book)" :alt="book.title" />
-              <div class="cover-overlay">
-                <button class="play-btn" @click.stop="handlePlay(book)">
-                  <i class="ri-play-fill"></i>
-                </button>
-              </div>
-            </div>
-            <div class="book-info-minimal">
-              <h3 class="book-title">{{ book.title }}</h3>
-              <p v-if="book.series" class="book-series-text">{{ book.series }}</p>
-              <div v-if="book.genre" class="book-genre-tag-minimal">
-                <i class="ri-price-tag-3-line"></i>
-                <span>{{ book.genre }}</span>
-              </div>
-              
-              <div class="book-meta-footer-horizontal">
-                <div class="meta-item-simple">
-                  <i class="ri-star-fill star-icon"></i>
-                  <span>{{ book.rating || '—' }}</span>
-                </div>
-                <div class="meta-item-simple">
-                  <i class="ri-book-read-line"></i>
-                  <span>{{ book.progress }}%</span>
-                </div>
-                <div class="meta-item-simple">
-                  <i class="ri-pages-line"></i>
-                  <span>{{ book.pages || 0 }}p</span>
-                </div>
-              </div>
-            </div>
-          </div>
+            :book="book"
+            :active="isBookActive(book)"
+            @open="router.push(`/reader/${book.id}`)"
+            @play="handlePlay"
+            @favourite="toggleFavourite(book.id)"
+            @playlist="selectedPlaylistBook = book"
+            @edit="router.push(`/edit/${book.id}`)"
+            @delete="deleteAuthorBook(book)"
+          />
         </div>
 
         <div v-if="!author.books?.length" class="no-books-state">
@@ -111,6 +81,12 @@
         </div>
       </main>
     </div>
+
+    <AddToPlaylistModal
+      v-if="selectedPlaylistBook"
+      :book="selectedPlaylistBook"
+      @close="selectedPlaylistBook = null"
+    />
 
     <!-- Edit Choice Modal -->
     <div v-if="showEditChoice" class="modal-overlay" @click="showEditChoice = false">
@@ -193,12 +169,21 @@ import { useToast } from '~/composables/useToast';
 import { useBooks } from '~/composables/useBooks';
 import { useLibraryStore } from '~/composables/useLibraryStore';
 import { fetchAuthorImageResults } from '~/composables/useAuthorImageSearch';
+import LibraryBookCard from './LibraryBookCard.vue';
+import AddToPlaylistModal from './AddToPlaylistModal.vue';
 
 const route = useRoute();
 const router = useRouter();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const { addToast } = useToast();
-const { fetchAllData, authors: globalAuthors, books: globalBooks, initialized } = useBooks();
+const {
+  fetchAllData,
+  authors: globalAuthors,
+  books: globalBooks,
+  initialized,
+  toggleFavourite,
+  deleteBook,
+} = useBooks();
 
 const author = ref(null);
 const loading = ref(true);
@@ -207,6 +192,7 @@ const isScraping = ref(false);
 const showEditChoice = ref(false);
 const showImagePicker = ref(false);
 const imageOptions = ref([]);
+const selectedPlaylistBook = ref(null);
 
 const fetchAuthor = () => {
   const authorName = decodeURIComponent(route.params.id);
@@ -317,6 +303,16 @@ const handlePlay = (book) => {
     return;
   }
   playTTS(book);
+};
+
+const isBookActive = (book) => (
+  ttsBook.value?.id === book.id && ttsStatus.value !== 'idle'
+);
+
+const deleteAuthorBook = async (book) => {
+  if (!window.confirm(`Delete "${book.title}" from your library?`)) return;
+  await deleteBook(book.id);
+  fetchAuthor();
 };
 
 const resolveBookCover = (book) => {

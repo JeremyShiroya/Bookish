@@ -15,6 +15,7 @@ export interface GoodreadsSearchResult {
   rawSeriesTitle: string | null;
   series: string | null;
   seriesInstallment: string | null;
+  seriesTotal: string | null;
   webReview: string | null;
   ratingValue: string | null;
   ratingCount: string | null;
@@ -28,6 +29,8 @@ export interface GoodreadsBookDetails {
   cover: string | null;
   series: string | null;
   seriesInstallment: string | null;
+  seriesTotal: string | null;
+  seriesUrl: string | null;
   webReview: string | null;
   ratingValue: string | null;
   ratingCount: string | null;
@@ -65,32 +68,78 @@ export function normalizeGoodreadsImage(url?: string | null) {
 
 export function parseSeriesFromText(value?: string | null) {
   const text = compact(value);
-  if (!text) return { series: null as string | null, seriesInstallment: null as string | null };
+  if (!text) return { series: null as string | null, seriesInstallment: null as string | null, seriesTotal: null as string | null };
 
+  // "Book #1 of 6 in/of [the] Series Name [series]"
+  const bookOfTotal = text.match(/book\s*#?\s*([\d.]+)\s+of\s+([\d.]+)\s+(?:in\s+)?(?:the\s+)?(.+?)(?:\s+series)?$/i);
+  if (bookOfTotal) {
+    return {
+      series: compact(bookOfTotal[3]).replace(/\s+series$/i, '') || null,
+      seriesInstallment: bookOfTotal[1],
+      seriesTotal: bookOfTotal[2],
+    };
+  }
+
+  // "Book #1 in/of [the] Series Name [series]"
   const bookInSeries = text.match(/book\s*#?\s*([\d.]+)\s+(?:in|of)\s+(?:the\s+)?(.+?)(?:\s+series)?$/i);
   if (bookInSeries) {
     return {
       series: compact(bookInSeries[2]).replace(/\s+series$/i, '') || null,
       seriesInstallment: bookInSeries[1],
+      seriesTotal: null,
     };
   }
 
+  // "Series Name #1 of 6" or "Series Name, #1 of 6"
+  const namedNumberWithTotal = text.match(/^(.+?)(?:,\s*)?#\s*([\d.]+)\s+of\s+([\d.]+)$/i);
+  if (namedNumberWithTotal) {
+    return {
+      series: compact(namedNumberWithTotal[1]).replace(/\s+series$/i, '') || null,
+      seriesInstallment: namedNumberWithTotal[2],
+      seriesTotal: namedNumberWithTotal[3],
+    };
+  }
+
+  // "Series Name #1" or "Series Name, #1" or "Series Name book 1"
   const namedNumber = text.match(/^(.+?)(?:,\s*)?#\s*([\d.]+)$/i) || text.match(/^(.+?)\s+book\s+([\d.]+)$/i);
   if (namedNumber) {
     return {
       series: compact(namedNumber[1]).replace(/\s+series$/i, '') || null,
       seriesInstallment: namedNumber[2],
+      seriesTotal: null,
     };
   }
 
-  return { series: text.replace(/\s+series$/i, '') || null, seriesInstallment: null };
+  return { series: text.replace(/\s+series$/i, '') || null, seriesInstallment: null, seriesTotal: null };
+}
+
+export function parseGoodreadsSeriesTotal(html: string) {
+  const $ = cheerio.load(html);
+  let text = compact($('.responsiveSeriesHeader__subtitle').first().text());
+
+  if (!text) {
+    const rawProps = $('[data-react-class="ReactComponents.SeriesHeader"]').first().attr('data-react-props');
+    if (rawProps) {
+      try {
+        text = compact(JSON.parse(rawProps).subtitle);
+      } catch {
+        text = '';
+      }
+    }
+  }
+
+  const match = text.match(/\b([\d,]+)\s+primary\s+works?\b/i);
+  if (!match) return null;
+
+  const total = Number(match[1].replace(/,/g, ''));
+  return Number.isSafeInteger(total) && total > 0 ? String(total) : null;
 }
 
 export function splitGoodreadsTitle(rawTitle?: string | null) {
   const raw = compact(rawTitle);
   const match = raw.match(/^(.*?)\s*\(([^()]*(?:#|book\s*)\s*[\d.][^()]*)\)\s*$/i);
   if (!match) {
-    return { title: raw, rawSeriesTitle: null as string | null, series: null as string | null, seriesInstallment: null as string | null };
+    return { title: raw, rawSeriesTitle: null as string | null, series: null as string | null, seriesInstallment: null as string | null, seriesTotal: null as string | null };
   }
 
   const parsed = parseSeriesFromText(match[2]);
@@ -99,6 +148,7 @@ export function splitGoodreadsTitle(rawTitle?: string | null) {
     rawSeriesTitle: compact(match[2]),
     series: parsed.series,
     seriesInstallment: parsed.seriesInstallment,
+    seriesTotal: parsed.seriesTotal,
   };
 }
 
@@ -224,6 +274,7 @@ export function parseGoodreadsSearchHtml(html: string): GoodreadsSearchResult[] 
       rawSeriesTitle: split.rawSeriesTitle,
       series: split.series,
       seriesInstallment: split.seriesInstallment,
+      seriesTotal: split.seriesTotal,
       webReview: rating.webReview,
       ratingValue: rating.ratingValue,
       ratingCount: rating.ratingCount,
@@ -308,6 +359,7 @@ export function parseGoodreadsDiscoveryHtml(html: string): GoodreadsSearchResult
       rawSeriesTitle: null,
       series: null,
       seriesInstallment: null,
+      seriesTotal: null,
       webReview: rating.webReview,
       ratingValue: rating.ratingValue,
       ratingCount: rating.ratingCount,
@@ -358,6 +410,7 @@ async function searchGoodreadsTitleRedirects(title: string, author?: string): Pr
         rawSeriesTitle: split.rawSeriesTitle,
         series: details.series || split.series,
         seriesInstallment: details.seriesInstallment || split.seriesInstallment,
+        seriesTotal: details.seriesTotal || split.seriesTotal,
         webReview: details.webReview,
         ratingValue: details.ratingValue,
         ratingCount: details.ratingCount,
@@ -409,17 +462,41 @@ export function parseGoodreadsBookHtml(html: string, seed?: Partial<GoodreadsSea
 
   let series = splitTitle.series || seed?.series || null;
   let seriesInstallment = splitTitle.seriesInstallment || seed?.seriesInstallment || null;
+  let seriesTotal = splitTitle.seriesTotal || null;
   const seriesCandidates: string[] = [];
-  $('h3[aria-label], a[href*="/series/"], [class*="Series"], [data-testid*="series"]').each((_, el) => {
+  $('h3[aria-label], [class*="Series"]:not(a), [data-testid*="series"]:not(a)').each((_, el) => {
     const value = compact($(el).attr('aria-label')) || compact($(el).text());
     if (value) seriesCandidates.push(value);
   });
   for (const value of seriesCandidates) {
-    if (series && seriesInstallment) break;
+    if (series && seriesInstallment && seriesTotal) break;
     const parsed = parseSeriesFromText(value);
     if (!series && parsed.series) series = parsed.series;
     if (!seriesInstallment && parsed.seriesInstallment) seriesInstallment = parsed.seriesInstallment;
+    if (!seriesTotal && parsed.seriesTotal) seriesTotal = parsed.seriesTotal;
   }
+
+  if (!series) {
+    $('a[href*="/series/"]').each((_, el) => {
+      if (series) return;
+      const parsed = parseSeriesFromText(compact($(el).text()));
+      if (parsed.series) series = parsed.series;
+      if (!seriesInstallment && parsed.seriesInstallment) seriesInstallment = parsed.seriesInstallment;
+    });
+  }
+
+  const seriesKey = compact(series).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const seriesLinks = $('a[href*="/series/"]').toArray();
+  const matchingSeriesLink = seriesLinks.find((el) => {
+    const textKey = compact($(el).text()).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const hrefKey = compact($(el).attr('href')).toLowerCase().replace(/[^a-z0-9]/g, '');
+    return seriesKey && (textKey === seriesKey || textKey.includes(seriesKey) || hrefKey.includes(seriesKey));
+  });
+  const seriesUrl = normalizeGoodreadsPageUrl(
+    matchingSeriesLink
+      ? $(matchingSeriesLink).attr('href')
+      : (seriesLinks.length === 1 ? $(seriesLinks[0]).attr('href') : null),
+  );
 
   const ratingValue =
     compact(ldRating.ratingValue)
@@ -460,6 +537,8 @@ export function parseGoodreadsBookHtml(html: string, seed?: Partial<GoodreadsSea
     cover,
     series,
     seriesInstallment,
+    seriesTotal,
+    seriesUrl,
     webReview,
     ratingValue: ratingValue || null,
     ratingCount: ratingCount || null,
@@ -533,7 +612,21 @@ export async function scrapeGoodreadsBook(bookUrl: string, seed?: Partial<Goodre
   try {
     const response = await fetch(bookUrl, { headers });
     if (!response.ok) return null;
-    return parseGoodreadsBookHtml(await response.text(), seed);
+    const details = parseGoodreadsBookHtml(await response.text(), seed);
+    if (!details.seriesUrl) return details;
+
+    try {
+      const seriesResponse = await fetch(details.seriesUrl, { headers });
+      if (!seriesResponse.ok) return details;
+      const seriesTotal = parseGoodreadsSeriesTotal(await seriesResponse.text());
+      const installment = Number(details.seriesInstallment);
+      if (seriesTotal && (!Number.isFinite(installment) || Number(seriesTotal) >= installment)) {
+        details.seriesTotal = seriesTotal;
+      }
+    } catch {
+      // Series enrichment is optional; the book metadata remains useful without it.
+    }
+    return details;
   } catch (err) {
     console.error('Error scraping book detail:', err);
     return null;

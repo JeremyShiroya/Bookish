@@ -9,6 +9,7 @@ export interface GBResult {
   publisher: string | null;
   series: string | null;
   seriesInstallment: string | null;
+  seriesTotal: string | null;
   cover: string | null;
 }
 
@@ -81,6 +82,7 @@ export async function searchGoogleBooks(title: string, author?: string): Promise
           publisher: typeof info.publisher === 'string' && info.publisher.trim() ? info.publisher.trim() : null,
           series,
           seriesInstallment,
+          seriesTotal: null,
           cover,
         };
       })

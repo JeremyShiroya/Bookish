@@ -9,6 +9,7 @@ export type MetadataSource = {
   blurb: string | null;
   series: string | null;
   seriesInstallment: string | null;
+  seriesTotal: string | null;
   genre: string | null;
   publishYear: number | null;
   publisher?: string | null;
@@ -108,6 +109,13 @@ function firstValue<T>(...values: Array<T | null | undefined>) {
   return values.find(hasValue) ?? null;
 }
 
+function highestSeriesTotal(...values: Array<string | null | undefined>) {
+  const totals = values
+    .map((value) => Number(value))
+    .filter((value) => Number.isSafeInteger(value) && value > 0);
+  return totals.length ? String(Math.max(...totals)) : null;
+}
+
 function completenessScore(source: MetadataSource) {
   return [
     source.title,
@@ -118,6 +126,7 @@ function completenessScore(source: MetadataSource) {
     source.publishYear,
     source.series,
     source.seriesInstallment,
+    source.seriesTotal,
     source.webReview,
     source.publisher,
   ].filter(hasValue).length;
@@ -229,6 +238,13 @@ function mergeMetadata(primary: MetadataSource, matches: MetadataSource[], goodr
       ...sources.filter((item) => item.source === 'openLibrary').map((item) => item.seriesInstallment),
       ...sources.filter((item) => item.source === 'googleBooks').map((item) => item.seriesInstallment),
       ...sources.filter((item) => item.source === 'internetArchive').map((item) => item.seriesInstallment),
+    ),
+    seriesTotal: highestSeriesTotal(
+      ...sources.filter((item) => item.source === 'goodreads').map((item) => item.seriesTotal),
+      ...sources.filter((item) => item.source === 'kobo').map((item) => item.seriesTotal),
+      ...sources.filter((item) => item.source === 'openLibrary').map((item) => item.seriesTotal),
+      ...sources.filter((item) => item.source === 'googleBooks').map((item) => item.seriesTotal),
+      ...sources.filter((item) => item.source === 'internetArchive').map((item) => item.seriesTotal),
     ),
     genre: firstValue(
       ...sources.filter((item) => item.source === 'googleBooks').map((item) => item.genre),

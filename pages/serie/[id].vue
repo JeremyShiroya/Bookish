@@ -7,6 +7,8 @@
     empty-title="Series not found"
     empty-description="Books with matching series metadata will appear here."
     empty-icon="ri-book-shelf-line"
+    :show-installment="true"
+    :count-label="seriesCountLabel"
   />
 </template>
 
@@ -14,6 +16,7 @@
 import { computed } from 'vue';
 import BookGroupDetail from '~/components/BookGroupDetail.vue';
 import { useBooks } from '~/composables/useBooks';
+import { formatSeriesCollectionProgress } from '~/composables/useSeriesProgress';
 
 const route = useRoute();
 const { seriesList } = useBooks();
@@ -40,5 +43,17 @@ const seriesBooks = computed(() => (
       if (Number.isFinite(aOrder) && Number.isFinite(bOrder)) return aOrder - bOrder;
       return String(a.title || '').localeCompare(String(b.title || ''));
     })
+));
+
+// Highest seriesTotal any book in the series has set
+const derivedSeriesTotal = computed(() => {
+  const totals = seriesBooks.value
+    .map(b => Number(b.seriesTotal || 0))
+    .filter(n => n > 0 && Number.isFinite(n));
+  return totals.length ? Math.max(...totals) : null;
+});
+
+const seriesCountLabel = computed(() => (
+  formatSeriesCollectionProgress(seriesBooks.value.length, derivedSeriesTotal.value)
 ));
 </script>

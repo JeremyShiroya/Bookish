@@ -7,15 +7,7 @@
       </button>
     </div>
 
-    <EmptyState
-      v-if="!books.length"
-      :title="emptyTitle"
-      :description="emptyDescription"
-      :icon="emptyIcon"
-    />
-
-    <template v-else>
-      <div class="detail-hero">
+    <div class="detail-hero">
         <div class="detail-cover-stack" aria-hidden="true">
           <div
             v-for="(book, index) in previewBooks"
@@ -28,16 +20,42 @@
         </div>
         <div class="detail-copy">
           <p class="detail-kicker">{{ kicker }}</p>
-          <h1>{{ title }}</h1>
+          <div class="detail-title-row">
+            <h1>{{ title }}</h1>
+            <button
+              v-if="titleEditable"
+              type="button"
+              class="detail-title-action"
+              :aria-label="`Edit ${title}`"
+              title="Edit playlist"
+              @click="$emit('edit-title')"
+            >
+              <i class="ri-edit-line"></i>
+            </button>
+          </div>
           <p>
-            {{ books.length }} {{ books.length === 1 ? 'Book' : 'Books' }}
+            {{ countLabel || `${books.length} ${books.length === 1 ? 'Book' : 'Books'}` }}
             <span v-if="description"> &bull; {{ description }}</span>
           </p>
         </div>
-      </div>
+    </div>
 
-      <section class="detail-table" :aria-label="`${title} books`">
+    <div v-if="books.length" class="detail-status-filter" aria-label="Filter books by reading status">
+      <button
+        v-for="option in statusOptions"
+        :key="option.value"
+        type="button"
+        :class="{ active: selectedStatus === option.value }"
+        @click="selectedStatus = option.value"
+      >
+        {{ option.label }}
+        <span>{{ statusCounts[option.value] }}</span>
+      </button>
+    </div>
+
+    <section v-if="filteredBooks.length" class="detail-table" :aria-label="`${title} books`">
         <div class="data-header">
+          <div class="col-index">#</div>
           <div class="col-book">Book</div>
           <div class="col-status">Status</div>
           <div class="col-progress">Progress</div>
@@ -47,13 +65,14 @@
         </div>
 
         <div
-          v-for="book in books"
+          v-for="(book, index) in filteredBooks"
           :key="book.id"
           class="data-row"
           tabindex="0"
           @click="router.push(`/reader/${book.id}`)"
           @keydown.enter="router.push(`/reader/${book.id}`)"
         >
+          <div class="col-index row-index">{{ showInstallment ? (book.seriesInstallment ?? index + 1) : (index + 1) }}</div>
           <div class="col-book book-cell">
             <img :src="resolveBookCover(book)" :alt="book.title" class="cell-cover" @error="(event) => coverFallback(event, book.title)" />
             <div class="cell-book-info">
@@ -119,13 +138,25 @@
             </button>
           </div>
         </div>
-      </section>
-    </template>
+    </section>
+
+    <EmptyState
+      v-else-if="!books.length"
+      :title="emptyTitle"
+      :description="emptyDescription"
+      :icon="emptyIcon"
+    />
+    <EmptyState
+      v-else
+      title="No books match this status"
+      description="Choose another reading status to see more books."
+      icon="ri-filter-3-line"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import EmptyState from './EmptyState.vue';
 import GoodreadsRatingDisplay from './GoodreadsRatingDisplay.vue';
 import { useBooks } from '~/composables/useBooks';
@@ -164,10 +195,52 @@ const props = defineProps({
     type: String,
     default: 'ri-book-open-line',
   },
+  showInstallment: {
+    type: Boolean,
+    default: false,
+  },
+  countLabel: {
+    type: String,
+    default: '',
+  },
+  titleEditable: {
+    type: Boolean,
+    default: false,
+  },
 });
+
+defineEmits(['edit-title']);
 
 const router = useRouter();
 const { deleteBook, toggleFavourite } = useBooks();
+const selectedStatus = ref('all');
+
+const statusOptions = [
+  { value: 'all', label: 'All' },
+  { value: 'unread', label: 'Unread' },
+  { value: 'reading', label: 'Reading' },
+  { value: 'read', label: 'Read' },
+];
+
+const normalizedStatus = (book) => {
+  const status = String(book.status || 'Unread').toLowerCase();
+  if (status === 'read' || status === 'completed' || Number(book.progress) >= 100) return 'read';
+  if (status === 'reading') return 'reading';
+  return 'unread';
+};
+
+const filteredBooks = computed(() => (
+  selectedStatus.value === 'all'
+    ? props.books
+    : props.books.filter(book => normalizedStatus(book) === selectedStatus.value)
+));
+
+const statusCounts = computed(() => ({
+  all: props.books.length,
+  unread: props.books.filter(book => normalizedStatus(book) === 'unread').length,
+  reading: props.books.filter(book => normalizedStatus(book) === 'reading').length,
+  read: props.books.filter(book => normalizedStatus(book) === 'read').length,
+}));
 
 const previewBooks = computed(() => props.books.slice(0, 3));
 
@@ -323,6 +396,12 @@ const getDetailStackStyle = (index, total = 3) => {
   min-width: 0;
 }
 
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
 .detail-kicker {
   margin: 0 0 0.25rem;
   color: var(--color-text-secondary);
@@ -335,6 +414,27 @@ const getDetailStackStyle = (index, total = 3) => {
   font-size: clamp(2rem, 4vw, 3.1rem);
   font-weight: 500;
   line-height: 1.05;
+}
+
+.detail-title-action {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  background: var(--color-surface-secondary);
+  color: var(--color-brand-primary);
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.detail-title-action:hover {
+  border-color: var(--color-brand-primary);
+  background: var(--color-surface-active);
+  transform: translateY(-1px);
 }
 
 .detail-copy p:not(.detail-kicker) {
@@ -353,11 +453,23 @@ const getDetailStackStyle = (index, total = 3) => {
 .data-header,
 .data-row {
   display: grid;
-  grid-template-columns: minmax(260px, 2.2fr) 130px minmax(160px, 1fr) 120px minmax(160px, 1.1fr) 150px;
+  grid-template-columns: 36px minmax(260px, 2.2fr) 130px minmax(160px, 1fr) 120px minmax(160px, 1.1fr) 150px;
   gap: 1rem;
   align-items: center;
   width: 100%;
   padding: 0.95rem 1.25rem;
+}
+
+.col-index {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.row-index {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text-subtle);
 }
 
 .data-header {
@@ -388,7 +500,47 @@ const getDetailStackStyle = (index, total = 3) => {
 }
 
 .data-row:hover {
-  background: var(--color-surface-hover);
+  background: var(--color-table-row-hover);
+}
+
+.detail-status-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-bottom: 1rem;
+  padding: 0.25rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 999px;
+  background: var(--color-surface-secondary);
+}
+
+.detail-status-filter button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.48rem 0.78rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.detail-status-filter button.active {
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+  box-shadow: var(--shadow-control-subtle);
+}
+
+.detail-status-filter span {
+  min-width: 1.2rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 999px;
+  background: var(--color-surface-on-image);
+  font-size: 0.68rem;
+  text-align: center;
 }
 
 .book-cell {
@@ -695,6 +847,10 @@ const getDetailStackStyle = (index, total = 3) => {
 
   .detail-copy {
     text-align: center;
+  }
+
+  .detail-title-row {
+    justify-content: center;
   }
 
   .detail-copy h1 {

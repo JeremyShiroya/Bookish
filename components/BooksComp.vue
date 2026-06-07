@@ -236,77 +236,18 @@
 
         <!-- Grid View -->
         <div v-if="viewMode === 'grid'" class="books-grid">
-          <div
+          <LibraryBookCard
             v-for="book in paginatedBooks"
             :key="book.id"
-            class="book-card horizontal"
-            @click="router.push(`/reader/${book.id}`)"
-          >
-            <div class="book-card-bg-container">
-              <div class="book-bg" :style="{ backgroundImage: `url(${resolveBookCover(book)})` }"></div>
-              <div class="book-bg-overlay"></div>
-            </div>
-            <div class="book-cover">
-              <img :src="resolveBookCover(book)" :alt="book.title" @error="(e) => coverFallback(e, book.title)" />
-              <div class="cover-overlay">
-                <button
-                  class="play-btn"
-                  :class="{ active: isBookActive(book) }"
-                  title="Read aloud"
-                  @click.stop="handlePlay(book)"
-                >
-                  <i :class="isBookActive(book) ? 'ri-pause-fill' : 'ri-play-fill'"></i>
-                </button>
-              </div>
-            </div>
-            <div class="book-info">
-              <h3 class="book-title" :title="book.title">{{ truncateWords(book.title, 7) }}</h3>
-              <p class="book-author">
-                {{ book.author }} 
-                <span v-if="book.publishYear">• {{ book.publishYear }}</span>
-              </p>
-              <p class="book-series" :class="{ standalone: !book.series }">
-                {{ book.series || 'Standalone' }}
-              </p>
-              <div v-if="book.genre" class="book-genre-tag" :title="'Genre: ' + book.genre">
-                <i class="ri-price-tag-3-line"></i>
-                <span>{{ book.genre }}</span>
-              </div>
-              
-              <div v-if="getGoodreadsRating(book)" class="book-goodreads-row" title="Goodreads Rating">
-                <GoodreadsRatingDisplay :web-review="book.webReview" compact />
-              </div>
-
-              <div class="book-meta">
-                <div class="meta-item" title="Personal Rating">
-                  <i class="ri-star-fill star-icon"></i>
-                  <span>{{ formatPersonalRating(book.rating) }}</span>
-                  <span>{{ book.rating || '—' }}</span>
-                </div>
-                <div class="grid-progress" title="Reading Progress">
-                  <div class="grid-progress-track">
-                    <div class="grid-progress-fill" :style="{ width: `${book.progress || 0}%` }"></div>
-                  </div>
-                  <span>{{ book.progress || 0 }}%</span>
-                </div>
-              </div>
-              
-              <div class="book-actions">
-                <button class="action-btn" :class="{ active: book.isFavourite }" title="Add to favorites" @click.stop="toggleFavourite(book.id)">
-                  <i :class="[book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line']"></i>
-                </button>
-                <button class="action-btn" title="Add to playlist" @click.stop="openPlaylistModal(book)">
-                  <i class="ri-play-list-2-line"></i>
-                </button>
-                <button class="action-btn" title="Edit book" @click.stop="router.push(`/edit/${book.id}`)">
-                  <i class="ri-edit-line"></i>
-                </button>
-                <button class="action-btn delete" title="Delete book" @click.stop="openDeleteModal(book)">
-                  <i class="ri-delete-bin-line"></i>
-                </button>
-              </div>
-            </div>
-          </div>
+            :book="book"
+            :active="isBookActive(book)"
+            @open="router.push(`/reader/${book.id}`)"
+            @play="handlePlay"
+            @favourite="toggleFavourite(book.id)"
+            @playlist="selectedPlaylistBook = book"
+            @edit="router.push(`/edit/${book.id}`)"
+            @delete="openDeleteModal(book)"
+          />
         </div>
 
         <div v-else class="data-table">
@@ -381,7 +322,7 @@
                 <button class="row-action-btn" :class="{ active: book.isFavourite }" title="Favourite" @click="toggleFavourite(book.id)">
                   <i :class="book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line'"></i>
                 </button>
-                <button class="row-action-btn" title="Add to playlist" @click="openPlaylistModal(book)">
+                <button class="row-action-btn" title="Add to playlist" @click="selectedPlaylistBook = book">
                   <i class="ri-play-list-2-line"></i>
                 </button>
                 <button class="row-action-btn" title="Edit" @click="router.push(`/edit/${book.id}`)">
@@ -427,76 +368,11 @@
     </div>
 
 
-    <div v-if="showPlaylistModal" class="playlist-modal-overlay" @click="closePlaylistModal">
-      <div class="playlist-modal" @click.stop>
-        <div class="playlist-modal-header">
-          <div>
-            <h2>Add to Playlist</h2>
-            <p>{{ selectedPlaylistBook?.title }}</p>
-          </div>
-          <button class="close-button" @click="closePlaylistModal">
-            <i class="ri-close-line"></i>
-          </button>
-        </div>
-
-        <div class="playlist-mode-toggle">
-          <button
-            type="button"
-            :class="{ active: playlistMode === 'existing' }"
-            :disabled="selectablePlaylists.length === 0"
-            @click="playlistMode = 'existing'"
-          >
-            Existing
-          </button>
-          <button
-            type="button"
-            :class="{ active: playlistMode === 'new' }"
-            @click="playlistMode = 'new'"
-          >
-            New Playlist
-          </button>
-        </div>
-
-        <div v-if="playlistMode === 'existing'" class="playlist-picker">
-          <label
-            v-for="playlist in selectablePlaylists"
-            :key="playlist.id"
-            class="playlist-option"
-            :class="{ active: selectedPlaylistId === String(playlist.id) }"
-          >
-            <input type="radio" :value="String(playlist.id)" v-model="selectedPlaylistId" />
-            <span>
-              <strong>{{ playlist.name }}</strong>
-              <small>{{ playlist.bookCount || 0 }} books</small>
-            </span>
-          </label>
-
-          <p v-if="selectablePlaylists.length === 0" class="playlist-empty-note">
-            This book is already in every playlist. Create a new one to add it somewhere fresh.
-          </p>
-        </div>
-
-        <div v-else class="playlist-create-form">
-          <label>
-            Name
-            <input v-model="newPlaylistName" type="text" placeholder="Weekend reads" class="playlist-input" />
-          </label>
-          <label>
-            Description
-            <textarea v-model="newPlaylistDescription" rows="3" placeholder="Optional note..." class="playlist-input"></textarea>
-          </label>
-        </div>
-
-        <div class="playlist-modal-actions">
-          <button type="button" class="btn-secondary" @click="closePlaylistModal">Cancel</button>
-          <button type="button" class="btn-primary-modal" :disabled="!canSavePlaylist || isSavingPlaylist" @click="saveBookToPlaylist">
-            <i v-if="isSavingPlaylist" class="ri-loader-4-line spinner"></i>
-            <i v-else class="ri-play-list-add-line"></i>
-            {{ isSavingPlaylist ? 'Adding...' : 'Add to Playlist' }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <AddToPlaylistModal
+      v-if="selectedPlaylistBook"
+      :book="selectedPlaylistBook"
+      @close="selectedPlaylistBook = null"
+    />
 
 
     <!-- Delete Confirmation Modal -->
@@ -513,6 +389,8 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import DeleteConfirmModal from "./DeleteConfirmModal.vue";
 import GoodreadsRatingDisplay from "./GoodreadsRatingDisplay.vue";
+import LibraryBookCard from "./LibraryBookCard.vue";
+import AddToPlaylistModal from "./AddToPlaylistModal.vue";
 
 import { useBooks } from "~/composables/useBooks";
 import { getGoodreadsRating, parseGoodreadsReview } from "~/composables/useGoodreadsRating";
@@ -525,14 +403,11 @@ import EmptyState from "./EmptyState.vue";
 
 const {
   books,
-  collections,
   loading,
   error,
   updateBook,
   deleteBook: removeBookFromStore,
   toggleFavourite,
-  createPlaylist,
-  addBookToPlaylist,
   fetchAllData,
 } = useBooks();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS()
@@ -568,13 +443,7 @@ const activeActionsMenu = ref(null);
 // Modal states
 const showDeleteModal = ref(false);
 const selectedBook = ref(null);
-const showPlaylistModal = ref(false);
 const selectedPlaylistBook = ref(null);
-const selectedPlaylistId = ref("");
-const playlistMode = ref("existing");
-const newPlaylistName = ref("");
-const newPlaylistDescription = ref("");
-const isSavingPlaylist = ref(false);
 
 // Computed filtered books
 const filteredBooks = computed(() => {
@@ -702,7 +571,11 @@ const sortSummaryLabel = computed(() => {
 });
 
 const currentPage = ref(1);
-const itemsPerPage = computed(() => Number(settings.value.libraryItemsPerPage) || 20);
+const itemsPerPage = computed(() => (
+  viewMode.value === 'grid'
+    ? Number(settings.value.libraryGridItemsPerPage) || 12
+    : Number(settings.value.libraryTableItemsPerPage) || 10
+));
 
 const totalPages = computed(() => Math.ceil(filteredBooks.value.length / itemsPerPage.value));
 
@@ -729,19 +602,6 @@ const statusBadgeClass = (status) => {
   if (status === 'Read') return 'status-read';
   return 'status-unread';
 };
-
-const selectablePlaylists = computed(() => {
-  const bookId = selectedPlaylistBook.value?.id;
-  return collections.value
-    .filter((playlist) => !bookId || !(playlist.bookIds || []).includes(bookId))
-    .map((playlist) => ({ ...playlist, bookCount: (playlist.bookIds || []).length }));
-});
-
-const canSavePlaylist = computed(() => (
-  playlistMode.value === "new"
-    ? newPlaylistName.value.trim().length > 0
-    : Boolean(selectedPlaylistId.value)
-));
 
 const truncateWords = (value, limit = 7) => {
   const words = String(value || "").trim().split(/\s+/).filter(Boolean);
@@ -791,51 +651,6 @@ const setViewMode = (mode) => {
 
 const retryLoadLibrary = () => {
   fetchAllData(true);
-};
-
-const openPlaylistModal = (book) => {
-  selectedPlaylistBook.value = book;
-  const firstAvailable = collections.value.find((playlist) => !(playlist.bookIds || []).includes(book.id));
-  selectedPlaylistId.value = firstAvailable ? String(firstAvailable.id) : "";
-  playlistMode.value = firstAvailable ? "existing" : "new";
-  newPlaylistName.value = "";
-  newPlaylistDescription.value = "";
-  showPlaylistModal.value = true;
-};
-
-const closePlaylistModal = () => {
-  showPlaylistModal.value = false;
-  selectedPlaylistBook.value = null;
-  selectedPlaylistId.value = "";
-  playlistMode.value = "existing";
-  newPlaylistName.value = "";
-  newPlaylistDescription.value = "";
-  isSavingPlaylist.value = false;
-};
-
-const saveBookToPlaylist = async () => {
-  if (!selectedPlaylistBook.value || !canSavePlaylist.value || isSavingPlaylist.value) return;
-
-  isSavingPlaylist.value = true;
-  try {
-    let playlistId = selectedPlaylistId.value;
-    if (playlistMode.value === "new") {
-      const playlist = await createPlaylist({
-        name: newPlaylistName.value.trim(),
-        description: newPlaylistDescription.value.trim() || null,
-      });
-      playlistId = String(playlist.id);
-    }
-
-    await addBookToPlaylist(playlistId, selectedPlaylistBook.value.id);
-    addToast("Book added to playlist", "success");
-    closePlaylistModal();
-  } catch (error) {
-    console.error("Playlist update failed:", error);
-    addToast("Failed to update playlist", "error");
-  } finally {
-    isSavingPlaylist.value = false;
-  }
 };
 
 
@@ -1389,8 +1204,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  flex: 1;
-  min-width: 90px;
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 0.45rem;
 }
 
 .grid-progress-track {
@@ -1931,7 +1747,7 @@ onUnmounted(() => {
 }
 
 .data-row:hover {
-  background: var(--color-surface-hover);
+  background: var(--color-table-row-hover);
 }
 
 /* Book cell (cover + info) */
@@ -2281,10 +2097,10 @@ onUnmounted(() => {
 }
 
 .playlist-modal {
-  width: min(520px, 100%);
-  background: var(--color-surface-primary);
+  width: min(560px, 100%);
+  background: var(--color-surface-modal);
   border: 1px solid var(--color-border-subtle);
-  border-radius: 14px;
+  border-radius: 18px;
   box-shadow: var(--shadow-modal);
   overflow: hidden;
 }
@@ -2294,21 +2110,59 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--color-border-subtle);
+  padding: 1.35rem 1.5rem 0;
 }
 
 .playlist-modal-header h2 {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: 1.2rem;
-  font-weight: 500;
+  font-size: 1.25rem;
+  font-weight: 600;
 }
 
 .playlist-modal-header p {
   margin: 0.25rem 0 0;
   color: var(--color-text-muted);
   font-size: 0.88rem;
+}
+
+.playlist-book-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 1rem 1.5rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 12px;
+  background: var(--color-brand-primary-faint);
+}
+
+.playlist-book-preview img {
+  width: 44px;
+  height: 62px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  object-fit: cover;
+  box-shadow: var(--shadow-cover);
+}
+
+.playlist-book-preview div {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.playlist-book-preview strong {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 0.92rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-book-preview span {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
 }
 
 .close-button {
@@ -2330,23 +2184,26 @@ onUnmounted(() => {
 .playlist-mode-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem 0;
+  gap: 0.25rem;
+  margin: 1rem 1.5rem 0;
+  padding: 0.25rem;
+  border-radius: 11px;
+  background: var(--color-surface-secondary);
 }
 
 .playlist-mode-toggle button {
   padding: 0.65rem 1rem;
-  border: 1px solid var(--color-border-subtle);
+  border: 0;
   border-radius: 8px;
-  background: var(--color-surface-secondary);
+  background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
 }
 
 .playlist-mode-toggle button.active {
-  background: var(--color-brand-primary);
-  border-color: var(--color-brand-primary);
-  color: var(--color-text-on-brand);
+  background: var(--color-surface-primary);
+  color: var(--color-brand-primary);
+  box-shadow: var(--shadow-control-subtle);
 }
 
 .playlist-mode-toggle button:disabled {
@@ -2362,19 +2219,45 @@ onUnmounted(() => {
 .playlist-picker {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
-  max-height: 280px;
+  gap: 0.6rem;
+  max-height: 330px;
   overflow-y: auto;
+}
+
+.playlist-search {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  background: var(--color-surface-input);
+  color: var(--color-text-muted);
+}
+
+.playlist-search:focus-within {
+  border-color: var(--color-border-focus);
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.playlist-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 0.86rem;
 }
 
 .playlist-option {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
-  padding: 0.85rem;
+  gap: 0.75rem;
+  padding: 0.75rem;
   border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
-  background: var(--color-surface-secondary);
+  background: var(--color-surface-input);
   cursor: pointer;
 }
 
@@ -2384,23 +2267,66 @@ onUnmounted(() => {
 }
 
 .playlist-option input {
-  accent-color: var(--color-brand-primary);
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.playlist-option span {
+.playlist-option-copy {
   display: flex;
+  flex: 1;
+  min-width: 0;
   flex-direction: column;
   gap: 0.15rem;
 }
 
-.playlist-option strong {
+.playlist-option-copy strong {
   color: var(--color-text-primary);
-  font-weight: 500;
+  font-weight: 600;
 }
 
-.playlist-option small,
+.playlist-option-copy small,
 .playlist-empty-note {
   color: var(--color-text-muted);
+}
+
+.playlist-option-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  background: var(--color-brand-primary-faint);
+  color: var(--color-brand-primary);
+  font-size: 1rem;
+}
+
+.playlist-option-check {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  color: transparent;
+}
+
+.playlist-option.active .playlist-option-check {
+  border-color: var(--color-brand-primary);
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+}
+
+.playlist-empty-note {
+  margin: 0;
+  padding: 1rem;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 10px;
+  text-align: center;
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 .playlist-create-form {
@@ -2436,10 +2362,21 @@ onUnmounted(() => {
 
 .playlist-modal-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1rem 1.5rem 1.25rem;
   border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-secondary);
+}
+
+.playlist-selection-summary {
+  margin-right: auto;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .btn-secondary,
@@ -2461,8 +2398,8 @@ onUnmounted(() => {
 }
 
 .btn-primary-modal {
-  background: var(--color-brand-primary);
-  border-color: var(--color-brand-primary);
+  background: var(--gradient-brand-primary);
+  border-color: transparent;
   color: var(--color-text-on-brand);
 }
 

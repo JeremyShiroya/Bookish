@@ -6,6 +6,7 @@ export interface IAResult {
   blurb: string | null;
   series: string | null;
   seriesInstallment: string | null;
+  seriesTotal: string | null;
   genre: string | null;
   publishYear: number | null;
   publisher: string | null;
@@ -113,6 +114,7 @@ function toResult(doc: any, details: any): IAResult | null {
     blurb: normalizeDescription(metadata.description || doc.description),
     series: null,
     seriesInstallment: null,
+    seriesTotal: null,
     genre: normalizeGenre(metadata.subject || doc.subject),
     publishYear: parseYear(metadata.year, metadata.date, doc.year),
     publisher,

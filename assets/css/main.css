@@ -46,6 +46,7 @@
   --color-surface-tertiary: rgba(138, 43, 226, 0.08);
   --color-surface-muted: rgba(138, 43, 226, 0.06);
   --color-surface-hover: rgba(147, 112, 219, 0.18);
+  --color-table-row-hover: #d3d5e3;
   --color-surface-active: rgba(147, 112, 219, 0.24);
   --color-surface-modal: #ffffff;
   --color-surface-input: rgba(255, 255, 255, 0.45);
@@ -216,6 +217,7 @@
   --color-surface-tertiary: rgba(168, 85, 247, 0.12);
   --color-surface-muted: rgba(168, 85, 247, 0.09);
   --color-surface-hover: rgba(168, 85, 247, 0.22);
+  --color-table-row-hover: #302e3b;
   --color-surface-active: rgba(168, 85, 247, 0.28);
   --color-surface-modal: #1f1d29;
   --color-surface-input: rgba(255, 255, 255, 0.06);
