@@ -55,27 +55,37 @@
 
       <!-- Right Column: Books & Gallery -->
       <main class="books-main-content">
-        <header class="gallery-heading">
-          <h2>Books</h2>
-          <div class="accent-line"></div>
-        </header>
+        <section v-if="standaloneBooks.length" class="author-work-section">
+          <header class="gallery-heading">
+            <h2>Standalone</h2>
+            <div class="accent-line"></div>
+          </header>
 
-        <div class="books-grid-modern">
-          <LibraryBookCard
-            v-for="book in author.books" 
-            :key="book.id" 
-            :book="book"
-            :active="isBookActive(book)"
-            @open="router.push(`/reader/${book.id}`)"
-            @play="handlePlay"
-            @favourite="toggleFavourite(book.id)"
-            @playlist="selectedPlaylistBook = book"
-            @edit="router.push(`/edit/${book.id}`)"
-            @delete="deleteAuthorBook(book)"
-          />
-        </div>
+          <div class="books-grid-modern">
+            <LibraryBookCard
+              v-for="book in standaloneBooks"
+              :key="book.id"
+              :book="book"
+              :active="isBookActive(book)"
+              @open="router.push(`/reader/${book.id}`)"
+              @play="handlePlay"
+              @favourite="toggleFavourite(book.id)"
+              @playlist="selectedPlaylistBook = book"
+              @edit="router.push(`/edit/${book.id}`)"
+              @delete="deleteAuthorBook(book)"
+            />
+          </div>
+        </section>
 
-        <div v-if="!author.books?.length" class="no-books-state">
+        <section v-if="authorSeries.length" class="author-work-section series-section">
+          <header class="gallery-heading">
+            <h2>Series</h2>
+            <div class="accent-line"></div>
+          </header>
+          <SeriesComp :items="authorSeries" :show-title="false" :show-empty="false" />
+        </section>
+
+        <div v-if="!standaloneBooks.length && !authorSeries.length" class="no-books-state">
           <i class="ri-book-open-line"></i>
           <p>No books available for this author yet.</p>
         </div>
@@ -88,63 +98,18 @@
       @close="selectedPlaylistBook = null"
     />
 
-    <!-- Edit Choice Modal -->
-    <div v-if="showEditChoice" class="modal-overlay" @click="showEditChoice = false">
-      <div class="choice-modal" @click.stop>
-        <h3>Change Author Image</h3>
-        <p>Choose how you'd like to update the photo</p>
-        <div class="choice-grid">
-          <button class="choice-btn" @click="triggerFileUpload">
-            <i class="ri-upload-2-line"></i>
-            <div class="choice-text">
-              <strong>Upload</strong>
-              <span>From your computer</span>
-            </div>
-          </button>
-          <button class="choice-btn" @click="scrapeAuthorImage">
-            <i class="ri-global-line"></i>
-            <div class="choice-text">
-              <strong>Scrape Web</strong>
-              <span>Find web portraits</span>
-            </div>
-          </button>
-        </div>
-        <button class="modal-close-btn" @click="showEditChoice = false">Cancel</button>
-      </div>
-    </div>
-
-    <!-- Image Picker Modal -->
-    <div v-if="showImagePicker" class="modal-overlay" @click="showImagePicker = false">
-      <div class="picker-modal" @click.stop>
-        <div class="picker-header">
-          <h3>Select Author Image</h3>
-          <p v-if="!isScraping">Found {{ imageOptions.length }} results for {{ author.name }}</p>
-          <p v-else>Searching for author images...</p>
-        </div>
-
-        <!-- Loader inside modal -->
-        <div v-if="isScraping" class="picker-loader">
-          <SkeletonLoader variant="authors-grid" :count="6" />
-        </div>
-
-        <div v-else class="picker-grid">
-          <div 
-            v-for="(img, idx) in imageOptions" 
-            :key="idx" 
-            class="picker-item"
-            @click="selectImage(img)"
-          >
-            <img :src="img" alt="Author option" loading="lazy" @error="removeImageOption(img)" />
-            <div class="picker-item-overlay">
-              <i class="ri-check-line"></i>
-            </div>
-          </div>
-        </div>
-        <div class="picker-footer">
-          <button class="modal-close-btn" @click="showImagePicker = false">Cancel</button>
-        </div>
-      </div>
-    </div>
+    <AuthorImageModal
+      :visible="showAuthorImageModal"
+      :stage="authorImageStage"
+      :loading="isScraping"
+      :author-name="author.name"
+      :images="imageOptions"
+      @close="closeAuthorImageModal"
+      @upload="triggerFileUpload"
+      @search="searchAuthorImages"
+      @select="selectImage"
+      @image-error="removeImageOption"
+    />
   </div>
 
   <div v-else-if="loading" class="loading-overlay">
@@ -169,8 +134,11 @@ import { useToast } from '~/composables/useToast';
 import { useBooks } from '~/composables/useBooks';
 import { useLibraryStore } from '~/composables/useLibraryStore';
 import { fetchAuthorImageResults } from '~/composables/useAuthorImageSearch';
+import { groupAuthorWorks } from '~/composables/useAuthorDetails';
+import AuthorImageModal from './AuthorImageModal.vue';
 import LibraryBookCard from './LibraryBookCard.vue';
 import AddToPlaylistModal from './AddToPlaylistModal.vue';
+import SeriesComp from './SeriesComp.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -189,8 +157,8 @@ const author = ref(null);
 const loading = ref(true);
 const error = ref(null);
 const isScraping = ref(false);
-const showEditChoice = ref(false);
-const showImagePicker = ref(false);
+const showAuthorImageModal = ref(false);
+const authorImageStage = ref('choice');
 const imageOptions = ref([]);
 const selectedPlaylistBook = ref(null);
 
@@ -223,7 +191,14 @@ watchEffect(() => {
 });
 
 const handleImageClick = () => {
-  showEditChoice.value = true;
+  authorImageStage.value = 'choice';
+  showAuthorImageModal.value = true;
+};
+
+const closeAuthorImageModal = () => {
+  if (isScraping.value) return;
+  showAuthorImageModal.value = false;
+  authorImageStage.value = 'choice';
 };
 
 const triggerFileUpload = () => {
@@ -241,40 +216,37 @@ const triggerFileUpload = () => {
     reader.readAsDataURL(file);
   };
   input.click();
-  showEditChoice.value = false;
+  showAuthorImageModal.value = false;
 };
 
-const scrapeAuthorImage = async () => {
+const searchAuthorImages = async () => {
   if (!author.value) return;
   try {
     isScraping.value = true;
-    showEditChoice.value = false;
-    showImagePicker.value = true;
+    authorImageStage.value = 'results';
     imageOptions.value = [];
     const images = await fetchAuthorImageResults(author.value.name);
     if (images.length > 0) {
       imageOptions.value = images;
     } else {
-      showImagePicker.value = false;
       addToast('Could not find any suitable images on the web.', 'error');
     }
   } catch (err) {
     console.error('Scrape failed:', err);
-    showImagePicker.value = false;
     addToast('Failed to search for images.', 'error');
   } finally {
     isScraping.value = false;
   }
 };
 
-const selectImage = async (imgUrl) => {
-  showImagePicker.value = false;
-  await updateAuthorImage(imgUrl);
+const selectImage = async (image) => {
+  showAuthorImageModal.value = false;
+  await updateAuthorImage(image.url);
   addToast('Author image updated', 'success');
 };
 
-const removeImageOption = (imgUrl) => {
-  imageOptions.value = imageOptions.value.filter(img => img !== imgUrl);
+const removeImageOption = (image) => {
+  imageOptions.value = imageOptions.value.filter(option => option.url !== image.url);
 };
 
 const updateAuthorImage = async (newImageUrl) => {
@@ -296,6 +268,10 @@ const totalPages = computed(() => {
   if (!author.value?.books) return 0;
   return author.value.books.reduce((acc, b) => acc + (b.pages || 0), 0);
 });
+
+const authorWorks = computed(() => groupAuthorWorks(author.value?.books || []));
+const standaloneBooks = computed(() => authorWorks.value.standaloneBooks);
+const authorSeries = computed(() => authorWorks.value.seriesGroups);
 
 const handlePlay = (book) => {
   if (ttsBook.value?.id === book.id && ttsStatus.value !== 'idle') {
@@ -538,6 +514,10 @@ const resolveBookCover = (book) => {
 /* Right Column: Main Content */
 .books-main-content {
   padding: 1rem 3rem;
+}
+
+.author-work-section + .author-work-section {
+  margin-top: 3rem;
 }
 
 .gallery-heading {

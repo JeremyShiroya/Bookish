@@ -4,6 +4,7 @@ import {
   addUniqueImage,
   isUsefulAuthorImageUrl,
   rankAuthorResult,
+  searchBingImages,
   searchGoogleImages,
 } from '../../utils/imageSearch';
 
@@ -17,8 +18,25 @@ const jsonHeaders = {
   'Accept': 'application/json',
 };
 
-function addImage(target: string[], seen: Set<string>, url?: string | null) {
+type AuthorImageResult = {
+  url: string;
+  source: string;
+  label: string;
+};
+
+function addImage(
+  target: string[],
+  sources: Map<string, Omit<AuthorImageResult, 'url'>>,
+  seen: Set<string>,
+  url: string | null | undefined,
+  source: string,
+  label: string,
+) {
+  const before = target.length;
   addUniqueImage(target, seen, url, isUsefulAuthorImageUrl);
+  if (target.length > before) {
+    sources.set(target[target.length - 1], { source, label });
+  }
 }
 
 function quoteTerm(value?: string | null) {
@@ -33,6 +51,10 @@ function buildAuthorGoogleQueries(name: string) {
     `${exact} writer photo headshot -book -cover`,
     `${exact} novelist interview photo`,
     `site:penguinrandomhouse.com ${exact} author photo`,
+    `site:simonandschuster.com ${exact} author photo`,
+    `site:harpercollins.com ${exact} author photo`,
+    `site:macmillan.com ${exact} author photo`,
+    `site:bloomsbury.com ${exact} author photo`,
     `site:wikipedia.org ${exact} author portrait`,
     `site:goodreads.com/author/show ${exact} author photo`,
   ];
@@ -178,39 +200,47 @@ export default defineEventHandler(async (event) => {
   }
 
   const images: string[] = [];
+  const imageSources = new Map<string, Omit<AuthorImageResult, 'url'>>();
   const seen = new Set<string>();
 
   try {
-    const [wikiSummaryResult, wikidataResult, openLibraryImagesResult, goodreadsImagesResult, googleImagesResult] = await Promise.allSettled([
+    const [wikiSummaryResult, wikidataResult, openLibraryImagesResult, goodreadsImagesResult, googleImagesResult, bingImagesResult] = await Promise.allSettled([
       findWikipediaSummaryImages(name),
       findWikidataAuthorImages(name),
       findOpenLibraryAuthorImages(name),
       searchGoodreadsAuthorImages(name),
       searchGoogleAuthorImages(name),
+      searchBingImages(`"${name}" author portrait writer photo`, 20),
     ]);
 
     if (wikiSummaryResult.status === 'fulfilled') {
-      wikiSummaryResult.value.forEach((url) => addImage(images, seen, url));
+      wikiSummaryResult.value.forEach((url) => addImage(images, imageSources, seen, url, 'wikipedia', 'Wikipedia'));
     }
 
     if (wikidataResult.status === 'fulfilled') {
-      wikidataResult.value.forEach((url) => addImage(images, seen, url));
+      wikidataResult.value.forEach((url) => addImage(images, imageSources, seen, url, 'wikidata', 'Wikidata'));
     }
 
     if (openLibraryImagesResult.status === 'fulfilled') {
-      openLibraryImagesResult.value.forEach((url) => addImage(images, seen, url));
+      openLibraryImagesResult.value.forEach((url) => addImage(images, imageSources, seen, url, 'openLibrary', 'Open Library'));
     }
 
     if (goodreadsImagesResult.status === 'fulfilled') {
-      goodreadsImagesResult.value.forEach((url) => addImage(images, seen, url));
+      goodreadsImagesResult.value.forEach((url) => addImage(images, imageSources, seen, url, 'goodreads', 'Goodreads'));
     }
 
     const googleImages = googleImagesResult.status === 'fulfilled' ? googleImagesResult.value : [];
 
     googleImages.forEach((item) => {
-      addImage(images, seen, item.url);
-      addImage(images, seen, item.thumbnail);
+      addImage(images, imageSources, seen, item.url, 'google', 'Google Images');
+      addImage(images, imageSources, seen, item.thumbnail, 'google', 'Google Images');
     });
+
+    if (bingImagesResult.status === 'fulfilled') {
+      bingImagesResult.value.forEach((url) => (
+        addImage(images, imageSources, seen, url, 'bing', 'Bing Images')
+      ));
+    }
 
     const wikiTitles = await findWikipediaCandidates(name);
 
@@ -220,8 +250,8 @@ export default defineEventHandler(async (event) => {
           `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
           { headers: jsonHeaders },
         );
-        addImage(images, seen, summary?.originalimage?.source);
-        addImage(images, seen, summary?.thumbnail?.source);
+        addImage(images, imageSources, seen, summary?.originalimage?.source, 'wikipedia', 'Wikipedia');
+        addImage(images, imageSources, seen, summary?.thumbnail?.source, 'wikipedia', 'Wikipedia');
       } catch {}
 
       try {
@@ -230,7 +260,7 @@ export default defineEventHandler(async (event) => {
           { headers: jsonHeaders },
         );
         const page = Object.values(pageRes.query?.pages || {})[0] as any;
-        addImage(images, seen, page?.thumbnail?.source);
+        addImage(images, imageSources, seen, page?.thumbnail?.source, 'wikipedia', 'Wikipedia');
 
         const wikiDataId = page?.pageprops?.wikibase_item;
         if (wikiDataId) {
@@ -241,7 +271,7 @@ export default defineEventHandler(async (event) => {
           const entity = entityData.entities?.[wikiDataId];
           const fileName = entity?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
           const urls = await imageInfoForFiles(fileName ? [fileName] : []);
-          urls.forEach((url) => addImage(images, seen, url));
+          urls.forEach((url) => addImage(images, imageSources, seen, url, 'wikidata', 'Wikidata'));
         }
 
         const pageFiles = (page?.images || [])
@@ -249,7 +279,7 @@ export default defineEventHandler(async (event) => {
           .filter((title: string) => /(\.jpe?g|\.png|\.webp)$/i.test(title))
           .filter((title: string) => !/logo|icon|cover|book|map|signature/i.test(title));
         const urls = await imageInfoForFiles(pageFiles);
-        urls.forEach((url) => addImage(images, seen, url));
+        urls.forEach((url) => addImage(images, imageSources, seen, url, 'wikimedia', 'Wikimedia Commons'));
       } catch {}
     }
 
@@ -260,13 +290,18 @@ export default defineEventHandler(async (event) => {
       );
       const files = (commonsRes.query?.search || []).slice(0, 18).map((item: any) => item.title);
       const urls = await imageInfoForFiles(files);
-      urls.forEach((url) => addImage(images, seen, url));
+      urls.forEach((url) => addImage(images, imageSources, seen, url, 'wikimedia', 'Wikimedia Commons'));
     } catch {}
 
     const duckImages = await findDuckDuckGoImages(name);
-    duckImages.forEach((url) => addImage(images, seen, url));
+    duckImages.forEach((url) => addImage(images, imageSources, seen, url, 'duckDuckGo', 'DuckDuckGo Images'));
 
-    return { images: images.slice(0, 24) };
+    return {
+      images: images.slice(0, 36).map((url) => ({
+        url,
+        ...(imageSources.get(url) || { source: 'web', label: 'Web image' }),
+      })),
+    };
   } catch (error: any) {
     console.error('Search author images failed:', error);
     return { images: [] };

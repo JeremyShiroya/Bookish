@@ -40,20 +40,30 @@
         </div>
     </div>
 
-    <div v-if="books.length" class="detail-status-filter" aria-label="Filter books by reading status">
-      <button
-        v-for="option in statusOptions"
-        :key="option.value"
-        type="button"
-        :class="{ active: selectedStatus === option.value }"
-        @click="selectedStatus = option.value"
-      >
-        {{ option.label }}
-        <span>{{ statusCounts[option.value] }}</span>
-      </button>
-    </div>
+    <div v-if="books.length" class="view-container" :class="{ 'is-card': viewMode === 'table' }">
+      <LibraryDisplayControls
+        :status="selectedStatus"
+        :view="viewMode"
+        @update:status="selectedStatus = $event"
+        @update:view="setViewMode"
+      />
 
-    <section v-if="filteredBooks.length" class="detail-table" :aria-label="`${title} books`">
+      <div v-if="filteredBooks.length && viewMode === 'grid'" class="detail-books-grid">
+        <LibraryBookCard
+          v-for="book in filteredBooks"
+          :key="book.id"
+          :book="book"
+          :active="isBookActive(book)"
+          @open="router.push(`/reader/${book.id}`)"
+          @play="handlePlay"
+          @favourite="toggleFavourite(book.id)"
+          @playlist="selectedPlaylistBook = book"
+          @edit="router.push(`/edit/${book.id}`)"
+          @delete="handleDeleteBook(book)"
+        />
+      </div>
+
+      <section v-else-if="filteredBooks.length" class="detail-table" :aria-label="`${title} books`">
         <div class="data-header">
           <div class="col-index">#</div>
           <div class="col-book">Book</div>
@@ -138,29 +148,42 @@
             </button>
           </div>
         </div>
-    </section>
+      </section>
+
+      <EmptyState
+        v-else
+        title="No books match this status"
+        description="Choose another reading status to see more books."
+        icon="ri-filter-3-line"
+      />
+    </div>
 
     <EmptyState
-      v-else-if="!books.length"
+      v-else
       :title="emptyTitle"
       :description="emptyDescription"
       :icon="emptyIcon"
     />
-    <EmptyState
-      v-else
-      title="No books match this status"
-      description="Choose another reading status to see more books."
-      icon="ri-filter-3-line"
+
+    <AddToPlaylistModal
+      v-if="selectedPlaylistBook"
+      :book="selectedPlaylistBook"
+      @close="selectedPlaylistBook = null"
     />
   </div>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue';
+import AddToPlaylistModal from './AddToPlaylistModal.vue';
 import EmptyState from './EmptyState.vue';
 import GoodreadsRatingDisplay from './GoodreadsRatingDisplay.vue';
+import LibraryBookCard from './LibraryBookCard.vue';
+import LibraryDisplayControls from './LibraryDisplayControls.vue';
 import { useBooks } from '~/composables/useBooks';
+import { useBookishSettings } from '~/composables/useBookishSettings';
 import { getGoodreadsRating, parseGoodreadsReview } from '~/composables/useGoodreadsRating';
+import { useTTS } from '~/composables/useTTS';
 
 const props = defineProps({
   backTo: {
@@ -213,20 +236,17 @@ defineEmits(['edit-title']);
 
 const router = useRouter();
 const { deleteBook, toggleFavourite } = useBooks();
+const { settings, updateSettings } = useBookishSettings();
+const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const selectedStatus = ref('all');
-
-const statusOptions = [
-  { value: 'all', label: 'All' },
-  { value: 'unread', label: 'Unread' },
-  { value: 'reading', label: 'Reading' },
-  { value: 'read', label: 'Read' },
-];
+const viewMode = ref(settings.value.groupDetailView);
+const selectedPlaylistBook = ref(null);
 
 const normalizedStatus = (book) => {
   const status = String(book.status || 'Unread').toLowerCase();
-  if (status === 'read' || status === 'completed' || Number(book.progress) >= 100) return 'read';
-  if (status === 'reading') return 'reading';
-  return 'unread';
+  if (status === 'read' || status === 'completed' || Number(book.progress) >= 100) return 'Read';
+  if (status === 'reading') return 'Reading';
+  return 'Unread';
 };
 
 const filteredBooks = computed(() => (
@@ -235,14 +255,24 @@ const filteredBooks = computed(() => (
     : props.books.filter(book => normalizedStatus(book) === selectedStatus.value)
 ));
 
-const statusCounts = computed(() => ({
-  all: props.books.length,
-  unread: props.books.filter(book => normalizedStatus(book) === 'unread').length,
-  reading: props.books.filter(book => normalizedStatus(book) === 'reading').length,
-  read: props.books.filter(book => normalizedStatus(book) === 'read').length,
-}));
-
 const previewBooks = computed(() => props.books.slice(0, 3));
+
+const setViewMode = (mode) => {
+  viewMode.value = mode;
+  updateSettings({ groupDetailView: mode });
+};
+
+const isBookActive = (book) => (
+  ttsBook.value?.id === book.id && ttsStatus.value !== 'idle'
+);
+
+const handlePlay = (book) => {
+  if (isBookActive(book)) {
+    toggleTTS();
+    return;
+  }
+  playTTS(book);
+};
 
 const statusBadgeClass = (status) => {
   if (status === 'Reading') return 'status-reading';
@@ -444,10 +474,19 @@ const getDetailStackStyle = (index, total = 3) => {
 }
 
 .detail-table {
-  border: 1px solid var(--color-border-card);
-  border-radius: 8px;
   background: var(--color-surface-card);
   overflow: hidden;
+}
+
+.view-container {
+  width: 100%;
+}
+
+.view-container.is-card {
+  overflow: hidden;
+  border: 1px solid var(--color-border-card);
+  border-radius: 14px;
+  background: var(--color-surface-card);
 }
 
 .data-header,
@@ -503,44 +542,11 @@ const getDetailStackStyle = (index, total = 3) => {
   background: var(--color-table-row-hover);
 }
 
-.detail-status-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  margin-bottom: 1rem;
-  padding: 0.25rem;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 999px;
-  background: var(--color-surface-secondary);
-}
-
-.detail-status-filter button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.48rem 0.78rem;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.8rem;
-}
-
-.detail-status-filter button.active {
-  background: var(--color-brand-primary);
-  color: var(--color-text-on-brand);
-  box-shadow: var(--shadow-control-subtle);
-}
-
-.detail-status-filter span {
-  min-width: 1.2rem;
-  padding: 0.05rem 0.3rem;
-  border-radius: 999px;
-  background: var(--color-surface-on-image);
-  font-size: 0.68rem;
-  text-align: center;
+.detail-books-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: 276px;
+  gap: 1.25rem;
 }
 
 .book-cell {
@@ -876,6 +882,16 @@ const getDetailStackStyle = (index, total = 3) => {
 
   .col-actions {
     opacity: 1;
+  }
+
+  .detail-books-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  .detail-books-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

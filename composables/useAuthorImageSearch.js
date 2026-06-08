@@ -28,6 +28,29 @@ const addImage = (images, seen, url) => {
   images.push(normalized);
 };
 
+export const normalizeAuthorImageResults = (results = []) => {
+  const output = [];
+  const seen = new Set();
+
+  for (const result of results) {
+    const item = typeof result === 'string'
+      ? { url: result, source: 'unknown', label: 'Web image' }
+      : {
+          url: result?.url,
+          source: result?.source || 'unknown',
+          label: result?.label || 'Web image',
+        };
+    const normalized = normalizeImageUrl(item.url);
+    if (!normalized) continue;
+    const key = normalized.replace(/[?#].*$/, '').toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push({ ...item, url: normalized });
+  }
+
+  return output;
+};
+
 const imageInfoForFiles = async (fileTitles) => {
   if (!fileTitles.length) return [];
   try {
@@ -109,8 +132,8 @@ export const fetchAuthorImageResults = async (name) => {
   try {
     const response = await fetch(`/api/authors/search-images?name=${encodeURIComponent(name)}`);
     const data = await response.json();
-    (data.images || []).forEach((url) => addImage(images, seen, url));
-    if (images.length) return images;
+    const normalizedResults = normalizeAuthorImageResults(data.images || []);
+    if (normalizedResults.length) return normalizedResults;
   } catch {}
 
   const [wikipedia, wikidata, openLibrary] = await Promise.all([
@@ -120,5 +143,5 @@ export const fetchAuthorImageResults = async (name) => {
   ]);
 
   [...wikipedia, ...wikidata, ...openLibrary].forEach((url) => addImage(images, seen, url));
-  return images.slice(0, 24);
+  return normalizeAuthorImageResults(images.slice(0, 24));
 };

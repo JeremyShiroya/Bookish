@@ -60,6 +60,12 @@ describe('useBookishSettings storage helpers', () => {
     expect(DEFAULT_BOOKISH_SETTINGS.libraryTableItemsPerPage).toBe(10)
   })
 
+  it('opens series and playlist details in table view by default', () => {
+    expect(DEFAULT_BOOKISH_SETTINGS.groupDetailView).toBe('table')
+    expect(normalizeBookishSettings({ groupDetailView: 'grid' }).groupDetailView).toBe('grid')
+    expect(normalizeBookishSettings({ groupDetailView: 'invalid' }).groupDetailView).toBe('table')
+  })
+
   it('migrates the legacy shared page size without exceeding the new defaults', () => {
     expect(normalizeBookishSettings({ libraryItemsPerPage: 20 })).toMatchObject({
       libraryGridItemsPerPage: 12,

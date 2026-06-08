@@ -6,6 +6,7 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   readerTheme: 'light',
   readerZoom: 1.0,
   libraryView: 'grid',
+  groupDetailView: 'table',
   librarySort: 'name',
   librarySortDirection: 'asc',
   libraryGridItemsPerPage: 12,
@@ -69,6 +70,9 @@ export function normalizeBookishSettings(value) {
     libraryView: ['grid', 'table'].includes(source.libraryView)
       ? source.libraryView
       : DEFAULT_BOOKISH_SETTINGS.libraryView,
+    groupDetailView: ['grid', 'table'].includes(source.groupDetailView)
+      ? source.groupDetailView
+      : DEFAULT_BOOKISH_SETTINGS.groupDetailView,
     librarySort: ['name', 'rating', 'year'].includes(source.librarySort)
       ? source.librarySort
       : DEFAULT_BOOKISH_SETTINGS.librarySort,

@@ -6,6 +6,7 @@ import {
   rankAuthorResult,
   rankCoverResult,
   parseGoogleImageSearchHtml,
+  parseBingImageSearchHtml,
   searchGoogleImages,
 } from './imageSearch';
 
@@ -35,6 +36,7 @@ describe('image search helpers', () => {
     expect(isUsefulAuthorImageUrl('https://example.com/gillian-flynn-portrait.jpg')).toBe(true);
     expect(isUsefulAuthorImageUrl('https://covers.openlibrary.org/a/id/12345-L.jpg')).toBe(true);
     expect(isUsefulAuthorImageUrl('https://encrypted-tbn0.gstatic.com/images?q=tbn:portrait')).toBe(true);
+    expect(isUsefulAuthorImageUrl('https://images.penguinrandomhouse.com/author/22367')).toBe(true);
     expect(isUsefulAuthorImageUrl('https://example.com/sharp-objects-book-cover.jpg')).toBe(false);
     expect(isUsefulAuthorImageUrl('https://example.com/logo.svg')).toBe(false);
   });
@@ -111,6 +113,18 @@ describe('image search helpers', () => {
       'https://example.com/cover-one.jpg',
       'https://example.com/cover-two.webp',
       'https://encrypted-tbn0.gstatic.com/images?q=tbn:thumb',
+    ]);
+  });
+
+  it('parses original image URLs from Bing image results', () => {
+    const html = `
+      <a class="iusc" m='{"murl":"https://example.com/author-one.jpg","turl":"https://example.com/thumb.jpg"}'></a>
+      <div data-meta="{&quot;murl&quot;:&quot;https://example.com/author-two.webp&quot;}"></div>
+    `;
+
+    expect(parseBingImageSearchHtml(html)).toEqual([
+      'https://example.com/author-one.jpg',
+      'https://example.com/author-two.webp',
     ]);
   });
 

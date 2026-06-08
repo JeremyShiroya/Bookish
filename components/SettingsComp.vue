@@ -212,6 +212,23 @@
 
         <div class="setting-row">
           <div class="setting-copy">
+            <h3>Series and playlist view</h3>
+            <p>{{ settings.groupDetailView === 'grid' ? 'Book-card grid' : 'Detailed table' }} by default.</p>
+          </div>
+          <div class="segmented-control" aria-label="Series and playlist view">
+            <button :class="{ active: settings.groupDetailView === 'grid' }" @click="setGroupDetailView('grid')">
+              <i class="ri-apps-2-line"></i>
+              <span>Grid</span>
+            </button>
+            <button :class="{ active: settings.groupDetailView === 'table' }" @click="setGroupDetailView('table')">
+              <i class="ri-list-unordered"></i>
+              <span>Table</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-copy">
             <h3>Table items per page</h3>
             <p>{{ settings.libraryTableItemsPerPage }} book rows per page.</p>
           </div>
@@ -543,6 +560,7 @@ const setAudioVolume = (value) => {
 }
 
 const setLibraryView = (libraryView) => updateSettings({ libraryView })
+const setGroupDetailView = (groupDetailView) => updateSettings({ groupDetailView })
 const setLibrarySort = (librarySort, librarySortDirection) => updateSettings({ librarySort, librarySortDirection })
 const setLibraryGridItemsPerPage = (libraryGridItemsPerPage) => updateSettings({ libraryGridItemsPerPage })
 const setLibraryTableItemsPerPage = (libraryTableItemsPerPage) => updateSettings({ libraryTableItemsPerPage })

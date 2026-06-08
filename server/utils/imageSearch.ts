@@ -100,6 +100,15 @@ function isKnownBookCoverCdnUrl(url: string) {
     || url.includes('d1w7fb2mkkr3kw.cloudfront.net/assets/images/book');
 }
 
+function isKnownAuthorImageCdnUrl(url: string) {
+  return url.includes('images.penguinrandomhouse.com/author/')
+    || url.includes('images.randomhouse.com/author/')
+    || url.includes('images.macmillan.com/')
+    || url.includes('authorimages.harpercollins.com')
+    || url.includes('simonandschusterpublishing.com/')
+    || url.includes('media.bloomsbury.com/');
+}
+
 function isLikelyImageSearchUrl(url?: string | null) {
   const normalized = normalizeImageUrl(url);
   if (!normalized || normalized.startsWith('data:')) return false;
@@ -153,6 +162,7 @@ export function isUsefulAuthorImageUrl(url?: string | null) {
       || lower.includes('images.gr-assets.com')
       || lower.includes('i.gr-assets.com')
       || isOpenLibraryAuthorImage
+      || isKnownAuthorImageCdnUrl(lower)
     )
     && !/(svg|icon|logo|stub|symbol|book[_-]?cover|cover[_-]?(art|image|photo)|novel|book[_-]|book%20|magnify|signature|map|badge|sprite|placeholder|nophoto|no[_-]?image)/i.test(rejectionText)
   );
@@ -250,6 +260,42 @@ export function parseGoogleImageSearchHtml(html: string, query?: string): Google
   }
 
   return results;
+}
+
+export function parseBingImageSearchHtml(html: string): string[] {
+  const text = decodeHtmlEntities(decodeJsEscapes(html));
+  const results: string[] = [];
+  const seen = new Set<string>();
+
+  for (const match of text.matchAll(/"murl"\s*:\s*"([^"]+)"/gi)) {
+    const url = cleanExtractedUrl(match[1]);
+    const key = cleanForDedupe(url);
+    if (!url || !key || seen.has(key) || !isLikelyImageSearchUrl(url)) continue;
+    seen.add(key);
+    results.push(url);
+  }
+
+  return results;
+}
+
+export async function searchBingImages(query: string, num = 20): Promise<string[]> {
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      form: 'HDRSC2',
+      first: '1',
+      cw: '1177',
+      ch: '748',
+    });
+    const response = await fetch(`https://www.bing.com/images/search?${params.toString()}`, {
+      headers: googleImageHeaders,
+    });
+    if (!response.ok) return [];
+    return parseBingImageSearchHtml(await response.text()).slice(0, targetResultCount(num));
+  } catch (error) {
+    console.error('Bing image search failed:', error);
+    return [];
+  }
 }
 
 function dedupeGoogleResults(results: GoogleImageResult[]) {

@@ -1,7 +1,7 @@
 <template>
   <div class="series-container">
-    <div class="series-header">
-      <h1 class="series-title">Series</h1>
+    <div v-if="showTitle" class="series-header">
+      <h1 class="series-title">{{ title }}</h1>
     </div>
 
     <div v-if="sortedSeriesList.length > 0" class="series-grid">
@@ -59,7 +59,7 @@
 
     <!-- Empty State -->
     <EmptyState
-      v-else
+      v-else-if="showEmpty"
       title="No series detected"
       description="Books that share series metadata will automatically group here."
       icon="ri-book-shelf-line"
@@ -82,10 +82,28 @@ import EmptyState from "./EmptyState.vue";
 
 const { seriesList } = useBooks();
 const router = useRouter();
+const props = defineProps({
+  items: {
+    type: Array,
+    default: null,
+  },
+  title: {
+    type: String,
+    default: 'Series',
+  },
+  showTitle: {
+    type: Boolean,
+    default: true,
+  },
+  showEmpty: {
+    type: Boolean,
+    default: true,
+  },
+});
 
 // Sort books within each series by seriesInstallment
 const sortedSeriesList = computed(() =>
-  seriesList.value.map(series => ({
+  (props.items || seriesList.value).map(series => ({
     ...series,
     books: [...series.books].sort((a, b) => {
       const aIdx = Number(a.seriesInstallment) || Infinity;
