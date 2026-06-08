@@ -241,7 +241,7 @@
             :key="book.id"
             :book="book"
             :active="isBookActive(book)"
-            @open="router.push(`/reader/${book.id}`)"
+            @open="router.push(`/book/${book.id}`)"
             @play="handlePlay"
             @favourite="toggleFavourite(book.id)"
             @playlist="selectedPlaylistBook = book"
@@ -266,7 +266,7 @@
               v-for="book in paginatedBooks"
               :key="book.id"
               class="data-row"
-              @click="router.push(`/reader/${book.id}`)"
+              @click="router.push(`/book/${book.id}`)"
             >
               <div class="col-book book-cell">
                 <img :src="resolveBookCover(book)" :alt="book.title" class="cell-cover" @error="(e) => coverFallback(e, book.title)" />
@@ -978,10 +978,9 @@ onUnmounted(() => {
 .books-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: 276px;
   gap: 2rem;
   justify-content: start;
-  align-items: stretch;
+  align-items: start;
 }
 
 @media (max-width: 1100px) {

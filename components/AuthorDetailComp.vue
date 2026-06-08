@@ -67,7 +67,7 @@
               :key="book.id"
               :book="book"
               :active="isBookActive(book)"
-              @open="router.push(`/reader/${book.id}`)"
+              @open="router.push(`/book/${book.id}`)"
               @play="handlePlay"
               @favourite="toggleFavourite(book.id)"
               @playlist="selectedPlaylistBook = book"

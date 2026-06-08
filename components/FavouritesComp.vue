@@ -17,7 +17,7 @@
             :key="book.id"
             :book="book"
             :active="isBookActive(book)"
-            @open="router.push(`/reader/${book.id}`)"
+            @open="router.push(`/book/${book.id}`)"
             @play="handlePlay"
             @favourite="toggleFavourite(book.id)"
             @playlist="selectedPlaylistBook = book"
@@ -101,7 +101,6 @@ const deleteFavouriteBook = async (book) => {
 .books-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: 276px;
   gap: 2rem;
   justify-content: start;
 }

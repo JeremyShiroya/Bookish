@@ -31,7 +31,7 @@
             v-for="book in recentlyAddedBooks.slice(0, 3)"
             :key="book.id"
             class="recent-card"
-            @click="router.push(`/reader/${book.id}`)"
+            @click="router.push(`/book/${book.id}`)"
           >
             <div class="recent-card-bg-container">
               <div
@@ -83,7 +83,7 @@
               v-for="book in popularBooks"
               :key="book.id"
               class="popular-card"
-              @click="router.push(`/reader/${book.id}`)"
+              @click="router.push(`/book/${book.id}`)"
             >
               <img :src="book.cover" :alt="book.title" class="popular-cover" />
               <div class="popular-info">

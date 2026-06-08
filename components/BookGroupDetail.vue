@@ -54,7 +54,7 @@
           :key="book.id"
           :book="book"
           :active="isBookActive(book)"
-          @open="router.push(`/reader/${book.id}`)"
+          @open="router.push(`/book/${book.id}`)"
           @play="handlePlay"
           @favourite="toggleFavourite(book.id)"
           @playlist="selectedPlaylistBook = book"
@@ -79,8 +79,8 @@
           :key="book.id"
           class="data-row"
           tabindex="0"
-          @click="router.push(`/reader/${book.id}`)"
-          @keydown.enter="router.push(`/reader/${book.id}`)"
+          @click="router.push(`/book/${book.id}`)"
+          @keydown.enter="router.push(`/book/${book.id}`)"
         >
           <div class="col-index row-index">{{ showInstallment ? (book.seriesInstallment ?? index + 1) : (index + 1) }}</div>
           <div class="col-book book-cell">
@@ -545,8 +545,8 @@ const getDetailStackStyle = (index, total = 3) => {
 .detail-books-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: 276px;
   gap: 1.25rem;
+  align-items: start;
 }
 
 .book-cell {

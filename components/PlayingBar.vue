@@ -2,14 +2,14 @@
   <div class="playing-bar">
     <div class="track-info">
       <template v-if="ttsBook">
-        <div class="album-art">
+        <div class="album-art track-link" @click="router.push(`/book/${ttsBook.id}`)">
           <img
             :src="resolveBookCover(ttsBook)"
             :alt="ttsBook.title"
             @error="(e) => coverFallback(e, ttsBook.title)"
           />
         </div>
-        <div class="track-details">
+        <div class="track-details track-link" @click="router.push(`/book/${ttsBook.id}`)">
           <h4 class="track-title">{{ ttsBook.title }}</h4>
           <p class="artist-name">{{ ttsBook.author }}</p>
         </div>
@@ -151,8 +151,11 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useTTS } from '~/composables/useTTS'
 import { useBooks } from '~/composables/useBooks'
+
+const router = useRouter()
 
 const {
   ttsBook, ttsStatus, ttsSpeed, ttsVolume,
@@ -326,6 +329,15 @@ const coverFallback = (event, title) => {
   gap: 0.75rem;
 }
 
+.track-link {
+  cursor: pointer;
+}
+
+.track-link:hover .track-title {
+  color: var(--color-brand-primary-hover);
+  text-decoration: underline;
+}
+
 .album-art {
   width: 45px;
   height: 63px;
@@ -333,6 +345,11 @@ const coverFallback = (event, title) => {
   overflow: hidden;
   flex-shrink: 0;
   box-shadow: var(--shadow-control-subtle);
+  transition: opacity 0.15s;
+}
+
+.album-art.track-link:hover {
+  opacity: 0.85;
 }
 
 .album-art img {

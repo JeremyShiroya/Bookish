@@ -147,6 +147,7 @@ const formatPersonalRating = (rating) => {
 }
 
 .library-book-card:hover {
+  z-index: 2;
   transform: translateY(-4px);
   border-color: var(--color-border-on-image-strong);
   box-shadow: var(--shadow-card-hover);
