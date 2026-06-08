@@ -23,8 +23,7 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   ssr: false,
   modules: [
-    '@nuxt/test-utils/module',
-    '@vercel/analytics/nuxt'
+    '@nuxt/test-utils/module'
   ],
   css: ['@/assets/css/main.css'],
   runtimeConfig: {
