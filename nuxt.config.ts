@@ -26,6 +26,16 @@ export default defineNuxtConfig({
     '@nuxt/test-utils/module'
   ],
   css: ['@/assets/css/main.css'],
+  app: {
+    head: {
+      title: 'Bookish',
+      link: [
+        { rel: 'icon', type: 'image/png', href: '/Images/Logo.png' },
+        { rel: 'shortcut icon', type: 'image/png', href: '/Images/Logo.png' },
+        { rel: 'apple-touch-icon', href: '/Images/Logo.png' },
+      ],
+    },
+  },
   runtimeConfig: {
     public: {
       appVersion: packageJson.version,
