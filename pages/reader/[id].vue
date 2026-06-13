@@ -25,6 +25,11 @@
             <b class="ch-num">{{ currentPdfPage }} / {{ totalPages || book.pages || 1 }}</b>
             <span class="ch-sep">&nbsp;Page</span>
           </template>
+          <template v-else-if="tocPosition">
+            <b class="ch-num">{{ tocPosition.number }} / {{ tocPosition.total }}</b>
+            <span class="ch-sep" v-if="tocPosition.title">&nbsp;-&nbsp;</span>
+            <span class="ch-title">{{ tocPosition.title }}</span>
+          </template>
           <template v-else-if="chapterList.length">
             <b class="ch-num">{{ currentChapterIdx + 1 }} / {{ chapterList.length }}</b>
             <span class="ch-sep" v-if="currentChapterTitle">&nbsp;-&nbsp;</span>
@@ -63,15 +68,18 @@
 
     <div class="toc-backdrop" :class="{ visible: tocOpen }" @click="tocOpen = false" />
 
-    <aside class="toc-sidebar" :class="{ open: tocOpen }">
+    <aside class="toc-sidebar" :class="{ open: tocOpen }" ref="tocSidebarRef">
       <div class="toc-head">
-        <span>Contents</span>
+        <div class="toc-head-info">
+          <span class="toc-head-label">Contents</span>
+          <span v-if="book" class="toc-head-book">{{ book.title }}</span>
+        </div>
         <button class="tb-btn" @click="tocOpen = false" title="Close contents">
           <i class="ri-close-line"></i>
         </button>
       </div>
 
-      <nav v-if="displayTocItems.length" class="toc-nav">
+      <nav v-if="displayTocItems.length" class="toc-nav" ref="tocNavRef">
         <button
           v-for="(item, i) in displayTocItems"
           :key="`${item.type}-${item.page ?? item.index}-${i}`"
@@ -80,7 +88,7 @@
           :style="{ paddingLeft: `${1 + (item.level || 0) * 0.8}rem` }"
           @click="goToTocItem(item)"
         >
-          <span class="toc-num">{{ tocItemLabel(item, i) }}</span>
+          <span class="toc-indicator"></span>
           <span class="toc-title">{{ item.title }}</span>
         </button>
       </nav>
@@ -189,7 +197,7 @@ definePageMeta({ layout: 'reader' })
 
 import { computed, nextTick, onMounted, onUnmounted, ref, toRaw, watch } from 'vue'
 import { useBooks } from '~/composables/useBooks'
-import { stripHtml, splitToChunks, useTTS } from '~/composables/useTTS'
+import { isRenderableSection, buildReadableChunks, useTTS } from '~/composables/useTTS'
 import { useBookStorage } from '~/composables/useBookStorage'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 import { extractPdfTocFromSource, pdfSourceToBytes } from '~/composables/usePdfExtractor'
@@ -199,7 +207,7 @@ const router = useRouter()
 const { books, fetchBookById, updateBook } = useBooks()
 const { getBookContent, saveBookContent } = useBookStorage()
 const { settings, updateSettings } = useBookishSettings()
-const { ttsBook, ttsChunkIdx, ttsCurrentChunk, ttsStatus, play: playTTS } = useTTS()
+const { ttsBook, ttsChunkIdx, ttsCurrentChunk, ttsStatus, play: playTTS, pause: pauseTTS, resume: resumeTTS } = useTTS()
 
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2.5
@@ -207,6 +215,7 @@ const MAX_ZOOM = 2.5
 const readerPageRef = ref(null)
 const chaptersContainerRef = ref(null)
 const pdfViewerRef = ref(null)
+const tocNavRef = ref(null)
 
 const book = ref(null)
 const loading = ref(true)
@@ -228,6 +237,7 @@ const restoredInitialPdfScroll = ref(false)
 const readerReady = ref(false)
 const confirmReadFromHereOpen = ref(false)
 const pendingReadFromHereChunk = ref(0)
+const pendingReadFromHereWasPlaying = ref(false)
 
 const bookFormat = computed(() => (book.value?.format || '').toLowerCase())
 const isPdfBook = computed(() => bookFormat.value === 'pdf')
@@ -243,6 +253,20 @@ const hasCover = computed(() => hasCoverVal())
 const currentChapterTitle = computed(() => {
   const ch = chapterList.value[currentChapterIdx.value]
   return ch ? ch.title : ''
+})
+
+// Position among real TOC chapters (sections are page-level file splits,
+// so "section 214 / 369" would misrepresent the chapter count).
+const tocPosition = computed(() => {
+  if (isPdfBook.value) return null
+  const entries = displayTocItems.value
+  if (!entries.length) return null
+  let pos = 0
+  for (let i = 0; i < entries.length; i++) {
+    if (entries[i].index <= currentChapterIdx.value) pos = i
+    else break
+  }
+  return { number: pos + 1, total: entries.length, title: entries[pos].title }
 })
 
 const epubStyle = computed(() => {
@@ -290,7 +314,7 @@ function parseChapters(content) {
   return html
     .split(/<hr[^>]*chapter-break[^>]*\/?>/i)
     .map(part => part.trim())
-    .filter(part => part.replace(/<[^>]+>/g, '').trim().length > 3)
+    .filter(isRenderableSection)
     .map((html, i) => ({ title: extractTitle(html, i), html }))
 }
 
@@ -343,16 +367,33 @@ const isCurrentBookNarrating = computed(() => (
   ttsBook.value?.id === book.value?.id && ttsStatus.value !== 'idle'
 ))
 
-const allReadableChunks = computed(() => splitToChunks(stripHtml(rawContent.value || '')))
+// Canonical chunk data: the flat chunk list (TTS playback order) plus the
+// per-section chunk counts. Built section-by-section so indices line up with
+// the reader's `ch-N` sections, the highlight spans, and the chapter splits.
+const readableChunkData = computed(() => buildReadableChunks(rawContent.value || ''))
 
-function tocItemLabel(item, index) {
-  if (item.type === 'pdf') return item.page
-  return index + 1
-}
+const sectionChunkCounts = computed(() => readableChunkData.value.sectionCounts)
+
+const allReadableChunks = computed(() => readableChunkData.value.chunks)
+
+// The TOC entry whose section range contains the section being read.
+// Chapters usually span many sections (EPUBs split files per few pages),
+// so an exact index match would almost never highlight anything.
+const activeTocEntryIdx = computed(() => {
+  if (isPdfBook.value) return -1
+  const entries = displayTocItems.value
+  if (!entries.length) return -1
+  let active = -1
+  for (const entry of entries) {
+    if (entry.index <= currentChapterIdx.value) active = entry.index
+    else break
+  }
+  return active
+})
 
 function isTocItemActive(item) {
   if (item.type === 'pdf') return currentPdfPage.value === item.page
-  return currentChapterIdx.value === item.index
+  return item.index === activeTocEntryIdx.value
 }
 
 function goToTocItem(item) {
@@ -369,6 +410,25 @@ function scrollToChapter(index) {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+// First flat chunk index of section `sectionIndex`, from the per-section counts.
+function sectionStartChunk(sectionIndex) {
+  const counts = sectionChunkCounts.value
+  let offset = 0
+  for (let i = 0; i < sectionIndex && i < counts.length; i += 1) offset += counts[i] || 0
+  return offset
+}
+
+// Which section (ch-N) a flat chunk index falls in.
+function sectionForChunk(chunkIndex) {
+  const counts = sectionChunkCounts.value
+  let offset = 0
+  for (let i = 0; i < counts.length; i += 1) {
+    offset += counts[i] || 0
+    if (chunkIndex < offset) return i
+  }
+  return Math.max(0, counts.length - 1)
+}
+
 function chunkIndexForCurrentPosition() {
   const chunks = allReadableChunks.value
   if (!chunks.length) return 0
@@ -379,46 +439,65 @@ function chunkIndexForCurrentPosition() {
     return Math.max(0, Math.min(chunks.length - 1, Math.floor(pageProgress * chunks.length)))
   }
 
-  let chunkIndex = 0
+  // Preferred: the highlight span nearest the top of the viewport is the exact
+  // sentence on screen, so "read from here" begins at the visible page — not a
+  // proportional estimate that drifts toward where narration last was.
+  const anchorY = 80
+  if (import.meta.client && _chunkEls.length) {
+    let best = -1
+    let firstConnected = -1
+    for (let i = 0; i < _chunkEls.length; i += 1) {
+      const el = _chunkEls[i]
+      if (!el?.isConnected) continue
+      if (firstConnected === -1) firstConnected = i
+      const top = el.getBoundingClientRect().top
+      if (top <= anchorY + 4) best = i
+      else break
+    }
+    if (best !== -1) return best
+    if (firstConnected !== -1) return firstConnected
+  }
+
+  // Fallback: the first chunk of the section currently in view.
   const chapterIndex = Math.max(0, Math.min(currentChapterIdx.value, chapterList.value.length - 1))
-  for (let i = 0; i < chapterIndex; i += 1) {
-    chunkIndex += splitToChunks(stripHtml(chapterList.value[i]?.html || '')).length
-  }
-
-  const chapterChunks = splitToChunks(stripHtml(chapterList.value[chapterIndex]?.html || ''))
-  const chapterEl = import.meta.client ? document.getElementById(`ch-${chapterIndex}`) : null
-  let intraChapterIndex = 0
-
-  if (chapterEl && chapterChunks.length > 1) {
-    const anchorY = 72
-    const rect = chapterEl.getBoundingClientRect()
-    const visibleOffset = Math.max(0, anchorY - rect.top)
-    const readableHeight = Math.max(1, rect.height - window.innerHeight * 0.2)
-    const chapterProgress = Math.max(0, Math.min(1, visibleOffset / readableHeight))
-    intraChapterIndex = Math.floor(chapterProgress * chapterChunks.length)
-  }
-
-  return Math.max(0, Math.min(chunks.length - 1, chunkIndex + intraChapterIndex))
+  return Math.max(0, Math.min(chunks.length - 1, sectionStartChunk(chapterIndex)))
 }
 
 function requestReadCurrentPosition() {
   if (!book.value || !allReadableChunks.value.length) return
+  // Pause TTS so auto-scroll stops and the current viewport position is preserved
+  pendingReadFromHereWasPlaying.value = ttsStatus.value === 'playing'
+  if (ttsStatus.value === 'playing') pauseTTS()
   pendingReadFromHereChunk.value = chunkIndexForCurrentPosition()
   confirmReadFromHereOpen.value = true
 }
 
 function cancelReadFromHere() {
   confirmReadFromHereOpen.value = false
+  // Resume if TTS was playing when the user opened the modal
+  if (pendingReadFromHereWasPlaying.value && ttsBook.value?.id === book.value?.id) {
+    resumeTTS()
+  }
+  pendingReadFromHereWasPlaying.value = false
 }
 
 function confirmReadFromHere() {
   if (!book.value || !allReadableChunks.value.length) return
   confirmReadFromHereOpen.value = false
+  pendingReadFromHereWasPlaying.value = false
+
+  // Move the reading marker back to the page being read from, so saved
+  // progress reflects the new (earlier) position rather than where narration
+  // previously was.
+  if (!isPdfBook.value) {
+    currentChapterIdx.value = sectionForChunk(pendingReadFromHereChunk.value)
+  }
+
   playTTS(book.value, {
     startChunkIdx: pendingReadFromHereChunk.value,
     ignoreSavedSession: true,
   })
-  queueProgressSave()
+  saveReadingProgress()
 }
 
 function jumpToNarration() {
@@ -515,6 +594,15 @@ let _activeEl = null
 
 const normalizeForSearch = (value) => (value || '').replace(/\s+/g, ' ').trim()
 
+function decodeHtmlEntities(text) {
+  if (!import.meta.client || !text) return text || ''
+  if (!text.includes('&')) return text
+  const el = document.createElement('textarea')
+  // Protect raw "<" so the parser can't swallow following text as a tag
+  el.innerHTML = text.replace(/</g, '&lt;')
+  return el.value
+}
+
 function unwrapTtsSpans(container) {
   container.querySelectorAll('span[data-tts-chunk]').forEach(span => {
     const parent = span.parentNode
@@ -558,10 +646,14 @@ function buildTextIndex(container) {
   while ((node = walker.nextNode())) {
     const value = node.nodeValue
     for (let i = 0; i < value.length; i++) {
-      if (/\s/.test(value[i])) {
+      const ch = value[i]
+      const code = ch.charCodeAt(0)
+      // Soft hyphens / zero-width chars are stripped from chunk targets too
+      if (code === 0xAD || (code >= 0x200B && code <= 0x200D) || code === 0xFEFF) continue
+      if (/\s/.test(ch)) {
         appendSpace(node, i)
       } else {
-        text += value[i]
+        text += ch
         map.push({ node, offset: i, synthetic: false })
       }
     }
@@ -579,6 +671,68 @@ function resolveRangePoint(map, index, direction) {
   return map[cursor] || null
 }
 
+// Wrap every chunk of ONE section in a <span data-tts-chunk> for highlighting.
+// Matching is scoped to the section element and chunks are matched in order,
+// so an identical sentence elsewhere can't steal the match. The whole sentence
+// is matched when possible (exact start AND end); otherwise a prefix locates
+// the start and a suffix pins the end, so length drift between the chunk text
+// and the rendered DOM never clips the first or last letters.
+function _mapSectionChunks(sectionEl, chunks, baseIdx) {
+  const { text, map } = buildTextIndex(sectionEl)
+  if (!map.length) return
+  const flatLower = text.toLowerCase()
+  const ranges = []
+  let searchFrom = 0
+
+  for (let i = 0; i < chunks.length; i++) {
+    const target = normalizeForSearch(decodeHtmlEntities(chunks[i])).toLowerCase()
+    if (!target) continue
+
+    let start = flatLower.indexOf(target, searchFrom)
+    let end
+    if (start !== -1) {
+      // Exact whole-sentence match: both ends are real DOM positions.
+      end = start + target.length - 1
+    } else {
+      const key = target.slice(0, Math.min(120, target.length))
+      start = flatLower.indexOf(key, searchFrom)
+      if (start === -1 && key.length > 48) start = flatLower.indexOf(key.slice(0, 48), searchFrom)
+      if (start === -1) continue
+      const suffix = target.slice(-Math.min(24, target.length))
+      const suffixFrom = start + Math.max(0, target.length - suffix.length - 12)
+      const suffixPos = flatLower.indexOf(suffix, suffixFrom)
+      end = suffixPos !== -1 && suffixPos >= start
+        ? suffixPos + suffix.length - 1
+        : start + target.length - 1
+    }
+    end = Math.min(end, map.length - 1)
+    ranges.push({ chunkIdx: baseIdx + i, start, end })
+    searchFrom = end + 1
+  }
+
+  // Apply in reverse so wrapping earlier ranges doesn't invalidate later offsets.
+  for (let i = ranges.length - 1; i >= 0; i--) {
+    const info = ranges[i]
+    const startPt = resolveRangePoint(map, info.start, 1)
+    const endPt = resolveRangePoint(map, info.end, -1)
+    if (!startPt || !endPt) continue
+
+    const range = document.createRange()
+    const endOffset = Math.min(endPt.node.nodeValue.length, endPt.offset + 1)
+    try {
+      range.setStart(startPt.node, startPt.offset)
+      range.setEnd(endPt.node, endOffset)
+      const span = document.createElement('span')
+      span.dataset.ttsChunk = String(info.chunkIdx)
+      span.appendChild(range.extractContents())
+      range.insertNode(span)
+      _chunkEls[info.chunkIdx] = span
+    } catch {
+      // Overlapping or detached range — skip this chunk's highlight.
+    }
+  }
+}
+
 function _buildChunkMap() {
   const container = chaptersContainerRef.value
   if (!container || !rawContent.value || isPdfBook.value) return
@@ -587,56 +741,27 @@ function _buildChunkMap() {
   unwrapTtsSpans(container)
   _chunkEls = []
 
-  const chunks = splitToChunks(stripHtml(rawContent.value))
-  const { text, map } = buildTextIndex(container)
-  const flatLower = text.toLowerCase()
-  const ranges = []
-  let searchFrom = 0
-
-  for (let i = 0; i < chunks.length; i++) {
-    const target = normalizeForSearch(chunks[i]).toLowerCase()
-    if (!target) continue
-
-    const key = target.slice(0, Math.min(120, target.length))
-    let position = flatLower.indexOf(key, searchFrom)
-    if (position === -1 && key.length > 48) {
-      position = flatLower.indexOf(key.slice(0, 48), searchFrom)
+  const { chunks, sectionCounts } = readableChunkData.value
+  let offset = 0
+  for (let s = 0; s < sectionCounts.length; s++) {
+    const count = sectionCounts[s] || 0
+    if (count > 0) {
+      const sectionEl = document.getElementById(`ch-${s}`)
+      if (sectionEl) _mapSectionChunks(sectionEl, chunks.slice(offset, offset + count), offset)
     }
-    if (position === -1) continue
-
-    ranges.push({
-      chunkIdx: i,
-      start: position,
-      end: Math.min(position + target.length - 1, map.length - 1),
-    })
-    searchFrom = position + Math.max(1, key.length)
-  }
-
-  for (let i = ranges.length - 1; i >= 0; i--) {
-    const rangeInfo = ranges[i]
-    const start = resolveRangePoint(map, rangeInfo.start, 1)
-    const end = resolveRangePoint(map, rangeInfo.end, -1)
-    if (!start || !end) continue
-
-    const range = document.createRange()
-    const endOffset = Math.min(end.node.nodeValue.length, end.offset + 1)
-    range.setStart(start.node, start.offset)
-    range.setEnd(end.node, endOffset)
-
-    const span = document.createElement('span')
-    span.dataset.ttsChunk = String(rangeInfo.chunkIdx)
-
-    try {
-      span.appendChild(range.extractContents())
-      range.insertNode(span)
-      _chunkEls[rangeInfo.chunkIdx] = span
-    } catch {
-      span.remove()
-    }
+    offset += count
   }
 }
 
+function _isNearViewport(el) {
+  if (!el?.isConnected) return false
+  const margin = window.innerHeight * 1.5
+  const rect = el.getBoundingClientRect()
+  return rect.bottom > -margin && rect.top < window.innerHeight + margin
+}
+
 function _highlightChunk(index) {
+  const previousEl = _activeEl
   clearHtmlHighlight()
   if (isPdfBook.value || index < 0) return
 
@@ -649,7 +774,11 @@ function _highlightChunk(index) {
 
   el.classList.add('tts-active')
   _activeEl = el
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  // Follow narration only while the reader is near it. If the user scrolled
+  // away, don't yank the viewport back — they can use "Jump to narration".
+  const shouldFollow = !previousEl || _isNearViewport(previousEl) || _isNearViewport(el)
+  if (shouldFollow) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 async function ensurePdfToc(bookId) {
@@ -710,7 +839,11 @@ async function saveReadingProgress() {
 
   const updated = { ...book.value, ...next }
   book.value = updated
-  await updateBook(updated)
+  try {
+    await updateBook(updated)
+  } catch (err) {
+    console.error('[Reader] Failed to save reading progress:', err)
+  }
 }
 
 function queueProgressSave() {
@@ -836,7 +969,7 @@ async function loadBook(id) {
       pdfTocChecked.value = !!stored.pdfTocChecked
       pdfSource.value = stored.source ?? null
       totalPages.value = stored.pages || book.value?.pages || 0
-      book.value = { ...book.value, content: stored.content ?? '' }
+      book.value = { ...book.value, content: stored.content ?? '', tocTitles: stored.tocTitles ?? [] }
     }
   } catch (error) {
     console.error('[Reader] Failed to load content from IndexedDB:', error)
@@ -881,8 +1014,15 @@ watch(activeTtsChunkIndex, (index) => {
 
 watch([currentPdfPage, currentChapterIdx], queueProgressSave)
 
-watch(tocOpen, (open) => {
-  if (open) updateBookEdge()
+watch(tocOpen, async (open) => {
+  if (open) {
+    updateBookEdge()
+    await nextTick()
+    const nav = tocNavRef.value
+    if (!nav) return
+    const activeEl = nav.querySelector('.toc-item.active')
+    if (activeEl) activeEl.scrollIntoView({ block: 'center', behavior: 'instant' })
+  }
 })
 
 watch(isPdfRenderable, async () => {
@@ -1096,10 +1236,31 @@ onUnmounted(async () => {
   justify-content: space-between;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border);
-  font-size: 0.875rem;
+  flex-shrink: 0;
+  gap: 0.5rem;
+}
+
+.toc-head-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.toc-head-label {
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text);
-  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.toc-head-book {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 0.1rem;
 }
 
 .toc-nav {
@@ -1111,33 +1272,40 @@ onUnmounted(async () => {
 .toc-item {
   display: flex;
   align-items: flex-start;
-  gap: 0.6rem;
+  gap: 0.5rem;
   width: 100%;
   text-align: left;
   background: none;
   border: none;
+  border-left: 2px solid transparent;
   color: var(--text);
   cursor: pointer;
-  padding: 0.52rem 1rem;
+  padding: 0.48rem 0.75rem 0.48rem 0.875rem;
   font-size: 0.8rem;
   line-height: 1.45;
-  transition: background 0.1s;
+  transition: background 0.1s, border-color 0.1s;
 }
 
 .toc-item:hover {
   background: var(--btn-hover);
+  border-left-color: var(--border);
 }
 
 .toc-item.active {
   background: var(--toc-active);
   color: var(--toc-color);
   font-weight: 500;
+  border-left-color: var(--toc-color);
+}
+
+.toc-indicator {
+  display: none;
 }
 
 .toc-num {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--muted);
-  min-width: 22px;
+  min-width: 20px;
   flex-shrink: 0;
   margin-top: 0.15rem;
   text-align: right;
@@ -1149,6 +1317,7 @@ onUnmounted(async () => {
 
 .toc-title {
   min-width: 0;
+  flex: 1;
 }
 
 .toc-empty {
@@ -1248,10 +1417,9 @@ onUnmounted(async () => {
 
 .chapter-content :deep(.tts-active) {
   background: var(--color-reader-highlight);
-  border-radius: 4px;
-  box-shadow: 0 0 0 1.5px var(--color-reader-highlight-border);
-  padding: 0.05em 0.2em;
-  margin: 0 -0.2em;
+  border-radius: 3px;
+  outline: 1.5px solid var(--color-reader-highlight-border);
+  outline-offset: 1px;
   transition: background 0.2s;
 }
 

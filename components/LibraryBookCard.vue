@@ -103,11 +103,20 @@ const progress = computed(() => Math.max(0, Math.min(100, Number(props.book.prog
 
 const generateCoverPlaceholder = (title) => {
   const safeTitle = String(title || 'Book')
-  const colors = ['#8A2BE2', '#6A0DAD', '#2f7d62', '#b45309']
+  const colors = getThemeCssVars([
+    { name: '--color-book-cover-placeholder-one', fallback: '#8A2BE2' },
+    { name: '--color-book-cover-placeholder-two', fallback: '#6A0DAD' },
+    { name: '--color-book-cover-placeholder-three', fallback: '#9370DB' },
+    { name: '--color-book-cover-placeholder-four', fallback: '#BA55D3' },
+    { name: '--color-book-cover-placeholder-five', fallback: '#DDA0DD' },
+  ])
   const hash = [...safeTitle].reduce((total, character) => total + character.charCodeAt(0), 0)
   const color = colors[hash % colors.length]
   const initial = safeTitle.trim()[0]?.toUpperCase() || '?'
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="145" font-family="serif" font-size="96" fill="rgba(255,255,255,.48)" text-anchor="middle" dominant-baseline="middle">${initial}</text></svg>`
+  const softText = getThemeCssVar('--color-book-cover-placeholder-text-soft', 'rgba(255,255,255,0.25)')
+  const strongText = getThemeCssVar('--color-book-cover-placeholder-text-strong', 'rgba(255,255,255,0.65)')
+  const displayTitle = safeTitle.length > 18 ? `${safeTitle.substring(0, 18)}...` : safeTitle
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="130" font-family="serif" font-size="100" fill="${softText}" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="${strongText}" text-anchor="middle">${displayTitle}</text></svg>`
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 

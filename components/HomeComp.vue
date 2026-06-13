@@ -237,7 +237,6 @@ const truncate = (text, length) => {
 
 .show-all-btn:hover {
   color: var(--color-text-primary);
-  /* transform: translateX(2px); */
 }
 
 .recent-grid {
@@ -461,15 +460,15 @@ const truncate = (text, length) => {
 .popular-title {
   font-size: 1.25rem;
   font-weight: 400;
-  color: var(--text-color);
+  color: var(--color-text-primary);
   margin: 0 0 0.25rem 0;
   line-height: 1.3;
-  padding-right: 2.5rem; /* leave space for play button */
+  padding-right: 2.5rem;
 }
 
 .popular-author {
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   margin: 0 0 0.5rem 0;
 }
 
@@ -484,7 +483,7 @@ const truncate = (text, length) => {
 
 .popular-blurb {
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   line-height: 1.6;
   margin: 0;
   display: -webkit-box;
@@ -500,20 +499,20 @@ const truncate = (text, length) => {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--primary-color);
+  background: var(--color-brand-primary);
   color: var(--color-text-on-brand);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 6px var(--primary-shadow);
+  box-shadow: var(--shadow-brand-button);
   transition: all 0.2s;
 }
 
 .popular-play-btn:hover {
   transform: scale(1.1);
-  background: var(--primary-dark);
+  background: var(--color-brand-primary-hover);
 }
 
 /* Your Authors */
@@ -558,13 +557,13 @@ const truncate = (text, length) => {
 .author-initial {
   width: 100%;
   height: 100%;
-  background: var(--primary-light);
+  background: var(--color-brand-primary-soft);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
   font-weight: 400;
-  color: var(--primary-color);
+  color: var(--color-brand-primary);
 }
 
 .author-list-info {
@@ -575,13 +574,13 @@ const truncate = (text, length) => {
 .author-list-name {
   font-size: 1.05rem;
   font-weight: 400;
-  color: var(--text-color);
+  color: var(--color-text-primary);
   margin: 0 0 0.25rem 0;
 }
 
 .author-list-count {
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
   margin: 0;
 }
 

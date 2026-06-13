@@ -44,7 +44,7 @@
             <i class="ri-checkbox-circle-line"></i>
           </div>
           <div class="metric-text">
-            <div class="metric-label">Completed</div>
+            <div class="metric-label">Read</div>
             <div class="metric-value">{{ bookMetrics.read }}</div>
           </div>
         </div>

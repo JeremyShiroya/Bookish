@@ -5,7 +5,7 @@
   />
   <aside class="sidebar">
     <div class="top">
-      <router-link to="/" id="title">
+      <router-link to="/" class="brand-link">
         <div class="logo-container">
           <div class="logo">
             <img src="/Images/Logo.png" alt="Logo" class="logo-image" />
@@ -187,7 +187,7 @@ watch(hoverIndex, updateHighlight);
   margin-bottom: 10px;
 }
 
-#title {
+.brand-link {
   color: var(--purple-logo);
   text-decoration: none;
 }

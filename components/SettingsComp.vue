@@ -138,6 +138,23 @@
             <i class="ri-volume-up-line"></i>
           </div>
         </div>
+
+        <div class="setting-row">
+          <div class="setting-copy">
+            <h3>Track splitting</h3>
+            <p>{{ settings.trackSplitting ? 'Progress bar split into chapter sections.' : 'Standard progress bar with no chapter splits.' }}</p>
+          </div>
+          <div class="segmented-control" aria-label="Track splitting">
+            <button :class="{ active: !settings.trackSplitting }" @click="setTrackSplitting(false)">
+              <i class="ri-equalizer-line"></i>
+              <span>Standard</span>
+            </button>
+            <button :class="{ active: settings.trackSplitting }" @click="setTrackSplitting(true)">
+              <i class="ri-chapters-line"></i>
+              <span>Chapters</span>
+            </button>
+          </div>
+        </div>
       </article>
 
       <article id="library" class="settings-panel">
@@ -276,6 +293,17 @@
           </label>
         </div>
 
+        <div class="setting-row">
+          <div class="setting-copy">
+            <h3>Author details</h3>
+            <p>{{ authorFetchLoading ? `Fetching ${authorFetchProgress}…` : 'Fetch bio, dates, nationality, and works for the authors already in your library.' }}</p>
+          </div>
+          <button class="data-action" :disabled="authorFetchLoading" @click="fetchAllAuthorDetails">
+            <i :class="authorFetchLoading ? 'ri-loader-4-line spin' : 'ri-user-search-line'"></i>
+            <span>{{ authorFetchLoading ? 'Fetching' : 'Fetch details' }}</span>
+          </button>
+        </div>
+
         <div class="metadata-snapshot">
           <div>
             <strong>{{ booksWithCovers }}</strong>
@@ -381,7 +409,7 @@ import { useLibraryBackup } from '~/composables/useLibraryBackup'
 import { useTTS } from '~/composables/useTTS'
 import { useToast } from '~/composables/useToast'
 
-const { books, authors, collections, genres, recentlyAddedBooks, fetchAllData } = useBooks()
+const { books, authors, collections, genres, recentlyAddedBooks, fetchAllData, fetchAndStoreAuthorDetails } = useBooks()
 const { settings, updateSettings, loadSettings } = useBookishSettings()
 const { getStorageSummary } = useBookStorage()
 const { createDownload, importBookishData, wipeBookishData } = useLibraryBackup()
@@ -428,7 +456,7 @@ const libraryStats = computed(() => [
   { label: 'Authors', value: authors.value.length, icon: 'ri-group-line' },
   { label: 'Playlists', value: collections.value.length, icon: 'ri-play-list-2-line' },
   { label: 'Reading', value: statusCounts.value.Reading || 0, icon: 'ri-bookmark-3-line' },
-  { label: 'Finished', value: statusCounts.value.Completed || statusCounts.value.Read || 0, icon: 'ri-checkbox-circle-line' },
+  { label: 'Read', value: statusCounts.value.Completed || statusCounts.value.Read || 0, icon: 'ri-checkbox-circle-line' },
 ])
 
 const formatStats = computed(() => {
@@ -467,6 +495,34 @@ const refreshStorageSummary = async () => {
     storageSummary.value = await getStorageSummary()
   } finally {
     storageLoading.value = false
+  }
+}
+
+const authorFetchLoading = ref(false)
+const authorFetchProgress = ref('')
+
+const fetchAllAuthorDetails = async () => {
+  if (authorFetchLoading.value) return
+  const names = authors.value.map(author => author.name).filter(Boolean)
+  if (!names.length) {
+    addToast('No authors in your library yet.', 'info')
+    return
+  }
+  authorFetchLoading.value = true
+  let successCount = 0
+  try {
+    for (let i = 0; i < names.length; i++) {
+      authorFetchProgress.value = `${i + 1} / ${names.length}`
+      const ok = await fetchAndStoreAuthorDetails(names[i], { force: true })
+      if (ok) successCount++
+    }
+    addToast(
+      `Author details updated for ${successCount} of ${names.length} authors.`,
+      successCount > 0 ? 'success' : 'error',
+    )
+  } finally {
+    authorFetchLoading.value = false
+    authorFetchProgress.value = ''
   }
 }
 
@@ -565,6 +621,7 @@ const setLibrarySort = (librarySort, librarySortDirection) => updateSettings({ l
 const setLibraryGridItemsPerPage = (libraryGridItemsPerPage) => updateSettings({ libraryGridItemsPerPage })
 const setLibraryTableItemsPerPage = (libraryTableItemsPerPage) => updateSettings({ libraryTableItemsPerPage })
 const setMetadataAutoFill = (metadataAutoFill) => updateSettings({ metadataAutoFill })
+const setTrackSplitting = (trackSplitting) => updateSettings({ trackSplitting })
 
 const gridItemsPerPageOptions = LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS
 const tableItemsPerPageOptions = LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS

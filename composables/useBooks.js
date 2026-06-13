@@ -130,19 +130,46 @@ export const useBooks = () => {
     return Object.values(grouped);
   });
 
-  const genresList = computed(() => genres.value);
-  const allAuthors = computed(() => authors.value);
 
   const toggleFavourite = async (bookId) => {
     const book = books.value.find(b => b.id === bookId);
     if (book) await updateBook({ ...book, isFavourite: !book.isFavourite });
   };
 
+  const fetchAndStoreAuthorDetails = async (authorName, { force = false } = {}) => {
+    if (!authorName || !import.meta.client) return false
+    try {
+      if (!force) {
+        // Skip if details are already present for this author
+        const existing = books.value.find(b => b.author === authorName && b.authorBio)
+        if (existing) return true
+      }
+      const details = await $fetch(`/api/authors/bio?name=${encodeURIComponent(authorName)}`)
+      const hasAnything = details && (
+        details.bio || details.birthDate || details.nationality ||
+        details.booksCount || details.notableWorks?.length || details.spouseName
+      )
+      if (!hasAnything) return false
+      const store = useLibraryStore()
+      await store.updateAuthorDetails(authorName, details)
+      // Refresh in-memory state for this author's books
+      const updated = await store.getBooks()
+      const updatedMap = new Map(updated.map(b => [b.id, b]))
+      books.value = books.value.map(b => updatedMap.get(b.id) || b)
+      return true
+    } catch (err) {
+      console.warn('[useBooks] Fetch author details failed:', err)
+      return false
+    }
+  }
+
   const addBook = async (book) => {
     try {
       const store = useLibraryStore();
       const savedBook = await store.addBook(book);
       books.value.unshift(savedBook);
+      // Fire-and-forget: fetch author bio/details if not already stored
+      if (savedBook.author) fetchAndStoreAuthorDetails(savedBook.author)
       return savedBook;
     } catch (err) {
       console.error('Failed to add book:', err);
@@ -162,9 +189,13 @@ export const useBooks = () => {
       // Always write the full merged record so the store has a complete snapshot.
       const result = await store.updateBook(index !== -1 ? books.value[index] : updatedBook);
       if (index !== -1) books.value[index] = result;
+      return result;
     } catch (err) {
       console.error('Failed to update book:', err);
+      // Roll back the optimistic update and surface the failure so callers
+      // don't report success on a write that never persisted.
       if (index !== -1 && previousBook) books.value[index] = previousBook;
+      throw err;
     }
   };
 
@@ -267,8 +298,8 @@ export const useBooks = () => {
     favourites,
     popularBooks,
     seriesList,
-    genresList,
-    allAuthors,
+    genresList: genres,
+    allAuthors: authors,
     toggleFavourite,
     addBook,
     updateBook,
@@ -279,5 +310,6 @@ export const useBooks = () => {
     addBookToPlaylist,
     fetchAllData,
     fetchBookById,
+    fetchAndStoreAuthorDetails,
   };
 };

@@ -396,9 +396,15 @@ async function searchGoodreadsTitleRedirects(title: string, author?: string): Pr
     try {
       const response = await fetch(`https://www.goodreads.com/book/title?id=${encodeURIComponent(value)}`, { headers });
       const url = normalizeGoodreadsPageUrl(response.url);
-      if (!response.ok || !url || seen.has(url)) continue;
+      // Goodreads serves an HTTP 202 anti-bot interstitial (no book data) when
+      // it throttles a request. Treating that as success would short-circuit
+      // the /search and DuckDuckGo fallbacks that can still read a rating from
+      // result snippets — so require a real 200 response that actually parsed
+      // into a book (title or rating), not the data-less interstitial.
+      if (response.status !== 200 || !url || seen.has(url)) continue;
 
       const details = parseGoodreadsBookHtml(await response.text());
+      if (!details.title && !details.ratingValue) continue;
       const split = splitGoodreadsTitle(details.title || title);
       seen.add(url);
       results.push({

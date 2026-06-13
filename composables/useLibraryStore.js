@@ -1,6 +1,19 @@
 const DB_NAME = 'bookish-library'
 const DB_VERSION = 1
 
+// IndexedDB's structured clone cannot serialize Vue reactive proxies — passing
+// one to `put()` throws DataCloneError ("#<Object> could not be cloned"), and a
+// shallow spread doesn't help because nested arrays/objects stay reactive. Every
+// write therefore goes through a deep plain-object snapshot first. Without this,
+// edits and progress saves fail silently while the UI still reports success.
+function toPlainRecord(value) {
+  try {
+    return JSON.parse(JSON.stringify(value))
+  } catch {
+    return value
+  }
+}
+
 function openLibraryDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
@@ -31,7 +44,7 @@ export const useLibraryStore = () => {
 
   const addBook = async (bookData) => {
     const now = new Date().toISOString()
-    const book = { ...bookData, id: crypto.randomUUID(), createdAt: now, updatedAt: now }
+    const book = toPlainRecord({ ...bookData, id: crypto.randomUUID(), createdAt: now, updatedAt: now })
     const db = await openLibraryDB()
     await new Promise((resolve, reject) => {
       const tx = db.transaction('books', 'readwrite')
@@ -44,7 +57,7 @@ export const useLibraryStore = () => {
   }
 
   const updateBook = async (book) => {
-    const updated = { ...book, updatedAt: new Date().toISOString() }
+    const updated = toPlainRecord({ ...book, updatedAt: new Date().toISOString() })
     const db = await openLibraryDB()
     await new Promise((resolve, reject) => {
       const tx = db.transaction('books', 'readwrite')
@@ -79,13 +92,13 @@ export const useLibraryStore = () => {
 
   const addCollection = async (collectionData) => {
     const now = new Date().toISOString()
-    const collection = {
+    const collection = toPlainRecord({
       ...collectionData,
       id: crypto.randomUUID(),
       bookIds: collectionData.bookIds || [],
       createdAt: now,
       updatedAt: now,
-    }
+    })
     const db = await openLibraryDB()
     await new Promise((resolve, reject) => {
       const tx = db.transaction('collections', 'readwrite')
@@ -167,11 +180,52 @@ export const useLibraryStore = () => {
       const store = tx.objectStore('books')
       const req = store.getAll()
       req.onsuccess = (e) => {
-        const now = new Date().toISOString()
-        for (const book of e.target.result) {
-          if (book.author === authorName) {
-            store.put({ ...book, authorImage: imageUrl, updatedAt: now })
+        try {
+          const now = new Date().toISOString()
+          for (const book of e.target.result) {
+            if (book.author === authorName) {
+              store.put({ ...book, authorImage: imageUrl, updatedAt: now })
+            }
           }
+        } catch (err) {
+          tx.abort()
+          reject(err)
+        }
+      }
+      tx.oncomplete = () => resolve()
+      tx.onerror = (e) => reject(e.target.error)
+      tx.onabort = (e) => reject(e.target.error ?? new DOMException('Transaction aborted'))
+    })
+  }
+
+  const updateAuthorDetails = async (authorName, details) => {
+    const db = await openLibraryDB()
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('books', 'readwrite')
+      const store = tx.objectStore('books')
+      const req = store.getAll()
+      req.onsuccess = (e) => {
+        try {
+          const now = new Date().toISOString()
+          for (const book of e.target.result) {
+            if (book.author === authorName) {
+              const patch = {}
+              if (details.bio) patch.authorBio = details.bio
+              if (details.birthDate !== undefined) patch.authorBirthDate = details.birthDate
+              if (details.deathDate !== undefined) patch.authorDeathDate = details.deathDate
+              if (details.nationality) patch.authorNationality = details.nationality
+              if (details.notableWorks?.length) patch.authorNotableWorks = details.notableWorks
+              if (details.booksCount) patch.authorBooksCount = details.booksCount
+              if (details.latestWork) patch.authorLatestWork = details.latestWork
+              if (details.spouseName !== undefined) patch.authorSpouseName = details.spouseName
+              if (details.hasChildren !== undefined) patch.authorHasChildren = details.hasChildren
+              if (details.childrenCount !== undefined) patch.authorChildrenCount = details.childrenCount
+              store.put({ ...book, ...patch, updatedAt: now })
+            }
+          }
+        } catch (err) {
+          tx.abort()
+          reject(err)
         }
       }
       tx.oncomplete = () => resolve()
@@ -191,5 +245,6 @@ export const useLibraryStore = () => {
     deleteCollection,
     addBookToCollection,
     updateAuthorImage,
+    updateAuthorDetails,
   }
 }

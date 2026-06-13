@@ -45,6 +45,13 @@
       :book="selectedPlaylistBook"
       @close="selectedPlaylistBook = null"
     />
+
+    <DeleteConfirmModal
+      v-if="showDeleteModal && selectedDeleteBook"
+      :book="selectedDeleteBook"
+      @close="showDeleteModal = false; selectedDeleteBook = null"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>
 
@@ -55,11 +62,14 @@ import { useTTS } from '~/composables/useTTS';
 import EmptyState from "./EmptyState.vue";
 import LibraryBookCard from './LibraryBookCard.vue';
 import AddToPlaylistModal from './AddToPlaylistModal.vue';
+import DeleteConfirmModal from './DeleteConfirmModal.vue';
 
 const { favourites, toggleFavourite, deleteBook, loading, initialized } = useBooks();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const router = useRouter();
 const selectedPlaylistBook = ref(null);
+const showDeleteModal = ref(false);
+const selectedDeleteBook = ref(null);
 
 const isBookActive = (book) => ttsBook.value?.id === book.id && ttsStatus.value !== 'idle';
 const handlePlay = (book) => {
@@ -70,9 +80,15 @@ const handlePlay = (book) => {
   playTTS(book);
 };
 
-const deleteFavouriteBook = async (book) => {
-  if (!window.confirm(`Delete "${book.title}" from your library?`)) return;
-  await deleteBook(book.id);
+const deleteFavouriteBook = (book) => {
+  selectedDeleteBook.value = book;
+  showDeleteModal.value = true;
+};
+
+const confirmDelete = async () => {
+  if (selectedDeleteBook.value) await deleteBook(selectedDeleteBook.value.id);
+  showDeleteModal.value = false;
+  selectedDeleteBook.value = null;
 };
 </script>
 

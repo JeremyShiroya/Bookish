@@ -106,21 +106,45 @@ if (import.meta.hot) {
 
 // ── Pure helpers (exported for tests) ─────────────────────────────────────
 
+const NAMED_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  mdash: '—', ndash: '–', hellip: '…',
+  lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”',
+  laquo: '«', raquo: '»', shy: '', copy: '©', reg: '®', trade: '™',
+  eacute: 'é', egrave: 'è', agrave: 'à', ccedil: 'ç',
+  auml: 'ä', ouml: 'ö', uuml: 'ü',
+}
+
+export function decodeEntities(text) {
+  if (!text) return ''
+  let result = text
+  if (result.includes('&')) {
+    result = result
+      .replace(/&#x([0-9a-f]+);/gi, (match, hex) => {
+        try { return String.fromCodePoint(parseInt(hex, 16)) } catch { return match }
+      })
+      .replace(/&#(\d+);/g, (match, num) => {
+        try { return String.fromCodePoint(Number(num)) } catch { return match }
+      })
+      .replace(/&([a-z]+);/gi, (match, name) => {
+        const key = name.toLowerCase()
+        return key in NAMED_ENTITIES ? NAMED_ENTITIES[key] : match
+      })
+  }
+  // Strip soft hyphens and zero-width characters that break text matching
+  return result.replace(/[\u00AD\u200B-\u200D\uFEFF]/g, '')
+}
+
 export function stripHtml(html) {
   if (!html) return ''
-  return html
+  const text = html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<hr[^>]*>/gi, ' . ')
+    .replace(/<hr[^>]*>/gi, ' ')
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<\/p>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
+  return decodeEntities(text)
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -147,7 +171,9 @@ export function splitToChunks(text, maxChars = DEFAULT_SENTENCE_MAX_CHARS) {
   const normalized = (text || '').replace(/\s+/g, ' ').trim()
   if (!normalized) return []
 
-  const sentences = normalized.match(/[^.!?]+(?:[.!?]+["')\]]*)?|[.!?]+/g) || [normalized]
+  // Closing quotes (straight and curly) after the terminator belong to this
+  // sentence — absorbing them keeps highlight boundaries on sentence edges.
+  const sentences = normalized.match(/[^.!?]+(?:[.!?]+["'’”»)\]]*)?|[.!?]+/g) || [normalized]
   const chunks = []
 
   for (const sentence of sentences) {
@@ -181,6 +207,119 @@ export function groupChunks(chunks, maxChars = DEFAULT_SENTENCE_MAX_CHARS) {
 
   if (buffer) grouped.push(buffer)
   return grouped
+}
+
+// A content section is renderable if it has real text or visible media.
+// Shared by the EPUB extractor, the reader, and the boundary builder so
+// section indexes stay aligned with stored tocTitles.
+export function isRenderableSection(html) {
+  if (!html) return false
+  if (html.replace(/<[^>]+>/g, '').trim().length > 3) return true
+  return /<(img|image|svg)\b/i.test(html)
+}
+
+const SECTION_TITLE_PATTERN = /^((?:Chapter|Part|Book)\s+(?:\d{1,4}|[IVXLCDM]+|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty)\b.{0,60}?|Prologue|Epilogue|Interlude|Preface|Foreword|Introduction|Afterword)/i
+
+// Splits assembled EPUB content into its renderable `<hr chapter-break>`
+// sections (the same parts the reader renders as `ch-N` elements and the
+// EPUB extractor emits one tocTitle per).
+export function splitContentSections(html) {
+  if (!html) return []
+  const cleaned = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+  return cleaned
+    .split(/<hr[^>]*chapter-break[^>]*\/?>/i)
+    .filter(isRenderableSection)
+}
+
+// Canonical readable-chunk builder shared by TTS playback, the reader's flat
+// chunk list, and the highlighter. EPUBs are chunked SECTION-BY-SECTION and
+// concatenated — never as one joined blob — so a chunk never straddles a
+// `<hr chapter-break>`. That keeps chunk indices in perfect lockstep with
+// section boundaries: chapter splits and "read from here" resolve to the exact
+// sentence the reader shows, instead of drifting because cross-section
+// sentence-splitting produced a different total. Returns the flat chunk list
+// plus per-section chunk counts (for chapter-boundary math).
+export function buildReadableChunks(html) {
+  const parts = splitContentSections(html)
+  if (parts.length < 2) {
+    const chunks = splitToChunks(stripHtml(html || ''))
+    return { chunks, sectionCounts: [chunks.length] }
+  }
+  const chunks = []
+  const sectionCounts = []
+  for (const part of parts) {
+    const partChunks = splitToChunks(stripHtml(part))
+    sectionCounts.push(partChunks.length)
+    for (const chunk of partChunks) chunks.push(chunk)
+  }
+  return { chunks, sectionCounts }
+}
+
+// Builds [{ chunkStart, chunkEnd, title }] from EPUB content HTML so the
+// playing bar can render chapter segments that MATCH the reader's table of
+// contents one-to-one.
+//
+// EPUBs are often split into one file per few PAGES, not per chapter. The
+// reader's TOC shows exactly the sections that carry a chapter title
+// (tocTitles[i]); every untitled section belongs to the titled chapter before
+// it. We mirror that here: one segment per titled section, starting at that
+// section's chunk offset and running until the next titled section. Because
+// section chunk counts come from the same per-section split as
+// `buildReadableChunks`, every chunkStart is an exact index into the TTS chunk
+// array — clicking a split lands on the right chapter. Without TOC data we fall
+// back to heading / "Chapter N" detection. Returns [] when fewer than two
+// chapters are found (PDFs, flat text) so the bar shows a single fill.
+export function buildChapterBoundariesFromHtml(html, totalChunks, tocTitles = []) {
+  if (!html || !totalChunks || totalChunks <= 0) return []
+
+  const parts = splitContentSections(html)
+  if (parts.length < 2) return []
+
+  const titles = Array.isArray(tocTitles) ? tocTitles : []
+  const hasToc = titles.some(title => title && String(title).trim())
+
+  const sectionTitle = (part, index) => {
+    if (hasToc) {
+      const title = titles[index]
+      return title && String(title).trim() ? String(title).trim().slice(0, 80) : null
+    }
+    const headingMatch = part.match(/<h([1-4])[^>]*>([\s\S]*?)<\/h\1>/i)
+    if (headingMatch) {
+      const heading = headingMatch[2].replace(/<[^>]+>/g, '').trim()
+      if (heading && heading.length <= 120) return heading.slice(0, 80)
+    }
+    const text = part.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    const patternMatch = text.match(SECTION_TITLE_PATTERN)
+    return patternMatch ? patternMatch[1].trim().slice(0, 80) : null
+  }
+
+  // Cumulative chunk offset + resolved title for every section.
+  const sections = []
+  let offset = 0
+  parts.forEach((part, index) => {
+    sections.push({ offset, title: sectionTitle(part, index) })
+    offset += splitToChunks(stripHtml(part)).length
+  })
+
+  // Chapters = sections that begin a titled TOC entry (identical to the set
+  // the reader renders in its sidebar), so the bar and TOC never diverge.
+  const starts = sections.filter(section => section.title)
+  if (starts.length < 2) return []
+
+  const boundaries = starts.map((section, index) => {
+    const next = starts[index + 1]
+    const chunkStart = Math.min(section.offset, totalChunks - 1)
+    const chunkEnd = next ? Math.min(next.offset - 1, totalChunks - 1) : totalChunks - 1
+    return {
+      chunkStart,
+      chunkEnd: Math.max(chunkStart, chunkEnd),
+      title: section.title,
+    }
+  })
+
+  // Pin the last segment to the true end so the bar always covers the track.
+  boundaries[boundaries.length - 1].chunkEnd = totalChunks - 1
+  return boundaries
 }
 
 export function formatDuration(seconds) {
@@ -329,6 +468,8 @@ export const useTTS = () => {
   const ttsWordIdx      = useState('tts:wordIdx',      () => -1)
   // The boundary array for the currently-playing chunk (populated from TTS response)
   const ttsBoundaries   = useState('tts:boundaries',   () => [])
+  // Chapter boundaries for track splitting: [{ chunkStart, chunkEnd, title }]
+  const ttsChapterBoundaries = useState('tts:chapterBoundaries', () => [])
 
   const { getBookContent } = useBookStorage()
 
@@ -547,10 +688,11 @@ export const useTTS = () => {
       ttsStatus.value = 'idle'
     }
 
+    const playGen = _prefetchGeneration
     audio.play().then(() => {
       _startWordLoop(_currentBoundaries)
     }).catch(() => {
-      if (_currentAudio === audio) {
+      if (_prefetchGeneration === playGen && _currentAudio === audio) {
         _currentAudio = null
         ttsStatus.value = 'idle'
       }
@@ -575,7 +717,7 @@ export const useTTS = () => {
     ttsVoiceId.value = normalizeAvailableVoice(ttsVoiceId.value)
 
     let stored = null
-    if (!book?.content) {
+    if (!book?.content || !book?.tocTitles) {
       try {
         stored = await getBookContent(book.id)
       } catch (e) {
@@ -583,14 +725,24 @@ export const useTTS = () => {
       }
     }
 
-    let text = ''
-    try {
-      text = await resolveReadableText(book, stored)
-    } catch (e) {
-      console.error('[TTS] Failed to extract readable PDF text:', e)
+    const html = book?.content || stored?.content || ''
+    let sentenceChunks = []
+    if (stripHtml(html).trim()) {
+      // EPUB / HTML: chunk section-by-section so chunk indices stay aligned
+      // with chapter boundaries and the reader's highlight spans.
+      sentenceChunks = buildReadableChunks(html).chunks
+    } else {
+      // PDF / plain text: no chapter-break sections, chunk the extracted text.
+      let text = ''
+      try {
+        text = await resolveReadableText(book, stored)
+      } catch (e) {
+        console.error('[TTS] Failed to extract readable PDF text:', e)
+      }
+      sentenceChunks = splitToChunks(text)
     }
 
-    if (!text.trim()) {
+    if (!sentenceChunks.length) {
       const { addToast } = useToast()
       addToast('This book has no readable text content for audio playback.', 'error')
       ttsStatus.value = 'idle'
@@ -598,7 +750,6 @@ export const useTTS = () => {
       return
     }
 
-    const sentenceChunks = splitToChunks(text)
     const contentStart = findContentStart(sentenceChunks)
     const hasRequestedChunkIdx = Number.isFinite(Number(options.startChunkIdx))
     const savedSession = options.ignoreSavedSession ? null : readStoredTtsSession()
@@ -610,6 +761,11 @@ export const useTTS = () => {
     const startChunkIdx = Math.max(0, Math.min(_chunks.length - 1, requestedChunkIdx ?? contentStart))
     _chunkIdx = hasRequestedChunkIdx ? startChunkIdx : Math.max(contentStart, startChunkIdx)
     ttsTotalChunks.value = _chunks.length
+    ttsChapterBoundaries.value = buildChapterBoundariesFromHtml(
+      book?.content || stored?.content || '',
+      _chunks.length,
+      book?.tocTitles || stored?.tocTitles || [],
+    )
     _updateProgress()
 
     if (contentStart > 0 && _chunkIdx === contentStart) {
@@ -661,6 +817,7 @@ export const useTTS = () => {
     ttsElapsedSeconds.value = 0
     ttsTotalSeconds.value = 0
     ttsBook.value = null
+    ttsChapterBoundaries.value = []
     clearStoredTtsSession()
   }
 
@@ -728,6 +885,22 @@ export const useTTS = () => {
     if (ttsStatus.value === 'playing') _speakNextEdge()
   }
 
+  // Jump to an absolute chunk index (used by chapter segments in the player).
+  // For a restored session whose chunks aren't loaded yet, start playback there.
+  const seekToChunk = (index) => {
+    const target = Math.max(0, Number(index) || 0)
+    if (_chunks.length) {
+      _cancelAudio()
+      _chunkIdx = Math.min(_chunks.length - 1, target)
+      _updateProgress()
+      if (ttsStatus.value === 'playing') _speakNextEdge()
+      return
+    }
+    if (ttsBook.value) {
+      play(ttsBook.value, { startChunkIdx: target, ignoreSavedSession: true })
+    }
+  }
+
   // Seek by wall-clock seconds inside the current sentence when possible.
   // If the seek crosses a sentence boundary, move to the adjacent sentence.
   const skipSeconds = (seconds) => {
@@ -763,16 +936,32 @@ export const useTTS = () => {
     ttsElapsedSeconds.value = session.elapsedSeconds
     ttsTotalSeconds.value = session.totalSeconds
     ttsCurrentChunk.value = session.currentChunk
+
+    // Hydrate chapter segments for the restored track (fire-and-forget)
+    if (import.meta.client && session.totalChunks > 0) {
+      const restoredId = restoredBook.id
+      getBookContent(restoredId).then(stored => {
+        if (ttsBook.value?.id !== restoredId || ttsChapterBoundaries.value.length) return
+        const html = restoredBook?.content || stored?.content || ''
+        const tocTitles = restoredBook?.tocTitles || stored?.tocTitles || []
+        ttsChapterBoundaries.value = buildChapterBoundariesFromHtml(html, session.totalChunks, tocTitles)
+      }).catch(() => {})
+    }
     return true
+  }
+
+  const setChapterBoundaries = (boundaries) => {
+    ttsChapterBoundaries.value = Array.isArray(boundaries) ? boundaries : []
   }
 
   return {
     ttsBook, ttsStatus, ttsProgress, ttsChunkIdx, ttsTotalChunks,
     ttsElapsedSeconds, ttsTotalSeconds,
     ttsSpeed, ttsVolume, ttsVoiceId, ttsVoices, ttsCurrentChunk,
-    ttsWordIdx, ttsBoundaries,
+    ttsWordIdx, ttsBoundaries, ttsChapterBoundaries,
     elapsedTime, totalTime,
     play, pause, resume, togglePlay, stop, restart, restoreLastSession,
-    setSpeed, setVolume, setVoice, seekToProgress, skipChunks, skipSeconds,
+    setSpeed, setVolume, setVoice, seekToProgress, skipChunks, skipSeconds, seekToChunk,
+    setChapterBoundaries,
   }
 }

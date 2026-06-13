@@ -1,4 +1,5 @@
 import JSZip from 'jszip'
+import { isRenderableSection } from '~/composables/useTTS'
 
 function parseXml(text) {
   return new DOMParser().parseFromString(text, 'application/xml')
@@ -330,7 +331,12 @@ export async function extractEpub(file) {
     )
 
     // ── 8. Assemble final self-contained HTML ──────────────────────────────
-    const bodyHtml = chapters.filter(c => c.trim()).join('\n<hr class="chapter-break"/>\n')
+    // Filter sections and their TOC titles TOGETHER so tocTitles stays
+    // index-aligned with the chapter-break sections in the joined content.
+    const sections = chapters
+      .map((html, i) => ({ html, title: tocTitles[i] ?? null }))
+      .filter(section => isRenderableSection(section.html))
+    const bodyHtml = sections.map(section => section.html).join('\n<hr class="chapter-break"/>\n')
     const styleTag = scopedCss ? `<style>${scopedCss}</style>` : ''
     const content = `${styleTag}<div class="epub-content">${bodyHtml}</div>`
 
@@ -338,7 +344,7 @@ export async function extractEpub(file) {
     const textOnly = bodyHtml.replace(/<[^>]+>/g, '')
     const pages = Math.max(1, Math.round(textOnly.length / 1500))
 
-    return { content, pages, cover, tocTitles }
+    return { content, pages, cover, tocTitles: sections.map(section => section.title) }
   } catch (err) {
     throw new Error(`Failed to parse EPUB: ${err.message}`)
   }

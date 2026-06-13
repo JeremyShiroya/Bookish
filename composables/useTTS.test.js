@@ -1,5 +1,59 @@
 import { describe, it, expect } from 'vitest'
-import { stripHtml, splitToChunks, groupChunks, formatDuration, findContentStart } from './useTTS.js'
+import {
+  stripHtml, splitToChunks, groupChunks, formatDuration, findContentStart,
+  buildReadableChunks, buildChapterBoundariesFromHtml,
+} from './useTTS.js'
+
+describe('buildReadableChunks', () => {
+  const section = (text) => `<p>${text}</p>`
+  const join = (...parts) => `<div class="epub-content">${parts.join('<hr class="chapter-break"/>')}</div>`
+
+  it('keeps per-section chunk counts summing to the flat total (no cross-section drift)', () => {
+    // A section that ends without a terminator would merge into the next one if
+    // the whole book were chunked at once — per-section chunking must not.
+    const html = join(section('Chapter One'), section('It began here'), section('Then it ended. Done.'))
+    const { chunks, sectionCounts } = buildReadableChunks(html)
+    expect(sectionCounts.reduce((a, b) => a + b, 0)).toBe(chunks.length)
+    expect(sectionCounts.length).toBe(3)
+  })
+
+  it('a chapter split lands on the exact chunk that starts the section', () => {
+    const html = join(section('Alpha one. Alpha two.'), section('Beta one. Beta two.'))
+    const { chunks, sectionCounts } = buildReadableChunks(html)
+    const bounds = buildChapterBoundariesFromHtml(html, chunks.length,
+      ['Alpha', 'Beta'])
+    // Second chapter's chunkStart must index the real first chunk of section 2.
+    expect(chunks[bounds[1].chunkStart]).toBe('Beta one.')
+    expect(bounds[1].chunkStart).toBe(sectionCounts[0])
+  })
+
+  it('falls back to whole-text chunking when there are no chapter breaks', () => {
+    const { chunks, sectionCounts } = buildReadableChunks('<p>Just one. Section here.</p>')
+    expect(chunks).toEqual(['Just one.', 'Section here.'])
+    expect(sectionCounts).toEqual([2])
+  })
+})
+
+describe('buildChapterBoundariesFromHtml', () => {
+  const join = (parts) => parts.join('<hr class="chapter-break"/>')
+
+  it('emits one segment per titled section, matching the TOC', () => {
+    const parts = [
+      '<p>Front matter copyright.</p>',
+      '<p>Body one. Body two.</p>',
+      '<p>Body three. Body four.</p>',
+    ]
+    const html = join(parts)
+    const total = buildReadableChunks(html).chunks.length
+    const bounds = buildChapterBoundariesFromHtml(html, total, [null, 'Chapter One', 'Chapter Two'])
+    expect(bounds.map(b => b.title)).toEqual(['Chapter One', 'Chapter Two'])
+    expect(bounds[bounds.length - 1].chunkEnd).toBe(total - 1)
+  })
+
+  it('returns [] for flat content with no chapter breaks', () => {
+    expect(buildChapterBoundariesFromHtml('<p>Flat. Text.</p>', 2)).toEqual([])
+  })
+})
 
 describe('stripHtml', () => {
   it('removes block tags and collapses whitespace', () => {

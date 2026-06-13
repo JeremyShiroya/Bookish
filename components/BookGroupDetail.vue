@@ -170,12 +170,20 @@
       :book="selectedPlaylistBook"
       @close="selectedPlaylistBook = null"
     />
+
+    <DeleteConfirmModal
+      v-if="showDeleteModal && bookToDelete"
+      :book="bookToDelete"
+      @close="showDeleteModal = false; bookToDelete = null"
+      @confirm="confirmDeleteBook"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue';
 import AddToPlaylistModal from './AddToPlaylistModal.vue';
+import DeleteConfirmModal from './DeleteConfirmModal.vue';
 import EmptyState from './EmptyState.vue';
 import GoodreadsRatingDisplay from './GoodreadsRatingDisplay.vue';
 import LibraryBookCard from './LibraryBookCard.vue';
@@ -241,6 +249,8 @@ const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const selectedStatus = ref('all');
 const viewMode = ref(settings.value.groupDetailView);
 const selectedPlaylistBook = ref(null);
+const showDeleteModal = ref(false);
+const bookToDelete = ref(null);
 
 const normalizedStatus = (book) => {
   const status = String(book.status || 'Unread').toLowerCase();
@@ -299,10 +309,15 @@ const truncateWords = (text, maxWords = 9) => {
   return `${words.slice(0, maxWords).join(' ')}...`;
 };
 
-const handleDeleteBook = async (book) => {
-  if (!import.meta.client) return;
-  const confirmed = window.confirm(`Delete "${book.title}" from your library?`);
-  if (confirmed) await deleteBook(book.id);
+const handleDeleteBook = (book) => {
+  bookToDelete.value = book;
+  showDeleteModal.value = true;
+};
+
+const confirmDeleteBook = async () => {
+  if (bookToDelete.value) await deleteBook(bookToDelete.value.id);
+  showDeleteModal.value = false;
+  bookToDelete.value = null;
 };
 
 const generateCoverPlaceholder = (title) => {

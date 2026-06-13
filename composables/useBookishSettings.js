@@ -15,6 +15,7 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   ttsSpeed: 1.0,
   ttsVolume: 1.0,
   metadataAutoFill: true,
+  trackSplitting: false,
 })
 
 export const LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS = Object.freeze([6, 8, 10, 12])
@@ -101,6 +102,9 @@ export function normalizeBookishSettings(value) {
     metadataAutoFill: source.metadataAutoFill === undefined
       ? DEFAULT_BOOKISH_SETTINGS.metadataAutoFill
       : source.metadataAutoFill !== false,
+    trackSplitting: source.trackSplitting === undefined
+      ? DEFAULT_BOOKISH_SETTINGS.trackSplitting
+      : source.trackSplitting === true,
   }
 }
 

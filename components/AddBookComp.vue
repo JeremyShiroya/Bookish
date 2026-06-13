@@ -302,8 +302,8 @@
             <div class="select-wrapper">
               <select id="status" v-model="newBook.status" class="form-input custom-select">
                 <option value="Unread">Unread</option>
-                <option value="Reading">Currently Reading</option>
-                <option value="Read">Finished</option>
+                <option value="Reading">Reading</option>
+                <option value="Read">Read</option>
               </select>
               <i class="ri-arrow-down-s-line select-icon"></i>
             </div>

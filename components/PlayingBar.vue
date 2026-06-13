@@ -101,8 +101,42 @@
       </div>
       <div class="time-display" aria-label="Playback time">
         <span>{{ elapsedTime }}</span>
-        <div class="time-progress-track">
-          <div class="time-progress-fill" :style="{ width: `${ttsProgress || 0}%` }"></div>
+        <div class="time-progress-track" :class="{ 'has-chapters': showChapters }">
+          <template v-if="showChapters">
+            <button
+              v-if="overflowBefore"
+              type="button"
+              class="chapter-overflow past"
+              @click.stop="openChapterMenu($event)"
+              @mouseenter="showSegmentTip($event, `${overflowBefore} earlier ${overflowBefore === 1 ? 'chapter' : 'chapters'} — click to browse`)"
+              @mouseleave="hideSegmentTip"
+            >+{{ overflowBefore }}</button>
+
+            <div
+              v-for="seg in visibleSegments"
+              :key="seg.index"
+              class="chapter-segment"
+              :class="{ active: seg.isActive, past: seg.isPast }"
+              :style="{ width: seg.widthPct + '%' }"
+              @click="handleSegmentClick(seg)"
+              @mouseenter="showSegmentTip($event, seg.title)"
+              @mouseleave="hideSegmentTip"
+            >
+              <div class="chapter-segment-fill" :style="{ width: seg.fillPct + '%' }"></div>
+            </div>
+
+            <button
+              v-if="overflowAfter"
+              type="button"
+              class="chapter-overflow"
+              @click.stop="openChapterMenu($event)"
+              @mouseenter="showSegmentTip($event, `${overflowAfter} more ${overflowAfter === 1 ? 'chapter' : 'chapters'} — click to browse`)"
+              @mouseleave="hideSegmentTip"
+            >+{{ overflowAfter }}</button>
+          </template>
+          <template v-else>
+            <div class="time-progress-fill" :style="{ width: `${ttsProgress || 0}%` }"></div>
+          </template>
         </div>
         <span>{{ totalTime }}</span>
       </div>
@@ -146,29 +180,188 @@
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="segmentTip.visible"
+        class="chapter-tooltip"
+        :style="{ left: segmentTip.x + 'px', top: segmentTip.y + 'px' }"
+      >{{ segmentTip.text }}</div>
+
+      <div
+        v-if="chapterMenuOpen"
+        ref="chapterMenuRef"
+        class="chapter-menu"
+        :style="{ left: chapterMenuX + 'px' }"
+        role="menu"
+        aria-label="Chapters"
+      >
+        <header class="chapter-menu-head">
+          <span>Chapters</span>
+          <span class="chapter-menu-count">{{ chapterSegments.length }}</span>
+        </header>
+        <div class="chapter-menu-list">
+          <button
+            v-for="seg in chapterSegments"
+            :key="seg.index"
+            type="button"
+            class="chapter-menu-item"
+            :class="{ active: seg.isActive, past: seg.isPast }"
+            role="menuitem"
+            @click="jumpToChapter(seg)"
+          >
+            <span class="chapter-menu-num">{{ seg.index + 1 }}</span>
+            <span class="chapter-menu-title">{{ seg.title }}</span>
+            <i v-if="seg.isActive" class="ri-volume-up-fill chapter-menu-icon"></i>
+            <span v-else class="chapter-menu-pct">{{ chapterPercent(seg) }}</span>
+          </button>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTTS } from '~/composables/useTTS'
 import { useBooks } from '~/composables/useBooks'
+import { useBookishSettings } from '~/composables/useBookishSettings'
 
 const router = useRouter()
 
 const {
   ttsBook, ttsStatus, ttsSpeed, ttsVolume,
-  ttsVoiceId, ttsVoices, ttsProgress,
+  ttsVoiceId, ttsVoices, ttsProgress, ttsChunkIdx, ttsTotalChunks, ttsChapterBoundaries,
   elapsedTime, totalTime,
-  play, togglePlay, skipChunks, skipSeconds, setSpeed, setVolume, setVoice, restoreLastSession,
+  play, togglePlay, skipChunks, skipSeconds, seekToChunk, setSpeed, setVolume, setVoice, restoreLastSession,
 } = useTTS()
+
+const { settings } = useBookishSettings()
+const trackSplitting = computed(() => settings.value.trackSplitting)
 
 const { books, toggleFavourite } = useBooks()
 
 const isIdle = computed(() => ttsStatus.value === 'idle')
 const isMuted = ref(false)
 const prevVolume = ref(1.0)
+
+const chapterSegments = computed(() => {
+  const boundaries = ttsChapterBoundaries.value
+  const total = ttsTotalChunks.value
+  if (!boundaries.length || total <= 0) return []
+  const currentIdx = ttsChunkIdx.value
+  return boundaries.map((seg, i) => {
+    const segLen = seg.chunkEnd - seg.chunkStart + 1
+    const isPast = currentIdx > seg.chunkEnd
+    const isActive = currentIdx >= seg.chunkStart && currentIdx <= seg.chunkEnd
+    const fillPct = isPast ? 100 : isActive && segLen > 1
+      ? Math.min(100, (currentIdx - seg.chunkStart) / segLen * 100)
+      : isActive ? 50 : 0
+    return { ...seg, index: i, rawLen: segLen, isPast, isActive, fillPct }
+  })
+})
+
+const showChapters = computed(() => trackSplitting.value && chapterSegments.value.length > 1)
+
+// Long books: show a window of segments around the current chapter so the
+// bar stays readable; the rest collapse into "+N" pills that open the menu.
+const MAX_VISIBLE_CHAPTERS = 7
+
+const segmentWindow = computed(() => {
+  const segs = chapterSegments.value
+  if (segs.length <= MAX_VISIBLE_CHAPTERS) {
+    const total = segs.reduce((sum, seg) => sum + seg.rawLen, 0) || 1
+    return {
+      segments: segs.map(seg => ({ ...seg, widthPct: seg.rawLen / total * 100 })),
+      before: 0,
+      after: 0,
+    }
+  }
+  const activeIdx = Math.max(0, segs.findIndex(seg => seg.isActive))
+  const start = Math.max(0, Math.min(
+    activeIdx - Math.floor(MAX_VISIBLE_CHAPTERS / 2),
+    segs.length - MAX_VISIBLE_CHAPTERS,
+  ))
+  const windowSegs = segs.slice(start, start + MAX_VISIBLE_CHAPTERS)
+  const windowTotal = windowSegs.reduce((sum, seg) => sum + seg.rawLen, 0) || 1
+  return {
+    segments: windowSegs.map(seg => ({ ...seg, widthPct: seg.rawLen / windowTotal * 100 })),
+    before: start,
+    after: segs.length - (start + MAX_VISIBLE_CHAPTERS),
+  }
+})
+
+const visibleSegments = computed(() => segmentWindow.value.segments)
+const overflowBefore = computed(() => segmentWindow.value.before)
+const overflowAfter = computed(() => segmentWindow.value.after)
+
+// Hover tooltip for chapter segments (teleported so the bar can't clip it)
+const segmentTip = ref({ visible: false, x: 0, y: 0, text: '' })
+
+const showSegmentTip = (event, text) => {
+  const rect = event.currentTarget.getBoundingClientRect()
+  segmentTip.value = {
+    visible: true,
+    x: Math.min(Math.max(rect.left + rect.width / 2, 70), window.innerWidth - 70),
+    y: rect.top - 8,
+    text,
+  }
+}
+
+const hideSegmentTip = () => {
+  segmentTip.value = { ...segmentTip.value, visible: false }
+}
+
+// Chapter menu (opened from the "+N" overflow pills)
+const chapterMenuOpen = ref(false)
+const chapterMenuX = ref(0)
+const chapterMenuRef = ref(null)
+
+const openChapterMenu = async (event) => {
+  hideSegmentTip()
+  const menuWidth = 280
+  chapterMenuX.value = Math.min(
+    Math.max(event.clientX - menuWidth / 2, 8),
+    window.innerWidth - menuWidth - 8,
+  )
+  chapterMenuOpen.value = true
+  await nextTick()
+  chapterMenuRef.value?.querySelector('.chapter-menu-item.active')
+    ?.scrollIntoView({ block: 'center', behavior: 'instant' })
+}
+
+const closeChapterMenu = () => {
+  chapterMenuOpen.value = false
+}
+
+const handleSegmentClick = (seg) => {
+  if (isIdle.value) return
+  seekToChunk(seg.chunkStart)
+}
+
+const jumpToChapter = (seg) => {
+  closeChapterMenu()
+  if (isIdle.value) return
+  seekToChunk(seg.chunkStart)
+}
+
+const chapterPercent = (seg) => {
+  const total = ttsTotalChunks.value
+  if (!total) return ''
+  return `${Math.round(seg.chunkStart / total * 100)}%`
+}
+
+const onDocumentClick = (event) => {
+  if (!chapterMenuOpen.value) return
+  if (chapterMenuRef.value?.contains(event.target)) return
+  if (event.target.closest?.('.chapter-overflow')) return
+  closeChapterMenu()
+}
+
+const onDocumentKeydown = (event) => {
+  if (event.key === 'Escape') closeChapterMenu()
+}
 
 const SPEEDS = [0.75, 1.0, 1.25, 1.5, 2.0]
 
@@ -201,7 +394,17 @@ const hydrateLastSession = () => {
   if (books.value.length) restoreLastSession(books.value)
 }
 
-onMounted(hydrateLastSession)
+onMounted(() => {
+  hydrateLastSession()
+  document.addEventListener('click', onDocumentClick)
+  document.addEventListener('keydown', onDocumentKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick)
+  document.removeEventListener('keydown', onDocumentKeydown)
+})
+
 watch(books, hydrateLastSession, { immediate: true })
 
 const playAdjacentBook = (delta) => {
@@ -439,12 +642,195 @@ const coverFallback = (event, title) => {
   overflow: hidden;
 }
 
+.time-progress-track.has-chapters {
+  display: flex;
+  align-items: center;
+  height: 14px;
+  border-radius: 3px;
+  gap: 3px;
+  overflow: visible;
+  background: transparent;
+}
+
 .time-progress-fill {
   height: 100%;
   min-width: 2px;
   border-radius: inherit;
   background: var(--color-brand-primary);
   transition: width 0.3s ease;
+}
+
+.chapter-segment {
+  flex: 0 1 auto;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--color-border-strong);
+  overflow: hidden;
+  position: relative;
+  transition: height 0.15s ease;
+  min-width: 8px;
+  cursor: pointer;
+}
+
+.chapter-segment:hover {
+  height: 7px;
+}
+
+.chapter-segment.active {
+  height: 7px;
+}
+
+.chapter-segment-fill {
+  position: absolute;
+  inset: 0;
+  width: 0%;
+  background: var(--color-brand-primary);
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+
+.chapter-overflow {
+  flex: 0 0 auto;
+  min-width: 28px;
+  height: 14px;
+  padding: 0 6px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface-card);
+  color: var(--color-text-muted);
+  font-size: 0.6rem;
+  font-weight: 600;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.chapter-overflow.past {
+  background: var(--color-brand-primary-soft);
+  border-color: var(--color-brand-primary-soft);
+  color: var(--color-brand-primary);
+}
+
+.chapter-overflow:hover {
+  border-color: var(--color-brand-primary);
+  color: var(--color-brand-primary);
+}
+
+.chapter-tooltip {
+  position: fixed;
+  z-index: 1200;
+  transform: translate(-50%, -100%);
+  max-width: 280px;
+  padding: 0.35rem 0.6rem;
+  background: var(--color-text-primary);
+  color: var(--color-surface-primary);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.3;
+  border-radius: 6px;
+  box-shadow: var(--shadow-modal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.chapter-menu {
+  position: fixed;
+  bottom: calc(var(--layout-playing-bar-height, 90px) + 10px);
+  z-index: 1200;
+  width: 280px;
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-border-card);
+  border-radius: 12px;
+  box-shadow: var(--shadow-modal);
+  overflow: hidden;
+}
+
+.chapter-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.9rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.chapter-menu-count {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: var(--color-surface-tertiary);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+
+.chapter-menu-list {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 0.3rem;
+}
+
+.chapter-menu-item {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.chapter-menu-item:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.chapter-menu-item.active {
+  background: var(--purple-li-active);
+  color: var(--color-brand-primary);
+  font-weight: 500;
+}
+
+.chapter-menu-item.past:not(.active) {
+  color: var(--color-text-muted);
+}
+
+.chapter-menu-num {
+  font-size: 0.7rem;
+  color: var(--color-text-subtle);
+  text-align: right;
+}
+
+.chapter-menu-item.active .chapter-menu-num {
+  color: var(--color-brand-primary);
+}
+
+.chapter-menu-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chapter-menu-pct {
+  font-size: 0.68rem;
+  color: var(--color-text-subtle);
+}
+
+.chapter-menu-icon {
+  font-size: 0.85rem;
 }
 
 .control-buttons {
