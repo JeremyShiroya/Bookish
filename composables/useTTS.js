@@ -3,8 +3,7 @@ import { useState } from '#app'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 
 let _currentAudio = null
-let _prefetchAudio = null
-let _prefetchBoundaries = null   // word boundaries for the pre-fetched next chunk
+let _prefetchChunk = null        // { chunkIdx, audio, boundaries }
 let _prefetchGeneration = 0      // incremented on cancel to invalidate in-flight pre-fetches
 let _chunks = []
 let _chunkIdx = 0
@@ -93,6 +92,10 @@ export function writeStoredTtsSession(session, storage = resolveStorage()) {
 
 export function clearStoredTtsSession(storage = resolveStorage()) {
   storage?.removeItem?.(BOOKISH_TTS_SESSION_KEY)
+}
+
+export function takeMatchingPrefetch(prefetch, chunkIdx) {
+  return prefetch?.chunkIdx === chunkIdx ? prefetch : null
 }
 
 if (import.meta.hot) {
@@ -253,6 +256,19 @@ export function buildReadableChunks(html) {
     for (const chunk of partChunks) chunks.push(chunk)
   }
   return { chunks, sectionCounts }
+}
+
+export function resolvePlaybackChunks({
+  format = '',
+  html = '',
+  explicitChunks = [],
+} = {}) {
+  if (String(format).toLowerCase() === 'pdf' && Array.isArray(explicitChunks)) {
+    return explicitChunks
+      .map(chunk => String(chunk || '').trim())
+      .filter(Boolean)
+  }
+  return buildReadableChunks(html).chunks
 }
 
 // Builds [{ chunkStart, chunkEnd, title }] from EPUB content HTML so the
@@ -558,8 +574,7 @@ export const useTTS = () => {
       _currentAudio.pause()
       _currentAudio = null
     }
-    _prefetchAudio = null
-    _prefetchBoundaries = null
+    _prefetchChunk = null
     _prefetchGeneration++
     // Stop the word-highlight rAF loop
     if (_rafId !== null) { cancelAnimationFrame(_rafId); _rafId = null }
@@ -632,11 +647,12 @@ export const useTTS = () => {
 
     // Use pre-fetched result if available, otherwise fetch now
     let chunkData = null
-    if (_prefetchAudio) {
-      chunkData = { audio: _prefetchAudio, boundaries: _prefetchBoundaries ?? [] }
-      _prefetchAudio = null
-      _prefetchBoundaries = null
+    const prefetched = takeMatchingPrefetch(_prefetchChunk, _chunkIdx)
+    if (prefetched) {
+      chunkData = { audio: prefetched.audio, boundaries: prefetched.boundaries ?? [] }
+      _prefetchChunk = null
     } else {
+      _prefetchChunk = null
       chunkData = await _fetchChunkAudio(_chunkIdx)
     }
 
@@ -664,8 +680,11 @@ export const useTTS = () => {
       const gen = _prefetchGeneration
       _fetchChunkAudio(nextIdx).then(result => {
         if (_prefetchGeneration === gen && result) {
-          _prefetchAudio = result.audio
-          _prefetchBoundaries = result.boundaries
+          _prefetchChunk = {
+            chunkIdx: nextIdx,
+            audio: result.audio,
+            boundaries: result.boundaries,
+          }
         }
       })
     }
@@ -727,10 +746,21 @@ export const useTTS = () => {
 
     const html = book?.content || stored?.content || ''
     let sentenceChunks = []
-    if (stripHtml(html).trim()) {
+    const format = String(book?.format || stored?.format || '').toLowerCase()
+    const storedPdfChunks = stored?.pdfManifest?.chunks?.map(chunk => chunk.text) || []
+    const explicitPdfChunks = Array.isArray(options.chunks) && options.chunks.length
+      ? options.chunks
+      : storedPdfChunks
+    if (format === 'pdf' && explicitPdfChunks.length) {
+      sentenceChunks = resolvePlaybackChunks({
+        format,
+        html,
+        explicitChunks: explicitPdfChunks,
+      })
+    } else if (stripHtml(html).trim() && format !== 'pdf') {
       // EPUB / HTML: chunk section-by-section so chunk indices stay aligned
       // with chapter boundaries and the reader's highlight spans.
-      sentenceChunks = buildReadableChunks(html).chunks
+      sentenceChunks = resolvePlaybackChunks({ format, html })
     } else {
       // PDF / plain text: no chapter-break sections, chunk the extracted text.
       let text = ''

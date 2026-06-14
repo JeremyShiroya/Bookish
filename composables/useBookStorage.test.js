@@ -41,6 +41,31 @@ describe('useBookStorage', () => {
     expect(result).toEqual({ content: '<p>New</p>', pages: 8 })
   })
 
+  it('persists the PDF text mapping version for one-time migrations', async () => {
+    await saveBookContent(22, {
+      content: '<div data-pdf-page="1"><p>Text</p></div>',
+      pages: 1,
+      pdfTextMapVersion: 2,
+    })
+
+    expect((await getBookContent(22)).pdfTextMapVersion).toBe(2)
+  })
+
+  it('persists the canonical PDF manifest', async () => {
+    const pdfManifest = {
+      version: 1,
+      pages: [{ page: 1, width: 600, height: 800, items: [], chunkIds: [0] }],
+      chunks: [{ id: 0, page: 1, text: 'Hello.', spans: [] }],
+    }
+    await saveBookContent(23, {
+      content: '<p>Hello.</p>',
+      pages: 1,
+      pdfManifest,
+    })
+
+    expect((await getBookContent(23)).pdfManifest).toEqual(pdfManifest)
+  })
+
   it('stores optional PDF source and outline metadata when provided', async () => {
     const source = new TextEncoder().encode('pdf bytes').buffer
     await saveBookContent(20, {

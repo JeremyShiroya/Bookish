@@ -32,3 +32,39 @@ export function groupAuthorWorks(books = []) {
 
   return { standaloneBooks, seriesGroups }
 }
+
+export function buildAuthorCollectionStats({
+  ownedBooks = 0,
+  totalBooks = null,
+  ownedSeries = 0,
+  totalSeries = null,
+} = {}) {
+  const normalizeTotal = (value) => {
+    if (value === null || value === undefined || value === '') return null
+    const total = Number(value)
+    return Number.isFinite(total) && total >= 0 ? total : null
+  }
+  const booksOwned = Math.max(0, Number(ownedBooks) || 0)
+  const seriesOwned = Math.max(0, Number(ownedSeries) || 0)
+  const normalizedBooksTotal = normalizeTotal(totalBooks)
+  const normalizedSeriesTotal = normalizeTotal(totalSeries)
+  const booksTotal = normalizedBooksTotal === null
+    ? null
+    : Math.max(booksOwned, normalizedBooksTotal)
+  const seriesTotal = normalizedSeriesTotal === null
+    ? null
+    : Math.max(seriesOwned, normalizedSeriesTotal)
+
+  return {
+    books: {
+      owned: booksOwned,
+      total: booksTotal,
+      totalLabel: booksTotal === null ? '?' : String(booksTotal),
+    },
+    series: {
+      owned: seriesOwned,
+      total: seriesTotal,
+      totalLabel: seriesTotal === null ? '?' : String(seriesTotal),
+    },
+  }
+}

@@ -119,9 +119,8 @@
           ref="pdfViewerRef"
           :src="pdfSource"
           :zoom="zoomLevel"
-          :text-content="rawContent"
-          :active-chunk-index="activeTtsChunkIndex"
-          :active-chunk-text="activeTtsChunkText"
+          :manifest="pdfManifest"
+          :active-chunk-id="activeTtsChunkIndex"
           @page-change="handlePdfPageChange"
           @loaded="handlePdfLoaded"
         />
@@ -200,14 +199,21 @@ import { useBooks } from '~/composables/useBooks'
 import { isRenderableSection, buildReadableChunks, useTTS } from '~/composables/useTTS'
 import { useBookStorage } from '~/composables/useBookStorage'
 import { useBookishSettings } from '~/composables/useBookishSettings'
-import { extractPdfTocFromSource, pdfSourceToBytes } from '~/composables/usePdfExtractor'
+import {
+  extractPdfContentFromSource,
+  extractPdfTocFromSource,
+  formatPdfTocTitle,
+  pdfSourceToBytes,
+} from '~/composables/usePdfExtractor'
+import { PDF_MANIFEST_VERSION, firstChunkForPage, pageForChunk } from '~/composables/usePdfManifest'
+import { pdfProgressForPage } from '~/composables/useReaderPosition'
 
 const route = useRoute()
 const router = useRouter()
-const { books, fetchBookById, updateBook } = useBooks()
+const { books, initialized, fetchAllData, fetchBookById, updateBook } = useBooks()
 const { getBookContent, saveBookContent } = useBookStorage()
 const { settings, updateSettings } = useBookishSettings()
-const { ttsBook, ttsChunkIdx, ttsCurrentChunk, ttsStatus, play: playTTS, pause: pauseTTS, resume: resumeTTS } = useTTS()
+const { ttsBook, ttsChunkIdx, ttsStatus, play: playTTS, pause: pauseTTS, resume: resumeTTS } = useTTS()
 
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2.5
@@ -226,6 +232,7 @@ const tocItems = ref([])
 const pdfTocChecked = ref(false)
 const tocLoading = ref(false)
 const pdfSource = ref(null)
+const pdfManifest = ref(null)
 
 const zoomLevel = ref(settings.value.readerZoom)
 const readerTheme = ref(settings.value.readerTheme)
@@ -237,6 +244,7 @@ const restoredInitialPdfScroll = ref(false)
 const readerReady = ref(false)
 const confirmReadFromHereOpen = ref(false)
 const pendingReadFromHereChunk = ref(0)
+const pendingReadFromHerePage = ref(1)
 const pendingReadFromHereWasPlaying = ref(false)
 
 const bookFormat = computed(() => (book.value?.format || '').toLowerCase())
@@ -337,7 +345,11 @@ const displayTocItems = computed(() => {
   if (isPdfBook.value) {
     return (pdfTocItems.value || [])
       .filter(item => item?.title && item?.page)
-      .map(item => ({ ...item, type: 'pdf' }))
+      .map(item => ({
+        ...item,
+        title: formatPdfTocTitle(item.title, item.page),
+        type: 'pdf',
+      }))
   }
 
   return (tocTitles.value || [])
@@ -358,11 +370,6 @@ const activeTtsChunkIndex = computed(() => {
   return ttsChunkIdx.value
 })
 
-const activeTtsChunkText = computed(() => {
-  if (ttsBook.value?.id !== book.value?.id || ttsStatus.value === 'idle') return ''
-  return ttsCurrentChunk.value || ''
-})
-
 const isCurrentBookNarrating = computed(() => (
   ttsBook.value?.id === book.value?.id && ttsStatus.value !== 'idle'
 ))
@@ -371,10 +378,17 @@ const isCurrentBookNarrating = computed(() => (
 // per-section chunk counts. Built section-by-section so indices line up with
 // the reader's `ch-N` sections, the highlight spans, and the chapter splits.
 const readableChunkData = computed(() => buildReadableChunks(rawContent.value || ''))
+const epubSectionCounts = computed(() => readableChunkData.value.sectionCounts)
+const allReadableChunks = computed(() => (
+  isPdfBook.value
+    ? (pdfManifest.value?.chunks || []).map(chunk => chunk.text)
+    : readableChunkData.value.chunks
+))
 
-const sectionChunkCounts = computed(() => readableChunkData.value.sectionCounts)
-
-const allReadableChunks = computed(() => readableChunkData.value.chunks)
+const activeTtsChunkPage = computed(() => {
+  if (!isPdfBook.value || activeTtsChunkIndex.value < 0) return 0
+  return pageForChunk(pdfManifest.value, activeTtsChunkIndex.value) || 0
+})
 
 // The TOC entry whose section range contains the section being read.
 // Chapters usually span many sections (EPUBs split files per few pages),
@@ -412,7 +426,7 @@ function scrollToChapter(index) {
 
 // First flat chunk index of section `sectionIndex`, from the per-section counts.
 function sectionStartChunk(sectionIndex) {
-  const counts = sectionChunkCounts.value
+  const counts = epubSectionCounts.value
   let offset = 0
   for (let i = 0; i < sectionIndex && i < counts.length; i += 1) offset += counts[i] || 0
   return offset
@@ -420,11 +434,13 @@ function sectionStartChunk(sectionIndex) {
 
 // Which section (ch-N) a flat chunk index falls in.
 function sectionForChunk(chunkIndex) {
-  const counts = sectionChunkCounts.value
+  const counts = epubSectionCounts.value
+  const target = Math.max(0, Number(chunkIndex) || 0)
   let offset = 0
-  for (let i = 0; i < counts.length; i += 1) {
-    offset += counts[i] || 0
-    if (chunkIndex < offset) return i
+  for (let index = 0; index < counts.length; index += 1) {
+    const count = Math.max(0, Number(counts[index]) || 0)
+    if (target < offset + count) return index
+    offset += count
   }
   return Math.max(0, counts.length - 1)
 }
@@ -434,9 +450,7 @@ function chunkIndexForCurrentPosition() {
   if (!chunks.length) return 0
 
   if (isPdfBook.value) {
-    const pages = totalPages.value || book.value?.pages || 1
-    const pageProgress = pages > 1 ? (currentPdfPage.value - 1) / (pages - 1) : 0
-    return Math.max(0, Math.min(chunks.length - 1, Math.floor(pageProgress * chunks.length)))
+    return firstChunkForPage(pdfManifest.value, currentPdfPage.value)?.id ?? 0
   }
 
   // Preferred: the highlight span nearest the top of the viewport is the exact
@@ -465,10 +479,22 @@ function chunkIndexForCurrentPosition() {
 
 function requestReadCurrentPosition() {
   if (!book.value || !allReadableChunks.value.length) return
-  // Pause TTS so auto-scroll stops and the current viewport position is preserved
+  const visiblePdfPage = isPdfRenderable.value
+    ? pdfViewerRef.value?.getVisiblePage?.()
+    : null
+  const targetPage = visiblePdfPage || currentPdfPage.value
+  const targetPdfChunk = isPdfBook.value
+    ? firstChunkForPage(pdfManifest.value, targetPage)
+    : null
+  const targetChunkId = isPdfBook.value
+    ? targetPdfChunk?.id
+    : chunkIndexForCurrentPosition()
+  if (targetChunkId === null || targetChunkId === undefined) return
+
   pendingReadFromHereWasPlaying.value = ttsStatus.value === 'playing'
   if (ttsStatus.value === 'playing') pauseTTS()
-  pendingReadFromHereChunk.value = chunkIndexForCurrentPosition()
+  pendingReadFromHerePage.value = targetPdfChunk?.page || targetPage
+  pendingReadFromHereChunk.value = targetChunkId
   confirmReadFromHereOpen.value = true
 }
 
@@ -481,29 +507,38 @@ function cancelReadFromHere() {
   pendingReadFromHereWasPlaying.value = false
 }
 
-function confirmReadFromHere() {
+async function confirmReadFromHere() {
   if (!book.value || !allReadableChunks.value.length) return
   confirmReadFromHereOpen.value = false
   pendingReadFromHereWasPlaying.value = false
+  const targetPage = pendingReadFromHerePage.value
 
   // Move the reading marker back to the page being read from, so saved
   // progress reflects the new (earlier) position rather than where narration
   // previously was.
-  if (!isPdfBook.value) {
+  if (isPdfBook.value) {
+    currentPdfPage.value = targetPage
+  } else {
     currentChapterIdx.value = sectionForChunk(pendingReadFromHereChunk.value)
   }
 
-  playTTS(book.value, {
+  await playTTS(book.value, {
     startChunkIdx: pendingReadFromHereChunk.value,
     ignoreSavedSession: true,
+    chunks: isPdfBook.value ? allReadableChunks.value : undefined,
   })
-  saveReadingProgress()
+  if (isPdfRenderable.value) {
+    currentPdfPage.value = targetPage
+    await nextTick()
+    pdfViewerRef.value?.scrollToPage(targetPage, 'instant', 'start')
+  }
+  await saveReadingProgress(isPdfBook.value ? { pdfPage: targetPage } : undefined)
 }
 
 function jumpToNarration() {
   if (!isCurrentBookNarrating.value) return
   if (isPdfRenderable.value) {
-    pdfViewerRef.value?.scrollToActiveHighlight?.()
+    pdfViewerRef.value?.scrollToChunk?.(activeTtsChunkIndex.value)
     return
   }
   _highlightChunk(ttsChunkIdx.value)
@@ -798,6 +833,7 @@ async function ensurePdfToc(bookId) {
       tocItems: extractedItems,
       format: bookFormat.value,
       pdfTocChecked: true,
+      pdfManifest: pdfManifest.value,
     })
   } catch (error) {
     console.error('[Reader] Failed to extract PDF table of contents:', error)
@@ -807,15 +843,14 @@ async function ensurePdfToc(bookId) {
   }
 }
 
-function readingProgressSnapshot() {
+function readingProgressSnapshot({ pdfPage } = {}) {
   let progress = 0
   let status = 'Unread'
 
   if (isPdfRenderable.value && totalPages.value > 0) {
-    progress = totalPages.value > 1
-      ? Math.round(((currentPdfPage.value - 1) / (totalPages.value - 1)) * 100)
-      : 100
-    status = progress > 95 ? 'Read' : currentPdfPage.value > 1 ? 'Reading' : 'Unread'
+    const pdfProgress = pdfProgressForPage(pdfPage ?? currentPdfPage.value, totalPages.value)
+    progress = pdfProgress.progress
+    status = pdfProgress.status
   } else if (!isPdfBook.value && chapterList.value.length > 0) {
     const idx = Math.max(0, currentChapterIdx.value)
     progress = chapterList.value.length > 1
@@ -832,9 +867,9 @@ function readingProgressSnapshot() {
 
 let _progressSaveTimer = null
 
-async function saveReadingProgress() {
+async function saveReadingProgress(position) {
   if (!readerReady.value || !book.value) return
-  const next = readingProgressSnapshot()
+  const next = readingProgressSnapshot(position)
   if (next.progress === (book.value.progress || 0) && next.status === (book.value.status || 'Unread')) return
 
   const updated = { ...book.value, ...next }
@@ -945,6 +980,7 @@ function handlePdfLoaded(payload) {
 async function loadBook(id) {
   readerReady.value = false
   restoredInitialPdfScroll.value = false
+  if (!initialized.value) await fetchAllData()
   const cached = books.value.find(b => b.id === id)
   if (cached) {
     book.value = cached
@@ -968,8 +1004,37 @@ async function loadBook(id) {
       tocItems.value = stored.tocItems ?? []
       pdfTocChecked.value = !!stored.pdfTocChecked
       pdfSource.value = stored.source ?? null
+      pdfManifest.value = stored.pdfManifest ?? null
       totalPages.value = stored.pages || book.value?.pages || 0
       book.value = { ...book.value, content: stored.content ?? '', tocTitles: stored.tocTitles ?? [] }
+
+      if (
+        bookFormat.value === 'pdf'
+        && stored.source
+        && stored.pdfManifest?.version !== PDF_MANIFEST_VERSION
+      ) {
+        try {
+          const rebuilt = await extractPdfContentFromSource(stored.source)
+          if (rebuilt.pdfManifest) {
+            rawContent.value = rebuilt.content || rawContent.value
+            totalPages.value = rebuilt.pages || totalPages.value
+            pdfManifest.value = rebuilt.pdfManifest
+            book.value = { ...book.value, content: rebuilt.content || rawContent.value }
+            await saveBookContent(id, {
+              content: rebuilt.content,
+              pages: totalPages.value,
+              tocTitles: tocTitles.value,
+              tocItems: tocItems.value,
+              format: bookFormat.value,
+              pdfTocChecked: pdfTocChecked.value,
+              pdfTextMapVersion: 2,
+              pdfManifest: rebuilt.pdfManifest,
+            })
+          }
+        } catch (error) {
+          console.warn('[Reader] Could not rebuild the PDF page map.', error)
+        }
+      }
     }
   } catch (error) {
     console.error('[Reader] Failed to load content from IndexedDB:', error)

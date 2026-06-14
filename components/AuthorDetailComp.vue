@@ -24,19 +24,15 @@
 
           <div class="author-stats">
             <div class="stat-chip">
-              <span class="stat-value">
-                {{ ownedBooksCount }}<span v-if="authorDetails.booksCount" class="stat-total"> / {{ authorDetails.booksCount }}</span>
-              </span>
+              <span class="stat-value">{{ collectionStats.books.owned }} / {{ collectionStats.books.totalLabel }}</span>
               <span class="stat-label">Books</span>
             </div>
             <div class="stat-chip">
-              <span class="stat-value">{{ authorSeries.length }}</span>
+              <span class="stat-value">{{ collectionStats.series.owned }} / {{ collectionStats.series.totalLabel }}</span>
               <span class="stat-label">Series</span>
             </div>
           </div>
-          <p v-if="authorDetails.booksCount" class="stats-caption">
-            Books shown as in your library / total published
-          </p>
+          <p class="stats-caption">In your library / validated full-length total</p>
 
           <!-- Key details -->
           <div class="detail-list" v-if="hasAnyDetail">
@@ -199,7 +195,7 @@ import { useToast } from '~/composables/useToast'
 import { useBooks } from '~/composables/useBooks'
 import { useLibraryStore } from '~/composables/useLibraryStore'
 import { fetchAuthorImageResults } from '~/composables/useAuthorImageSearch'
-import { groupAuthorWorks } from '~/composables/useAuthorDetails'
+import { buildAuthorCollectionStats, groupAuthorWorks } from '~/composables/useAuthorDetails'
 import AuthorImageModal from './AuthorImageModal.vue'
 import LibraryBookCard from './LibraryBookCard.vue'
 import AddToPlaylistModal from './AddToPlaylistModal.vue'
@@ -250,11 +246,13 @@ const authorDetails = computed(() => {
     deathDate: pick('authorDeathDate'),
     nationality: pick('authorNationality'),
     notableWorks: pick('authorNotableWorks') || [],
-    booksCount: pick('authorBooksCount'),
+    validatedBooksCount: pick('authorValidatedBooksCount'),
+    validatedSeriesCount: pick('authorValidatedSeriesCount'),
     latestWork: pick('authorLatestWork'),
     spouseName: pick('authorSpouseName'),
     hasChildren: pick('authorHasChildren'),
     childrenCount: pick('authorChildrenCount'),
+    version: pick('authorDetailsVersion'),
   }
 })
 
@@ -308,7 +306,7 @@ watchEffect(() => {
 const detailsFetchedFor = ref(null)
 watch(author, async (current) => {
   if (!current?.name || detailsFetchedFor.value === current.name) return
-  const needsFetch = !current.bio || !hasAnyDetail.value
+  const needsFetch = !current.bio || !hasAnyDetail.value || authorDetails.value.version !== 3
   if (!needsFetch) return
   detailsFetchedFor.value = current.name
   bioLoading.value = true
@@ -396,6 +394,12 @@ const updateAuthorImage = async (newImageUrl) => {
 const authorWorks = computed(() => groupAuthorWorks(author.value?.books || []))
 const standaloneBooks = computed(() => authorWorks.value.standaloneBooks)
 const authorSeries = computed(() => authorWorks.value.seriesGroups)
+const collectionStats = computed(() => buildAuthorCollectionStats({
+  ownedBooks: ownedBooksCount.value,
+  totalBooks: authorDetails.value.validatedBooksCount,
+  ownedSeries: authorSeries.value.length,
+  totalSeries: authorDetails.value.validatedSeriesCount,
+}))
 
 const handlePlay = (book) => {
   if (ttsBook.value?.id === book.id && ttsStatus.value !== 'idle') {

@@ -215,11 +215,17 @@ export const useLibraryStore = () => {
               if (details.deathDate !== undefined) patch.authorDeathDate = details.deathDate
               if (details.nationality) patch.authorNationality = details.nationality
               if (details.notableWorks?.length) patch.authorNotableWorks = details.notableWorks
-              if (details.booksCount) patch.authorBooksCount = details.booksCount
+              if (details.validatedBooksCount !== undefined) {
+                patch.authorValidatedBooksCount = details.validatedBooksCount
+              }
+              if (details.validatedSeriesCount !== undefined) {
+                patch.authorValidatedSeriesCount = details.validatedSeriesCount
+              }
               if (details.latestWork) patch.authorLatestWork = details.latestWork
               if (details.spouseName !== undefined) patch.authorSpouseName = details.spouseName
               if (details.hasChildren !== undefined) patch.authorHasChildren = details.hasChildren
               if (details.childrenCount !== undefined) patch.authorChildrenCount = details.childrenCount
+              if (details.version !== undefined) patch.authorDetailsVersion = details.version
               store.put({ ...book, ...patch, updatedAt: now })
             }
           }

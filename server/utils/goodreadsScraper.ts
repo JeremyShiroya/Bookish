@@ -40,6 +40,9 @@ export interface GoodreadsBookDetails {
 }
 
 const ABSOLUTE = /^https?:\/\//i;
+const GOODREADS_CACHE_TTL_MS = 5 * 60 * 1000;
+const goodreadsSearchCache = new Map<string, { expiresAt: number; results: GoodreadsSearchResult[] }>();
+const goodreadsSearchInFlight = new Map<string, Promise<GoodreadsSearchResult[]>>();
 
 function compact(value?: unknown) {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -158,8 +161,8 @@ function parseYear(value?: string | null) {
 }
 
 function cleanCount(value?: string | null) {
-  const match = compact(value).match(/[\d,]+/);
-  return match?.[0] || null;
+  const match = compact(value).match(/[\d,.]+(?:\s*(?:thousand|million|billion|[kmb]))?/i);
+  return match?.[0]?.replace(/\s+/g, ' ') || null;
 }
 
 function decodeHtmlEntities(value: string) {
@@ -194,13 +197,17 @@ function parseRatingFromText(value?: string | null) {
     };
   }
 
-  const ratingMatch = text.match(/(?:avg\s+rating|rating)\s+([\d.]+)/i) || text.match(/\b([\d.]+)\s+avg\b/i);
+  const ratingMatch =
+    text.match(/(?:avg\s+rating|rating)(?:\s+of)?(?:\s+approximately|\s+about)?\s+([\d.]+)/i)
+    || text.match(/\b([\d.]+)\s+(?:out\s+of\s+5(?:\s+stars?)?|avg)\b/i);
   const ratingValue =
     ratingMatch?.[1]
     || text.match(/\b([1-5]\.\d{1,2})\b(?=.*\b(?:ratings?|reviews?)\b)/i)?.[1]
     || null;
-  const ratingCount = cleanCount(text.match(/[\d,]+\s+ratings?/i)?.[0]);
-  const reviewCount = cleanCount(text.match(/[\d,]+\s+reviews?/i)?.[0]);
+  const countPattern = /(?:over\s+|more\s+than\s+|approximately\s+|about\s+)?[\d,.]+\s*(?:thousand|million|billion|[kmb])?\s+(?:ratings?|reviews?)/ig;
+  const counts = [...text.matchAll(countPattern)].map(match => match[0]);
+  const ratingCount = cleanCount(counts.find(value => /\bratings?\b/i.test(value)));
+  const reviewCount = cleanCount(counts.find(value => /\breviews?\b/i.test(value)));
   const webReview = formatGoodreadsReview(ratingValue, ratingCount, reviewCount);
 
   return { ratingValue, ratingCount, reviewCount, webReview };
@@ -336,6 +343,162 @@ function cleanSearchTitle(value?: string | null) {
     .replace(/^Goodreads\s*[:|-]\s*/i, '');
 }
 
+function normalizedMatchKey(value?: string | null) {
+  return compact(value)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+export function parseGoodreadsProxySearchText(
+  value: string,
+  title: string,
+  author: string | undefined,
+  resolvedUrl: string,
+): GoodreadsSearchResult | null {
+  const text = compact(value);
+  const titleKey = normalizedMatchKey(title);
+  const authorKey = normalizedMatchKey(author);
+  const textKey = normalizedMatchKey(text);
+  if (!titleKey || !textKey.includes(titleKey)) return null;
+  if (authorKey && !textKey.includes(authorKey)) return null;
+
+  const ratingPattern = /\b([1-5]\.\d{1,2})\s+(?:out\s+of\s+5(?:\s+stars?)?\s+)?([\d,]+)\s+ratings?\s+([\d,]+)\s+reviews?\b/i;
+  const ratingMatch = text.match(ratingPattern);
+  if (!ratingMatch) return null;
+
+  const ratingValue = ratingMatch[1];
+  const ratingCount = ratingMatch[2];
+  const reviewCount = ratingMatch[3];
+  const split = splitGoodreadsTitle(title);
+
+  return {
+    url: normalizeGoodreadsPageUrl(resolvedUrl) || resolvedUrl,
+    title: split.title || compact(title),
+    rawTitle: compact(title),
+    author: compact(author) || null,
+    cover: null,
+    rawSeriesTitle: split.rawSeriesTitle,
+    series: split.series,
+    seriesInstallment: split.seriesInstallment,
+    seriesTotal: split.seriesTotal,
+    webReview: formatGoodreadsReview(ratingValue, ratingCount, reviewCount),
+    ratingValue,
+    ratingCount,
+    reviewCount,
+  };
+}
+
+async function fetchGoodreadsProxyResult(
+  title: string,
+  author: string | undefined,
+  resolvedUrl: string,
+) {
+  try {
+    const query = [
+      resolvedUrl,
+      title,
+      author,
+      'Goodreads rating ratings reviews',
+    ].filter(Boolean).join(' ');
+    const proxyUrl = `https://r.jina.ai/http://www.google.com/search?q=${encodeURIComponent(query)}`;
+    const response = await fetch(proxyUrl, { headers });
+    if (!response.ok) return null;
+    return parseGoodreadsProxySearchText(await response.text(), title, author, resolvedUrl);
+  } catch {
+    return null;
+  }
+}
+
+export function parseGoodreadsYahooSearchHtml(
+  html: string,
+  title: string,
+  author: string | undefined,
+  resolvedUrl: string,
+): GoodreadsSearchResult | null {
+  const $ = cheerio.load(html);
+  const titleKey = normalizedMatchKey(title);
+  const authorTokens = compact(author)
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(token => token.length > 1);
+  const relevantRows: string[] = [];
+
+  $('#web .dd, #web .algo, .web-res, .algo').each((_, element) => {
+    const text = compact($(element).text());
+    const textKey = normalizedMatchKey(text);
+    if (!text || !/goodreads/i.test(text) || !textKey.includes(titleKey)) return;
+    if (authorTokens.length && !authorTokens.every(token => text.toLowerCase().includes(token))) return;
+    relevantRows.push(text);
+  });
+
+  if (!relevantRows.length) return null;
+  const rating = parseRatingFromText(relevantRows.join(' '));
+  if (!rating.ratingValue) return null;
+
+  const split = splitGoodreadsTitle(title);
+  return {
+    url: normalizeGoodreadsPageUrl(resolvedUrl) || resolvedUrl,
+    title: split.title || compact(title),
+    rawTitle: compact(title),
+    author: compact(author) || null,
+    cover: null,
+    rawSeriesTitle: split.rawSeriesTitle,
+    series: split.series,
+    seriesInstallment: split.seriesInstallment,
+    seriesTotal: split.seriesTotal,
+    webReview: rating.webReview,
+    ratingValue: rating.ratingValue,
+    ratingCount: rating.ratingCount,
+    reviewCount: rating.reviewCount,
+  };
+}
+
+async function fetchGoodreadsSearchFallback(
+  title: string,
+  author: string | undefined,
+  resolvedUrl: string,
+) {
+  const proxyResult = await fetchGoodreadsProxyResult(title, author, resolvedUrl);
+  if (proxyResult) return proxyResult;
+
+  const queries = [
+    [
+      `"${title}"`,
+      author ? `"${author}"` : null,
+      'Goodreads rating ratings reviews',
+    ],
+    [
+      `"${title}"`,
+      author ? `"${author}"` : null,
+      '"out of 5"',
+      'Goodreads',
+    ],
+    [
+      `"${title}"`,
+      author ? `"${author}"` : null,
+      'Goodreads average rating',
+    ],
+  ].map(parts => parts.filter(Boolean).join(' '));
+
+  for (const query of queries) {
+    try {
+      const response = await fetch(
+        `https://search.yahoo.com/search?p=${encodeURIComponent(query)}`,
+        { headers },
+      );
+      if (!response.ok) continue;
+      const result = parseGoodreadsYahooSearchHtml(await response.text(), title, author, resolvedUrl);
+      if (result) return result;
+    } catch {
+      // Try the next search wording.
+    }
+  }
+
+  return null;
+}
+
 export function parseGoodreadsDiscoveryHtml(html: string): GoodreadsSearchResult[] {
   const $ = cheerio.load(html);
   const results: GoodreadsSearchResult[] = [];
@@ -401,7 +564,17 @@ async function searchGoodreadsTitleRedirects(title: string, author?: string): Pr
       // the /search and DuckDuckGo fallbacks that can still read a rating from
       // result snippets — so require a real 200 response that actually parsed
       // into a book (title or rating), not the data-less interstitial.
-      if (response.status !== 200 || !url || seen.has(url)) continue;
+      if (!url || seen.has(url)) continue;
+
+      if (response.status !== 200) {
+        const fallbackResult = await fetchGoodreadsSearchFallback(title, author, url);
+        if (fallbackResult) {
+          seen.add(url);
+          results.push(fallbackResult);
+          break;
+        }
+        continue;
+      }
 
       const details = parseGoodreadsBookHtml(await response.text());
       if (!details.title && !details.ratingValue) continue;
@@ -554,7 +727,7 @@ export function parseGoodreadsBookHtml(html: string, seed?: Partial<GoodreadsSea
   };
 }
 
-export async function searchGoodreads(title: string, author?: string): Promise<GoodreadsSearchResult[]> {
+async function searchGoodreadsUncached(title: string, author?: string): Promise<GoodreadsSearchResult[]> {
   try {
     const seen = new Set<string>();
     const results: GoodreadsSearchResult[] = [];
@@ -565,7 +738,21 @@ export async function searchGoodreads(title: string, author?: string): Promise<G
       results.push(result);
     }
 
-    if (results.length) return results.slice(0, 8);
+    if (results.length) {
+      if (!results.some(result => result.webReview)) {
+        const fallback = await fetchGoodreadsSearchFallback(title, author, results[0].url);
+        if (fallback) {
+          results[0] = {
+            ...results[0],
+            webReview: fallback.webReview,
+            ratingValue: fallback.ratingValue,
+            ratingCount: fallback.ratingCount,
+            reviewCount: fallback.reviewCount,
+          };
+        }
+      }
+      return results.slice(0, 8);
+    }
 
     const queries = [
       `${title} ${author || ''}`.trim(),
@@ -576,7 +763,6 @@ export async function searchGoodreads(title: string, author?: string): Promise<G
       const query = encodeURIComponent(value);
       const response = await fetch(`https://www.goodreads.com/search?q=${query}`, { headers });
       if (response.status !== 200) {
-        console.error(`Goodreads search failed with status ${response.status}`);
         continue;
       }
 
@@ -612,6 +798,32 @@ export async function searchGoodreads(title: string, author?: string): Promise<G
     console.error('Error searching Goodreads:', err);
     return [];
   }
+}
+
+export async function searchGoodreads(title: string, author?: string): Promise<GoodreadsSearchResult[]> {
+  const key = `${normalizedMatchKey(title)}:${normalizedMatchKey(author)}`;
+  const now = Date.now();
+  const cached = goodreadsSearchCache.get(key);
+  if (cached && cached.expiresAt > now) return cached.results;
+  if (cached) goodreadsSearchCache.delete(key);
+
+  const active = goodreadsSearchInFlight.get(key);
+  if (active) return active;
+
+  const request = searchGoodreadsUncached(title, author)
+    .then((results) => {
+      goodreadsSearchCache.set(key, {
+        expiresAt: Date.now() + GOODREADS_CACHE_TTL_MS,
+        results,
+      });
+      return results;
+    })
+    .finally(() => {
+      goodreadsSearchInFlight.delete(key);
+    });
+
+  goodreadsSearchInFlight.set(key, request);
+  return request;
 }
 
 export async function scrapeGoodreadsBook(bookUrl: string, seed?: Partial<GoodreadsSearchResult>): Promise<GoodreadsBookDetails | null> {

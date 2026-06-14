@@ -116,7 +116,17 @@ export const useBookStorage = () => {
     })
   }
 
-  const saveBookContent = async (bookId, { content, pages, tocTitles, source, tocItems, format, pdfTocChecked }) => {
+  const saveBookContent = async (bookId, {
+    content,
+    pages,
+    tocTitles,
+    source,
+    tocItems,
+    format,
+    pdfTocChecked,
+    pdfTextMapVersion,
+    pdfManifest,
+  }) => {
     if (source !== undefined) {
       await savePdfSource(bookId, source)
     }
@@ -129,6 +139,8 @@ export const useBookStorage = () => {
       if (tocItems !== undefined) record.tocItems = cloneForStorage(tocItems ?? null)
       if (format !== undefined) record.format = cloneForStorage(format ?? null)
       if (pdfTocChecked !== undefined) record.pdfTocChecked = !!pdfTocChecked
+      if (pdfTextMapVersion !== undefined) record.pdfTextMapVersion = Number(pdfTextMapVersion) || 0
+      if (pdfManifest !== undefined) record.pdfManifest = cloneForStorage(pdfManifest ?? null)
       tx.objectStore(STORE_NAME).put(record, bookId)
       tx.oncomplete = () => resolve()
       tx.onerror = (e) => reject(e.target.error)

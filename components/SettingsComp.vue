@@ -93,14 +93,11 @@
             <h3>Narrator voice</h3>
             <p>{{ currentVoiceName }}</p>
           </div>
-          <div class="select-wrap">
-            <select :value="settings.ttsVoice" @change="setAudioVoice($event.target.value)">
-              <option v-for="voice in ttsVoices" :key="voice.id" :value="voice.id">
-                {{ voice.name }}
-              </option>
-            </select>
-            <i class="ri-arrow-down-s-line"></i>
-          </div>
+          <BookishSelect
+            :model-value="settings.ttsVoice"
+            :options="ttsVoices.map(voice => ({ value: voice.id, label: voice.name }))"
+            @update:model-value="setAudioVoice"
+          />
         </div>
 
         <div class="setting-row">

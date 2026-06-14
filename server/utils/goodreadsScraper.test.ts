@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   parseGoodreadsBookHtml,
   parseGoodreadsDiscoveryHtml,
+  parseGoodreadsProxySearchText,
   parseGoodreadsSearchHtml,
   parseGoodreadsSeriesTotal,
   parseSeriesFromText,
@@ -168,6 +169,138 @@ describe('goodreadsScraper parsing helpers', () => {
       reviewCount: '1,485',
       webReview: 'Goodreads Rating: 4.37/5 (23,637 ratings, 1,485 reviews).',
     });
+  });
+
+  it('parses a matching Goodreads aggregate rating from proxied search text', () => {
+    const text = `
+      Frank Herbert's Books. Dune (Dune, #1). 4.29 1,674,991 ratings
+      86,506 reviews. https://www.goodreads.com/book/show/44767458-dune
+    `;
+
+    expect(parseGoodreadsProxySearchText(text, 'Dune', 'Frank Herbert', 'https://www.goodreads.com/book/show/44767458-dune')).toMatchObject({
+      url: 'https://www.goodreads.com/book/show/44767458-dune',
+      title: 'Dune',
+      author: 'Frank Herbert',
+      ratingValue: '4.29',
+      ratingCount: '1,674,991',
+      reviewCount: '86,506',
+      webReview: 'Goodreads Rating: 4.29/5 (1,674,991 ratings, 86,506 reviews).',
+    });
+  });
+
+  it('rejects proxied rating text that does not match the requested author', () => {
+    const text = `
+      Twilight by Stephenie Meyer. 3.65 7,000,000 ratings 120,000 reviews.
+      https://www.goodreads.com/book/show/41865-twilight
+    `;
+
+    expect(parseGoodreadsProxySearchText(
+      text,
+      'Twilight',
+      'Richard Dawkins',
+      'https://www.goodreads.com/book/show/41865-twilight',
+    )).toBeNull();
+  });
+
+  it('uses the resolved Goodreads URL with a proxy fallback when Goodreads returns 202', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('https://www.goodreads.com/book/title')) {
+        const response = new Response('Please verify you are a human', { status: 202 });
+        Object.defineProperty(response, 'url', {
+          value: 'https://www.goodreads.com/book/show/44767458-dune',
+        });
+        return response;
+      }
+      if (url.startsWith('https://r.jina.ai/http://www.google.com/search?')) {
+        return new Response(`
+          Frank Herbert's Books. Dune blocked fallback. 4.29 1,674,991 ratings
+          86,506 reviews. https://www.goodreads.com/book/show/44767458-dune
+        `, { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const results = await searchGoodreads('Dune blocked fallback', 'Frank Herbert');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(results[0]).toMatchObject({
+      url: 'https://www.goodreads.com/book/show/44767458-dune',
+      ratingValue: '4.29',
+      webReview: 'Goodreads Rating: 4.29/5 (1,674,991 ratings, 86,506 reviews).',
+    });
+  });
+
+  it('falls back to validated Yahoo snippets when the proxy is unavailable', async () => {
+    const yahooHtml = `
+      <div id="web">
+        <div class="dd">
+          <h3>Dune Yahoo fallback by Frank Herbert | Goodreads</h3>
+          <p>Read 84.4k reviews from the world's largest community for readers.</p>
+        </div>
+        <div class="dd">
+          <h3>Dune Yahoo fallback Book Review</h3>
+          <p>Dune Yahoo fallback by Frank Herbert has a rating of approximately 4.29 out of 5
+          stars on Goodreads, based on over 1.6 million ratings.</p>
+        </div>
+      </div>
+    `;
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('https://www.goodreads.com/book/title')) {
+        const response = new Response('blocked', { status: 202 });
+        Object.defineProperty(response, 'url', {
+          value: 'https://www.goodreads.com/book/show/44767458-dune',
+        });
+        return response;
+      }
+      if (url.startsWith('https://r.jina.ai/http://www.google.com/search?')) {
+        return new Response('proxy unavailable', { status: 451 });
+      }
+      if (url.startsWith('https://search.yahoo.com/search?')) {
+        return new Response(yahooHtml, { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const results = await searchGoodreads('Dune Yahoo fallback', 'Frank Herbert');
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(results[0]).toMatchObject({
+      url: 'https://www.goodreads.com/book/show/44767458-dune',
+      ratingValue: '4.29',
+      ratingCount: '1.6 million',
+      reviewCount: '84.4k',
+      webReview: 'Goodreads Rating: 4.29/5 (1.6 million ratings, 84.4k reviews).',
+    });
+  });
+
+  it('coalesces concurrent identical Goodreads searches', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('https://www.goodreads.com/book/title')) {
+        const response = new Response('blocked', { status: 202 });
+        Object.defineProperty(response, 'url', {
+          value: 'https://www.goodreads.com/book/show/999-coalesced-book',
+        });
+        return response;
+      }
+      if (url.startsWith('https://r.jina.ai/http://www.google.com/search?')) {
+        return new Response(`
+          Coalesced Book by Test Author. 4.12 12,345 ratings 678 reviews.
+          https://www.goodreads.com/book/show/999-coalesced-book
+        `, { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const [first, second] = await Promise.all([
+      searchGoodreads('Coalesced Book', 'Test Author'),
+      searchGoodreads('Coalesced Book', 'Test Author'),
+    ]);
+
+    expect(first).toEqual(second);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('tries the Goodreads title redirect before the blocked search page', async () => {

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildPdfPagesHtml,
   extractPdf,
   extractPdfOutline,
   extractPdfTocFromDocument,
   extractVisiblePdfToc,
+  formatPdfTocTitle,
 } from './usePdfExtractor.js'
 
 function createFakePdf(outline = []) {
@@ -20,6 +22,27 @@ function createFakePdf(outline = []) {
 }
 
 describe('extractVisiblePdfToc', () => {
+  it('preserves one content section for every PDF page including empty pages', () => {
+    const html = buildPdfPagesHtml([
+      ['Page one text.'],
+      [],
+      ['Page three text.'],
+    ])
+
+    expect(html.split(/<hr[^>]*chapter-break[^>]*>/i)).toHaveLength(3)
+    expect(html).toContain('data-pdf-page="2"')
+  })
+
+  it('removes dot leaders and the target page from a displayed TOC title', () => {
+    expect(formatPdfTocTitle('Chapter One .......... 14', 14)).toBe('Chapter One')
+    expect(formatPdfTocTitle('Acknowledgements    315', 315)).toBe('Acknowledgements')
+  })
+
+  it('keeps numbers that are part of the real TOC title', () => {
+    expect(formatPdfTocTitle('Part 2', 2)).toBe('Part 2')
+    expect(formatPdfTocTitle('1984', 14)).toBe('1984')
+  })
+
   it('extracts embedded PDF outline entries with nested levels', async () => {
     const toc = await extractPdfOutline(createFakePdf([
       {

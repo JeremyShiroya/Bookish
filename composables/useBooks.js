@@ -141,13 +141,26 @@ export const useBooks = () => {
     try {
       if (!force) {
         // Skip if details are already present for this author
-        const existing = books.value.find(b => b.author === authorName && b.authorBio)
+        const existing = books.value.find(b => (
+          b.author === authorName
+          && b.authorBio
+          && b.authorDetailsVersion === 3
+        ))
         if (existing) return true
       }
-      const details = await $fetch(`/api/authors/bio?name=${encodeURIComponent(authorName)}`)
+      const knownBooks = books.value
+        .filter(book => book.author === authorName && book.title)
+        .slice(0, 5)
+        .map(book => book.title)
+      const params = new URLSearchParams({
+        name: authorName,
+        books: JSON.stringify(knownBooks),
+      })
+      const details = await $fetch(`/api/authors/bio?${params.toString()}`)
       const hasAnything = details && (
         details.bio || details.birthDate || details.nationality ||
-        details.booksCount || details.notableWorks?.length || details.spouseName
+        details.validatedBooksCount !== null || details.validatedSeriesCount !== null ||
+        details.notableWorks?.length || details.spouseName
       )
       if (!hasAnything) return false
       const store = useLibraryStore()

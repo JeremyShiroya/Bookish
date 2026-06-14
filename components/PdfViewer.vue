@@ -25,8 +25,8 @@
         ></canvas>
         <div class="pdf-highlight-layer" aria-hidden="true">
           <span
-            v-for="(highlight, idx) in highlightsByPage[page.number] || []"
-            :key="idx"
+            v-for="(highlight, index) in highlightsByPage[page.number] || []"
+            :key="index"
             class="pdf-highlight"
             :style="{
               left: `${highlight.left}px`,
@@ -43,15 +43,13 @@
 
 <script setup>
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { stripHtml, splitToChunks } from '~/composables/useTTS'
-import { findPdfHighlightRange, highlightsForPdfRange } from '~/composables/usePdfHighlight'
+import { chunkHighlightRects, scrollTargetForChunk } from '~/composables/usePdfGeometry'
 
 const props = defineProps({
   src: { required: true },
   zoom: { type: Number, default: 1 },
-  activeChunkIndex: { type: Number, default: -1 },
-  activeChunkText: { type: String, default: '' },
-  textContent: { type: String, default: '' },
+  manifest: { type: Object, default: null },
+  activeChunkId: { type: Number, default: -1 },
 })
 
 const emit = defineEmits(['page-change', 'loaded'])
@@ -64,21 +62,17 @@ const highlightsByPage = ref({})
 
 const pageCanvases = new Map()
 const pageWraps = new Map()
+const viewportTransforms = new Map()
 
 let pdfDocument = null
-let pdfjsLibRef = null
 let renderGeneration = 0
 let pageObserver = null
-let flatPdfText = ''
-let textItemRefs = []
-
-const normalizeText = (value) => (value || '').replace(/\s+/g, ' ').trim()
 
 const dataUrlToBytes = (dataUrl) => {
   const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
   return bytes
 }
 
@@ -90,42 +84,27 @@ const sourceToBytes = async (source) => {
   throw new TypeError('Unsupported PDF source')
 }
 
-const setPageCanvas = (el, pageNumber) => {
-  if (el) pageCanvases.set(pageNumber, el)
+const setPageCanvas = (element, pageNumber) => {
+  if (element) pageCanvases.set(pageNumber, element)
 }
 
-const setPageWrap = (el, pageNumber) => {
-  if (el) pageWraps.set(pageNumber, el)
+const setPageWrap = (element, pageNumber) => {
+  if (element) pageWraps.set(pageNumber, element)
 }
 
 const resetPageRefs = () => {
   pageCanvases.clear()
   pageWraps.clear()
-}
-
-const rectForTextItem = (item, viewport) => {
-  const pdfjsLib = pdfjsLibRef
-  const tx = pdfjsLib.Util.transform(viewport.transform, item.transform)
-  const fontHeight = Math.hypot(tx[2], tx[3]) || Math.abs(item.height * viewport.scale) || 12
-  const width = Math.max(2, (item.width || item.str.length * 5) * viewport.scale)
-  const left = tx[4]
-  const top = tx[5] - fontHeight
-
-  return {
-    left: Math.max(0, left),
-    top: Math.max(0, top),
-    width,
-    height: Math.max(8, fontHeight * 1.08),
-  }
+  viewportTransforms.clear()
 }
 
 const renderPage = async (pageNumber, baseScale, generation) => {
   if (!pdfDocument || generation !== renderGeneration) return
-
   const page = await pdfDocument.getPage(pageNumber)
   if (generation !== renderGeneration) return
 
   const viewport = page.getViewport({ scale: baseScale * props.zoom })
+  viewportTransforms.set(pageNumber, viewport.transform.slice())
   const canvas = pageCanvases.get(pageNumber)
   if (!canvas) return
 
@@ -137,35 +116,37 @@ const renderPage = async (pageNumber, baseScale, generation) => {
 
   const context = canvas.getContext('2d')
   context.setTransform(dpr, 0, 0, dpr, 0, 0)
-
   await page.render({ canvasContext: context, viewport }).promise
+}
 
-  const textContent = await page.getTextContent()
-  for (const item of textContent.items) {
-    const text = normalizeText(item.str)
-    if (!text) continue
+const updateHighlights = () => {
+  const chunk = props.manifest?.chunks?.find(entry => entry.id === props.activeChunkId)
+  const viewportTransform = chunk ? viewportTransforms.get(chunk.page) : null
+  if (!chunk || !viewportTransform) {
+    highlightsByPage.value = {}
+    return
+  }
 
-    const start = flatPdfText.length
-    flatPdfText += `${text} `
-    textItemRefs.push({
-      pageNumber,
-      start,
-      end: start + text.length - 1,
-      rect: rectForTextItem(item, viewport),
-    })
+  highlightsByPage.value = {
+    [chunk.page]: chunkHighlightRects(props.manifest, chunk.id, viewportTransform)
+      .map(rect => ({
+        left: Math.max(0, rect.left - 1.5),
+        top: Math.max(0, rect.top - 1),
+        width: rect.width + 3,
+        height: rect.height + 2,
+      })),
   }
 }
 
 const buildPages = async () => {
   if (!pdfDocument) return
-
   const firstPage = await pdfDocument.getPage(1)
   const firstViewport = firstPage.getViewport({ scale: 1 })
   const availableWidth = Math.max(320, (viewerRef.value?.clientWidth || 820) - 32)
   const baseScale = availableWidth / firstViewport.width
 
   const pageRecords = []
-  for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber++) {
+  for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
     const page = pageNumber === 1 ? firstPage : await pdfDocument.getPage(pageNumber)
     const viewport = page.getViewport({ scale: baseScale * props.zoom })
     pageRecords.push({
@@ -179,29 +160,23 @@ const buildPages = async () => {
   ready.value = true
   await nextTick()
   setupPageObserver()
-  emit('loaded', { pages: pdfDocument.numPages })
 
   const generation = renderGeneration
-  flatPdfText = ''
-  textItemRefs = []
-
-  for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber++) {
+  for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
     await renderPage(pageNumber, baseScale, generation)
   }
 
   updateHighlights()
+  emit('loaded', { pages: pdfDocument.numPages })
 }
 
 const renderPdf = async () => {
   if (!props.src) return
-
   const generation = ++renderGeneration
   ready.value = false
   pdfError.value = false
   pages.value = []
   highlightsByPage.value = {}
-  flatPdfText = ''
-  textItemRefs = []
   resetPageRefs()
 
   try {
@@ -210,119 +185,71 @@ const renderPdf = async () => {
       'pdfjs-dist/build/pdf.worker.mjs',
       import.meta.url
     ).toString()
-    pdfjsLibRef = pdfjsLib
-
     const bytes = await sourceToBytes(props.src)
     pdfDocument = await pdfjsLib.getDocument({ data: bytes }).promise
     if (generation !== renderGeneration) return
-
     await buildPages()
-  } catch (err) {
-    console.error('PDF render error:', err)
+  } catch (error) {
+    console.error('PDF render error:', error)
     pdfError.value = true
     ready.value = false
   }
 }
 
-const findChunkRange = (chunkIndex) => {
-  const chunks = splitToChunks(stripHtml(props.textContent || ''))
-  if (chunkIndex < 0 || chunkIndex >= chunks.length || !flatPdfText) return null
-
-  const flatLower = flatPdfText.toLowerCase()
-  let searchFrom = 0
-
-  for (let i = 0; i <= chunkIndex; i++) {
-    const target = normalizeText(chunks[i]).toLowerCase()
-    if (!target) continue
-
-    const keyLength = Math.min(120, target.length)
-    const key = target.slice(0, keyLength)
-    let position = flatLower.indexOf(key, searchFrom)
-
-    if (position === -1 && keyLength > 48) {
-      position = flatLower.indexOf(target.slice(0, 48), searchFrom)
-    }
-
-    if (position === -1) return null
-    if (i === chunkIndex) {
-      return {
-        start: position,
-        end: position + target.length,
-      }
-    }
-    searchFrom = position + Math.max(1, key.length)
-  }
-
-  return null
-}
-
-const updateHighlights = () => {
-  const range = props.activeChunkText
-    ? findPdfHighlightRange(flatPdfText, props.activeChunkText)
-    : findChunkRange(props.activeChunkIndex)
-
-  if (!range) {
-    highlightsByPage.value = {}
-    return
-  }
-
-  const nextHighlights = highlightsForPdfRange(textItemRefs, range)
-  highlightsByPage.value = nextHighlights
-
-  const firstPage = Number(Object.keys(nextHighlights)[0])
-  if (firstPage) {
-    scrollToPage(firstPage, 'smooth', 'center')
-  }
-}
-
 const setupPageObserver = () => {
-  if (pageObserver) pageObserver.disconnect()
-
+  pageObserver?.disconnect()
   pageObserver = new IntersectionObserver((entries) => {
-    let best = null
-    let bestRatio = 0
-
-    for (const entry of entries) {
-      if (entry.isIntersecting && entry.intersectionRatio > bestRatio) {
-        best = entry.target
-        bestRatio = entry.intersectionRatio
-      }
-    }
-
-    const pageNumber = Number(best?.dataset?.page)
+    const best = entries
+      .filter(entry => entry.isIntersecting)
+      .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
+    const pageNumber = Number(best?.target?.dataset?.page)
     if (pageNumber) emit('page-change', pageNumber)
   }, {
     root: null,
     rootMargin: '-48px 0px -120px 0px',
     threshold: [0.1, 0.3, 0.5, 0.7],
   })
+  for (const wrap of pageWraps.values()) pageObserver.observe(wrap)
+}
 
-  for (const wrap of pageWraps.values()) {
-    pageObserver.observe(wrap)
-  }
+const getVisiblePage = () => {
+  const anchorY = 56
+  const records = [...pageWraps.entries()].map(([page, element]) => {
+    const rect = element.getBoundingClientRect()
+    return { page, top: rect.top, bottom: rect.bottom }
+  })
+  const atAnchor = records.find(record => record.top <= anchorY && record.bottom > anchorY)
+  if (atAnchor) return atAnchor.page
+  records.sort((a, b) => Math.abs(a.top - anchorY) - Math.abs(b.top - anchorY))
+  return records[0]?.page || 1
 }
 
 const scrollToPage = (pageNumber, behavior = 'smooth', block = 'start') => {
-  const page = pageWraps.get(Number(pageNumber))
-  if (page) page.scrollIntoView({ behavior, block })
+  pageWraps.get(Number(pageNumber))?.scrollIntoView({ behavior, block })
 }
 
-const scrollToActiveHighlight = () => {
-  updateHighlights()
+const scrollToChunk = (chunkId, behavior = 'smooth') => {
+  const chunk = props.manifest?.chunks?.find(entry => entry.id === Number(chunkId))
+  const viewportTransform = chunk ? viewportTransforms.get(chunk.page) : null
+  if (!chunk || !viewportTransform) return
+
+  const target = scrollTargetForChunk(props.manifest, chunk.id, viewportTransform)
+  const pageWrap = pageWraps.get(chunk.page)
+  if (!target || !pageWrap) return
+  const pageRect = pageWrap.getBoundingClientRect()
+  const top = window.scrollY + pageRect.top + target.top - 72
+  window.scrollTo({ top: Math.max(0, top), behavior })
 }
 
-defineExpose({ scrollToPage, scrollToActiveHighlight })
+defineExpose({ getVisiblePage, scrollToPage, scrollToChunk })
 
 onMounted(renderPdf)
-onUnmounted(() => {
-  if (pageObserver) pageObserver.disconnect()
-})
+onUnmounted(() => pageObserver?.disconnect())
 
 watch(() => props.src, renderPdf)
 watch(() => props.zoom, renderPdf)
-watch(() => props.activeChunkIndex, updateHighlights)
-watch(() => props.activeChunkText, updateHighlights)
-watch(() => props.textContent, updateHighlights)
+watch(() => props.manifest, updateHighlights, { deep: true })
+watch(() => props.activeChunkId, updateHighlights)
 </script>
 
 <style scoped>
@@ -355,6 +282,7 @@ watch(() => props.textContent, updateHighlights)
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 2;
 }
 
 .pdf-highlight {

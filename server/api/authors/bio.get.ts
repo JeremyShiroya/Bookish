@@ -1,4 +1,5 @@
 import { defineEventHandler, getQuery, createError } from 'h3'
+import { extractValidatedAuthorTotals, selectAuthorCandidate } from '../../utils/authorEnrichment'
 
 const JSON_HEADERS = {
   'User-Agent': 'Bookish/1.0 (author info lookup; contact: local-app)',
@@ -11,12 +12,14 @@ interface AuthorDetails {
   deathDate: string | null
   nationality: string | null
   notableWorks: string[]
-  booksCount: number | null
+  validatedBooksCount: number | null
+  validatedSeriesCount: number | null
   latestWork: string | null
   spouseName: string | null
   hasChildren: boolean | null
   childrenCount: number | null
   source: string
+  version: number
 }
 
 async function fetchWikidataDetails(name: string): Promise<Partial<AuthorDetails> | null> {
@@ -27,9 +30,7 @@ async function fetchWikidataDetails(name: string): Promise<Partial<AuthorDetails
     )
     const candidates = (search.search || []).slice(0, 5)
     // Prefer results whose description mentions "author" or "writer" or "novelist"
-    const id = candidates.find((c: any) =>
-      /author|writer|novelist|poet|playwright/i.test(c.description || '')
-    )?.id || candidates[0]?.id
+    const id = selectAuthorCandidate(candidates, name)?.id
     if (!id) return null
 
     const entityRes: any = await $fetch(
@@ -89,7 +90,16 @@ async function fetchWikidataDetails(name: string): Promise<Partial<AuthorDetails
   }
 }
 
-async function fetchWikipediaBio(name: string): Promise<{ bio: string; notableWorks: string[]; latestWork: string | null } | null> {
+async function fetchWikipediaBio(
+  name: string,
+  knownBooks: string[],
+): Promise<{
+  bio: string
+  notableWorks: string[]
+  latestWork: string | null
+  validatedBooksCount: number | null
+  validatedSeriesCount: number | null
+} | null> {
   const titles = [name, `${name} (writer)`, `${name} (author)`, `${name} (novelist)`]
   for (const title of titles) {
     try {
@@ -100,10 +110,18 @@ async function fetchWikipediaBio(name: string): Promise<{ bio: string; notableWo
       if (summary?.type === 'disambiguation') continue
       const bio = summary?.extract
       if (!bio || bio.length < 40) continue
+      const identityText = `${summary?.description || ''} ${bio.slice(0, 240)}`
+      const mentionsWriting = /author|writer|novelist|poet|playwright|essayist|biographer/i.test(identityText)
+      const mentionsKnownBook = knownBooks.some(book => (
+        book.length > 2 && bio.toLowerCase().includes(book.toLowerCase())
+      ))
+      if (!mentionsWriting && !mentionsKnownBook) continue
 
       // Try to get notable works from the full page
       let notableWorks: string[] = []
       let latestWork: string | null = null
+      let validatedBooksCount: number | null = null
+      let validatedSeriesCount: number | null = null
       try {
         const pageRes: any = await $fetch(
           `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title.replace(/\s+/g, '_'))}&prop=revisions&rvprop=content&rvslots=main&format=json&origin=*`,
@@ -111,6 +129,9 @@ async function fetchWikipediaBio(name: string): Promise<{ bio: string; notableWo
         )
         const page = Object.values(pageRes.query?.pages || {})[0] as any
         const wikitext = page?.revisions?.[0]?.slots?.main?.['*'] || ''
+        const bibliography = extractValidatedAuthorTotals(wikitext)
+        validatedBooksCount = bibliography.fullLengthBooks
+        validatedSeriesCount = bibliography.series
         // Extract notable works from the infobox. The value often spans
         // multiple lines and is wrapped in {{plainlist}}/{{flatlist}} templates,
         // so capture until the next infobox parameter and pull link/italic titles.
@@ -139,24 +160,33 @@ async function fetchWikipediaBio(name: string): Promise<{ bio: string; notableWo
       } catch {}
 
       latestWork = notableWorks.length > 0 ? notableWorks[notableWorks.length - 1] : null
-      return { bio: bio.slice(0, 600), notableWorks, latestWork }
+      return {
+        bio: bio.slice(0, 600),
+        notableWorks,
+        latestWork,
+        validatedBooksCount,
+        validatedSeriesCount,
+      }
     } catch {}
   }
   return null
 }
 
-async function fetchOpenLibraryBio(name: string): Promise<{ bio: string | null; booksCount: number | null; topWork: string | null } | null> {
+async function fetchOpenLibraryBio(
+  name: string,
+  knownBooks: string[],
+): Promise<{
+  bio: string | null
+  topWork: string | null
+} | null> {
   try {
     const data: any = await $fetch(
       `https://openlibrary.org/search/authors.json?q=${encodeURIComponent(name)}&limit=5`,
       { headers: JSON_HEADERS },
     )
-    const match = (data.docs || []).find((d: any) =>
-      d.name && d.name.toLowerCase().includes(name.split(' ').pop()!.toLowerCase())
-    )
+    const match = selectAuthorCandidate(data.docs || [], name, knownBooks)
     if (!match) return null
 
-    const workCount = match.work_count || null
     const topWork = match.top_work || null
 
     const authorKey = match.key?.replace('/authors/', '')
@@ -173,7 +203,10 @@ async function fetchOpenLibraryBio(name: string): Promise<{ bio: string | null; 
       } catch {}
     }
 
-    return { bio: bio ? bio.slice(0, 600) : null, booksCount: workCount, topWork }
+    return {
+      bio: bio ? bio.slice(0, 600) : null,
+      topWork,
+    }
   } catch {
     return null
   }
@@ -182,6 +215,13 @@ async function fetchOpenLibraryBio(name: string): Promise<{ bio: string | null; 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const name = query.name?.toString().trim()
+  let knownBooks: string[] = []
+  try {
+    const parsed = JSON.parse(query.books?.toString() || '[]')
+    if (Array.isArray(parsed)) {
+      knownBooks = parsed.map(value => String(value || '').trim()).filter(Boolean).slice(0, 5)
+    }
+  } catch {}
 
   if (!name) {
     throw createError({ statusCode: 400, statusMessage: 'Author name is required' })
@@ -192,9 +232,9 @@ export default defineEventHandler(async (event) => {
 
   try {
     const [wikiResult, wikidataResult, openLibResult] = await Promise.allSettled([
-      fetchWikipediaBio(name),
+      fetchWikipediaBio(name, knownBooks),
       fetchWikidataDetails(name),
-      fetchOpenLibraryBio(name),
+      fetchOpenLibraryBio(name, knownBooks),
     ])
 
     const wiki = wikiResult.status === 'fulfilled' ? wikiResult.value : null
@@ -213,12 +253,14 @@ export default defineEventHandler(async (event) => {
       deathDate: wikidata?.deathDate || null,
       nationality: wikidata?.nationality || null,
       notableWorks,
-      booksCount: openLib?.booksCount || null,
+      validatedBooksCount: wiki?.validatedBooksCount ?? null,
+      validatedSeriesCount: wiki?.validatedSeriesCount ?? null,
       latestWork: wiki?.latestWork || notableWorks[notableWorks.length - 1] || null,
       spouseName: wikidata?.spouseName || null,
       hasChildren: wikidata?.hasChildren || null,
       childrenCount: wikidata?.childrenCount || null,
       source: bio ? (wiki?.bio ? 'wikipedia' : 'openlibrary') : 'none',
+      version: 3,
     }
 
     return details
@@ -226,8 +268,9 @@ export default defineEventHandler(async (event) => {
     console.error('[Author Bio] Failed:', error)
     return {
       bio: null, birthDate: null, deathDate: null, nationality: null,
-      notableWorks: [], booksCount: null, latestWork: null,
+      notableWorks: [], validatedBooksCount: null, validatedSeriesCount: null, latestWork: null,
       spouseName: null, hasChildren: null, childrenCount: null, source: 'none',
+      version: 3,
     }
   }
 })

@@ -1,5 +1,33 @@
+import { buildPdfManifest } from './usePdfManifest.js'
+
 const escapeHtml = (str) =>
   str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+export function buildPdfPagesHtml(pageParagraphs = []) {
+  return pageParagraphs
+    .map((paragraphs, index) => {
+      const content = (paragraphs || [])
+        .map(value => String(value || '').trim())
+        .filter(Boolean)
+        .map(value => `<p>${escapeHtml(value)}</p>`)
+        .join('\n')
+      return `<div data-pdf-page="${index + 1}">${content}</div>`
+    })
+    .join('\n<hr class="chapter-break" />\n')
+}
+
+export function formatPdfTocTitle(title, page) {
+  const value = String(title || '').trim()
+  const pageNumber = Number(page)
+  if (!value || !Number.isFinite(pageNumber)) return value.replace(/\s+/g, ' ')
+
+  const escapedPage = String(pageNumber).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return value
+    .replace(new RegExp(`(?:\\.{2,}|\\s{2,})\\s*${escapedPage}\\s*$`), '')
+    .replace(/\.{2,}\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 async function resolveOutlinePage(pdf, dest) {
   try {
@@ -121,6 +149,82 @@ async function collectPdfPageLines(pdf) {
   return pageLines
 }
 
+async function collectPdfPageParagraphs(pdf) {
+  const pageParagraphs = []
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum)
+    const textContent = await page.getTextContent()
+    const lines = bucketTextLines(textContent.items)
+    const paragraphs = []
+    let paragraph = []
+    let lastY = null
+
+    for (const line of lines) {
+      const gap = lastY !== null ? lastY - line.y : 0
+      if (lastY !== null && gap > 18) {
+        if (paragraph.length) paragraphs.push(paragraph.join(' '))
+        paragraph = [line.text.trim()]
+      } else {
+        paragraph.push(line.text.trim())
+      }
+      lastY = line.y
+    }
+    if (paragraph.length) paragraphs.push(paragraph.join(' '))
+    pageParagraphs.push(paragraphs)
+  }
+
+  return pageParagraphs
+}
+
+async function collectPdfPageRecords(pdf) {
+  const records = []
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum)
+    const viewport = page.getViewport({ scale: 1 })
+    const textContent = await page.getTextContent()
+    records.push({
+      page: pageNum,
+      width: viewport.width,
+      height: viewport.height,
+      items: textContent.items
+        .filter(item => typeof item?.str === 'string')
+        .map(item => ({
+          str: item.str,
+          width: item.width,
+          height: item.height,
+          transform: item.transform,
+          hasEOL: item.hasEOL,
+        })),
+    })
+  }
+
+  return records
+}
+
+function pageParagraphsFromRecords(records) {
+  return records.map(record => {
+    const lines = bucketTextLines(record.items)
+    const paragraphs = []
+    let paragraph = []
+    let lastY = null
+
+    for (const line of lines) {
+      const gap = lastY !== null ? lastY - line.y : 0
+      if (lastY !== null && gap > 18) {
+        if (paragraph.length) paragraphs.push(paragraph.join(' '))
+        paragraph = [line.text.trim()]
+      } else {
+        paragraph.push(line.text.trim())
+      }
+      lastY = line.y
+    }
+    if (paragraph.length) paragraphs.push(paragraph.join(' '))
+    return paragraphs
+  })
+}
+
 export function extractVisiblePdfToc(pageLines) {
   const tocItems = []
   const tocHeadingRe = /^(?:table\s+of\s+contents|contents)$/i
@@ -217,52 +321,51 @@ export async function extractPdf(file) {
     const pdf = await loadPdfDocument(arrayBuffer)
     const numPages = pdf.numPages
     let tocItems = await extractPdfOutline(pdf)
-    const pageLinesForToc = []
-    let html = ''
-
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum)
-      const textContent = await page.getTextContent()
-
-      const lines = bucketTextLines(textContent.items)
-      if (!lines.length) continue
-
-      pageLinesForToc.push({ page: pageNum, lines: lines.map(line => line.text) })
-
-      const paragraphs = []
-      let para = []
-      let lastY = null
-
-      for (const line of lines) {
-        const gap = lastY !== null ? lastY - line.y : 0
-        if (lastY !== null && gap > 18) {
-          if (para.length) paragraphs.push(para.join(' '))
-          para = [line.text.trim()]
-        } else {
-          para.push(line.text.trim())
-        }
-        lastY = line.y
-      }
-      if (para.length) paragraphs.push(para.join(' '))
-
-      const pageHtml = paragraphs
-        .map(p => p.trim())
-        .filter(p => p.length > 0)
-        .map(p => `<p>${escapeHtml(p)}</p>`)
-        .join('\n')
-
-      if (pageHtml) {
-        html += pageHtml
-        if (pageNum < pdf.numPages) html += '\n<hr class="chapter-break" />\n'
-      }
-    }
+    const pageRecords = await collectPdfPageRecords(pdf)
+    const pageLinesForToc = pageRecords.map(record => ({
+      page: record.page,
+      lines: bucketTextLines(record.items).map(line => line.text),
+    }))
 
     if (!tocItems.length) tocItems = extractVisiblePdfToc(pageLinesForToc)
 
-    return { content: html || null, pages: numPages, source, tocItems }
+    const html = buildPdfPagesHtml(pageParagraphsFromRecords(pageRecords))
+    const pdfManifest = buildPdfManifest(pageRecords)
+    return { content: html || null, pages: numPages, source, tocItems, pdfManifest }
   } catch (error) {
     console.warn('[PDF] Text extraction failed; preserving original PDF source for page rendering.', error)
     return { content: null, pages: 0, source, tocItems: [] }
+  }
+}
+
+export async function extractPdfContentFromSource(source) {
+  let pdf = null
+  try {
+    pdf = await loadPdfDocument(source)
+    if (!pdf) return { content: null, pages: 0 }
+    const pageRecords = await collectPdfPageRecords(pdf)
+    return {
+      content: buildPdfPagesHtml(pageParagraphsFromRecords(pageRecords)),
+      pages: pdf.numPages,
+      pdfManifest: buildPdfManifest(pageRecords),
+    }
+  } finally {
+    try {
+      await pdf?.destroy?.()
+    } catch {}
+  }
+}
+
+export async function extractPdfManifestFromSource(source) {
+  let pdf = null
+  try {
+    pdf = await loadPdfDocument(source)
+    if (!pdf) return null
+    return buildPdfManifest(await collectPdfPageRecords(pdf))
+  } finally {
+    try {
+      await pdf?.destroy?.()
+    } catch {}
   }
 }
 

@@ -299,14 +299,11 @@
         <div class="form-row">
           <div class="form-group">
             <label for="status">Reading Status</label>
-            <div class="select-wrapper">
-              <select id="status" v-model="newBook.status" class="form-input custom-select">
-                <option value="Unread">Unread</option>
-                <option value="Reading">Reading</option>
-                <option value="Read">Read</option>
-              </select>
-              <i class="ri-arrow-down-s-line select-icon"></i>
-            </div>
+            <BookishSelect
+              input-id="status"
+              v-model="newBook.status"
+              :options="['Unread', 'Reading', 'Read']"
+            />
           </div>
           <div class="form-group">
             <label>Personal Rating</label>
@@ -370,6 +367,7 @@ const extractedContent = ref(null)
 const extractedTocTitles = ref([])
 const extractedSource = ref(null)
 const extractedTocItems = ref([])
+const extractedPdfManifest = ref(null)
 
 const newBook = ref({
   title: '',
@@ -553,6 +551,7 @@ const handleDocumentChange = async (event) => {
   extractedTocTitles.value = []
   extractedSource.value = null
   extractedTocItems.value = []
+  extractedPdfManifest.value = null
   const extension = file.name.split('.').pop().toLowerCase()
   newBook.value.format = extension
 
@@ -600,6 +599,7 @@ const handleDocumentChange = async (event) => {
       extractedContent.value = result.content
       extractedSource.value = result.source ?? null
       extractedTocItems.value = result.tocItems ?? []
+      extractedPdfManifest.value = result.pdfManifest ?? null
       newBook.value.pages = result.pages || 0
     } catch (err) {
       extractionError.value = 'Could not extract PDF text. The book will be added without in-app reading.'
@@ -801,6 +801,8 @@ const saveBook = async () => {
           tocItems: extractedTocItems.value,
           format: savedBook.format || newBook.value.format,
           pdfTocChecked: (savedBook.format || newBook.value.format) === 'pdf',
+          pdfTextMapVersion: (savedBook.format || newBook.value.format) === 'pdf' ? 2 : undefined,
+          pdfManifest: extractedPdfManifest.value,
         });
       } catch (storageErr) {
         console.error('IndexedDB write failed:', storageErr);

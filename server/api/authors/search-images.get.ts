@@ -88,14 +88,6 @@ async function imageInfoForFiles(fileTitles: string[]) {
     .filter(Boolean);
 }
 
-async function findWikipediaCandidates(name: string) {
-  const searchRes: any = await $fetch(
-    `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(`${name} writer OR author`)}&format=json&origin=*`,
-    { headers: jsonHeaders },
-  );
-  return (searchRes.query?.search || []).slice(0, 4).map((item: any) => item.title);
-}
-
 async function findWikipediaSummaryImages(name: string) {
   const titles = [
     name,
@@ -240,47 +232,6 @@ export default defineEventHandler(async (event) => {
       bingImagesResult.value.forEach((url) => (
         addImage(images, imageSources, seen, url, 'bing', 'Bing Images')
       ));
-    }
-
-    const wikiTitles = await findWikipediaCandidates(name);
-
-    for (const title of wikiTitles) {
-      try {
-        const summary: any = await $fetch(
-          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
-          { headers: jsonHeaders },
-        );
-        addImage(images, imageSources, seen, summary?.originalimage?.source, 'wikipedia', 'Wikipedia');
-        addImage(images, imageSources, seen, summary?.thumbnail?.source, 'wikipedia', 'Wikipedia');
-      } catch {}
-
-      try {
-        const pageRes: any = await $fetch(
-          `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages|images|pageprops&pithumbsize=1000&format=json&origin=*`,
-          { headers: jsonHeaders },
-        );
-        const page = Object.values(pageRes.query?.pages || {})[0] as any;
-        addImage(images, imageSources, seen, page?.thumbnail?.source, 'wikipedia', 'Wikipedia');
-
-        const wikiDataId = page?.pageprops?.wikibase_item;
-        if (wikiDataId) {
-          const entityData: any = await $fetch(
-            `https://www.wikidata.org/wiki/Special:EntityData/${wikiDataId}.json`,
-            { headers: jsonHeaders },
-          );
-          const entity = entityData.entities?.[wikiDataId];
-          const fileName = entity?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
-          const urls = await imageInfoForFiles(fileName ? [fileName] : []);
-          urls.forEach((url) => addImage(images, imageSources, seen, url, 'wikidata', 'Wikidata'));
-        }
-
-        const pageFiles = (page?.images || [])
-          .map((item: any) => item.title)
-          .filter((title: string) => /(\.jpe?g|\.png|\.webp)$/i.test(title))
-          .filter((title: string) => !/logo|icon|cover|book|map|signature/i.test(title));
-        const urls = await imageInfoForFiles(pageFiles);
-        urls.forEach((url) => addImage(images, imageSources, seen, url, 'wikimedia', 'Wikimedia Commons'));
-      } catch {}
     }
 
     try {

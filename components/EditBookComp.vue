@@ -285,14 +285,11 @@
           <div class="form-row">
             <div class="form-group">
               <label for="status">Reading Status</label>
-              <div class="select-wrapper">
-                <select id="status" v-model="editBook.status" class="form-input custom-select">
-                  <option value="Unread">Unread</option>
-                  <option value="Reading">Reading</option>
-                  <option value="Read">Read</option>
-                </select>
-                <i class="ri-arrow-down-s-line select-icon"></i>
-              </div>
+              <BookishSelect
+                input-id="status"
+                v-model="editBook.status"
+                :options="['Unread', 'Reading', 'Read']"
+              />
             </div>
             <div class="form-group">
               <label>Personal Rating</label>

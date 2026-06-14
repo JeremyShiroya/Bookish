@@ -152,16 +152,14 @@
         {{ speedLabel }}
       </button>
 
-      <div class="voice-select-wrap" v-if="ttsVoices.length > 0">
-        <select
-          class="voice-select"
-          :value="ttsVoiceId"
-          :disabled="isIdle"
-          @change="setVoice($event.target.value)"
-        >
-          <option v-for="v in ttsVoices" :key="v.id" :value="v.id">{{ v.name }}</option>
-        </select>
-      </div>
+      <BookishSelect
+        v-if="ttsVoices.length > 0"
+        compact
+        :model-value="ttsVoiceId"
+        :options="ttsVoices.map(voice => ({ value: voice.id, label: voice.name }))"
+        :disabled="isIdle"
+        @update:model-value="setVoice"
+      />
 
       <div class="volume-control">
         <button class="icon-btn volume-btn" title="Mute / Unmute" @click="toggleMute">

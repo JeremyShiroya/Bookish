@@ -2,7 +2,48 @@ import { describe, it, expect } from 'vitest'
 import {
   stripHtml, splitToChunks, groupChunks, formatDuration, findContentStart,
   buildReadableChunks, buildChapterBoundariesFromHtml,
+  resolvePlaybackChunks, takeMatchingPrefetch,
 } from './useTTS.js'
+
+describe('takeMatchingPrefetch', () => {
+  it('refuses late audio that belongs to a different chunk', () => {
+    expect(takeMatchingPrefetch({
+      chunkIdx: 12,
+      audio: 'future-audio',
+      boundaries: [],
+    }, 9)).toBeNull()
+  })
+
+  it('returns audio only for the active chunk index', () => {
+    const prefetch = {
+      chunkIdx: 9,
+      audio: 'matching-audio',
+      boundaries: [{ offset: 0 }],
+    }
+    expect(takeMatchingPrefetch(prefetch, 9)).toEqual(prefetch)
+  })
+})
+
+describe('resolvePlaybackChunks', () => {
+  it('uses explicit manifest chunks for PDFs instead of stored HTML', () => {
+    const chunks = resolvePlaybackChunks({
+      format: 'pdf',
+      html: '<p>Wrong reconstructed text.</p>',
+      explicitChunks: ['Exact first sentence.', 'Exact second sentence.'],
+    })
+
+    expect(chunks).toEqual(['Exact first sentence.', 'Exact second sentence.'])
+  })
+
+  it('keeps existing section-aware HTML chunking for EPUB content', () => {
+    const chunks = resolvePlaybackChunks({
+      format: 'epub',
+      html: '<p>First.</p><hr class="chapter-break"><p>Second.</p>',
+    })
+
+    expect(chunks).toEqual(['First.', 'Second.'])
+  })
+})
 
 describe('buildReadableChunks', () => {
   const section = (text) => `<p>${text}</p>`
