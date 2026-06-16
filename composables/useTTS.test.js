@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   stripHtml, splitToChunks, groupChunks, formatDuration, findContentStart,
   buildReadableChunks, buildChapterBoundariesFromHtml,
+  chunkIndexForPdfProgress, chunkIndexForProgress,
   resolvePlaybackChunks, takeMatchingPrefetch,
 } from './useTTS.js'
 
@@ -9,18 +10,29 @@ describe('takeMatchingPrefetch', () => {
   it('refuses late audio that belongs to a different chunk', () => {
     expect(takeMatchingPrefetch({
       chunkIdx: 12,
+      chunkText: 'Future sentence.',
       audio: 'future-audio',
       boundaries: [],
-    }, 9)).toBeNull()
+    }, 9, 'Expected sentence.')).toBeNull()
   })
 
-  it('returns audio only for the active chunk index', () => {
+  it('returns audio only for the active chunk index and text', () => {
     const prefetch = {
       chunkIdx: 9,
+      chunkText: 'Matching sentence.',
       audio: 'matching-audio',
       boundaries: [{ offset: 0 }],
     }
-    expect(takeMatchingPrefetch(prefetch, 9)).toEqual(prefetch)
+    expect(takeMatchingPrefetch(prefetch, 9, 'Matching sentence.')).toEqual(prefetch)
+  })
+
+  it('rejects cached audio at the same index when its sentence text differs', () => {
+    expect(takeMatchingPrefetch({
+      chunkIdx: 9,
+      chunkText: 'He was directing his men.',
+      audio: 'wrong-audio',
+      boundaries: [],
+    }, 9, 'Lena had woken out of a dead sleep.')).toBeNull()
   })
 })
 
@@ -72,6 +84,36 @@ describe('buildReadableChunks', () => {
     const { chunks, sectionCounts } = buildReadableChunks('<p>Just one. Section here.</p>')
     expect(chunks).toEqual(['Just one.', 'Section here.'])
     expect(sectionCounts).toEqual([2])
+  })
+})
+
+describe('chunk index mapping', () => {
+  it('maps saved EPUB progress to section boundaries instead of proportional chunk guesses', () => {
+    const sectionCounts = [10, 1, 1, 1]
+
+    expect(chunkIndexForProgress(67, sectionCounts, 0)).toBe(11)
+  })
+
+  it('respects content-start when a new book has no saved progress', () => {
+    expect(chunkIndexForProgress(0, [3, 4, 5], 3)).toBe(3)
+  })
+
+  it('maps saved PDF progress to the first manifest chunk on that page', () => {
+    const manifest = {
+      pages: [
+        { page: 1, chunkIds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] },
+        { page: 2, chunkIds: [] },
+        { page: 3, chunkIds: [10] },
+        { page: 4, chunkIds: [11] },
+      ],
+      chunks: [
+        ...Array.from({ length: 10 }, (_, id) => ({ id, page: 1, text: `Page one ${id}.` })),
+        { id: 10, page: 3, text: 'PAGE THREE EXPECTED START.' },
+        { id: 11, page: 4, text: 'Page four.' },
+      ],
+    }
+
+    expect(chunkIndexForPdfProgress(67, manifest, 0)).toBe(10)
   })
 })
 

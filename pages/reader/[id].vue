@@ -213,7 +213,15 @@ const router = useRouter()
 const { books, initialized, fetchAllData, fetchBookById, updateBook } = useBooks()
 const { getBookContent, saveBookContent } = useBookStorage()
 const { settings, updateSettings } = useBookishSettings()
-const { ttsBook, ttsChunkIdx, ttsStatus, play: playTTS, pause: pauseTTS, resume: resumeTTS } = useTTS()
+const {
+  ttsBook,
+  ttsChunkIdx,
+  ttsPlayingChunkIdx,
+  ttsStatus,
+  play: playTTS,
+  pause: pauseTTS,
+  resume: resumeTTS,
+} = useTTS()
 
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2.5
@@ -367,7 +375,7 @@ const tocEmptyMessage = computed(() => {
 
 const activeTtsChunkIndex = computed(() => {
   if (ttsBook.value?.id !== book.value?.id || ttsStatus.value === 'idle') return -1
-  return ttsChunkIdx.value
+  return ttsPlayingChunkIdx.value
 })
 
 const isCurrentBookNarrating = computed(() => (
