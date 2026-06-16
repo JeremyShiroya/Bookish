@@ -197,17 +197,32 @@ definePageMeta({ layout: 'reader' })
 
 import { computed, nextTick, onMounted, onUnmounted, ref, toRaw, watch } from 'vue'
 import { useBooks } from '~/composables/useBooks'
-import { isRenderableSection, buildReadableChunks, useTTS } from '~/composables/useTTS'
+import {
+  isRenderableSection,
+  buildReadableChunks,
+  chunkIndexForSection,
+  isContentPageAligned,
+  useTTS,
+} from '~/composables/useTTS'
 import { useBookStorage } from '~/composables/useBookStorage'
 import { useBookishSettings } from '~/composables/useBookishSettings'
-import { extractPdfTocFromSource, pdfSourceToBytes } from '~/composables/usePdfExtractor'
+import { extractPdfContentFromSource, extractPdfTocFromSource, pdfSourceToBytes } from '~/composables/usePdfExtractor'
 
 const route = useRoute()
 const router = useRouter()
-const { books, fetchBookById, updateBook } = useBooks()
+const { books, fetchAllData, fetchBookById, initialized, updateBook } = useBooks()
 const { getBookContent, saveBookContent } = useBookStorage()
 const { settings, updateSettings } = useBookishSettings()
-const { ttsBook, ttsChunkIdx, ttsCurrentChunk, ttsStatus, play: playTTS, pause: pauseTTS, resume: resumeTTS } = useTTS()
+const {
+  ttsBook,
+  ttsChunkIdx,
+  ttsPlayingChunkIdx,
+  ttsPlayingChunkText,
+  ttsStatus,
+  play: playTTS,
+  pause: pauseTTS,
+  resume: resumeTTS,
+} = useTTS()
 
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2.5
@@ -237,6 +252,7 @@ const restoredInitialPdfScroll = ref(false)
 const readerReady = ref(false)
 const confirmReadFromHereOpen = ref(false)
 const pendingReadFromHereChunk = ref(0)
+const pendingReadFromHerePage = ref(1)
 const pendingReadFromHereWasPlaying = ref(false)
 
 const bookFormat = computed(() => (book.value?.format || '').toLowerCase())
@@ -355,12 +371,12 @@ const tocEmptyMessage = computed(() => {
 
 const activeTtsChunkIndex = computed(() => {
   if (ttsBook.value?.id !== book.value?.id || ttsStatus.value === 'idle') return -1
-  return ttsChunkIdx.value
+  return ttsPlayingChunkIdx.value
 })
 
 const activeTtsChunkText = computed(() => {
   if (ttsBook.value?.id !== book.value?.id || ttsStatus.value === 'idle') return ''
-  return ttsCurrentChunk.value || ''
+  return ttsPlayingChunkText.value || ''
 })
 
 const isCurrentBookNarrating = computed(() => (
@@ -434,9 +450,10 @@ function chunkIndexForCurrentPosition() {
   if (!chunks.length) return 0
 
   if (isPdfBook.value) {
-    const pages = totalPages.value || book.value?.pages || 1
-    const pageProgress = pages > 1 ? (currentPdfPage.value - 1) / (pages - 1) : 0
-    return Math.max(0, Math.min(chunks.length - 1, Math.floor(pageProgress * chunks.length)))
+    const visiblePage = pdfViewerRef.value?.getVisiblePage?.() || currentPdfPage.value
+    currentPdfPage.value = visiblePage
+    pendingReadFromHerePage.value = visiblePage
+    return chunkIndexForSection(sectionChunkCounts.value, visiblePage - 1)
   }
 
   // Preferred: the highlight span nearest the top of the viewport is the exact
@@ -491,6 +508,9 @@ function confirmReadFromHere() {
   // previously was.
   if (!isPdfBook.value) {
     currentChapterIdx.value = sectionForChunk(pendingReadFromHereChunk.value)
+  } else {
+    currentPdfPage.value = pendingReadFromHerePage.value
+    pdfViewerRef.value?.scrollToPage(pendingReadFromHerePage.value, 'instant', 'start')
   }
 
   playTTS(book.value, {
@@ -807,6 +827,44 @@ async function ensurePdfToc(bookId) {
   }
 }
 
+async function ensurePdfPageAlignedContent(bookId) {
+  if (!isPdfBook.value || !pdfSource.value) return
+
+  const expectedPages = totalPages.value || book.value?.pages || 0
+  if ((rawContent.value || '').trim() && isContentPageAligned(rawContent.value || '', expectedPages)) return
+
+  try {
+    const sourceBytes = await pdfSourceToBytes(toRaw(pdfSource.value))
+    const extracted = await extractPdfContentFromSource(sourceBytes)
+    if (!extracted?.content) return
+
+    rawContent.value = extracted.content
+    totalPages.value = extracted.pages || expectedPages || 0
+
+    if (!tocItems.value?.length && extracted.tocItems?.length) {
+      tocItems.value = extracted.tocItems
+    }
+
+    book.value = {
+      ...book.value,
+      content: extracted.content,
+      pages: totalPages.value || book.value?.pages || 0,
+      tocTitles: tocTitles.value,
+    }
+
+    await saveBookContent(bookId, {
+      content: extracted.content,
+      pages: totalPages.value || book.value?.pages || 0,
+      tocTitles: tocTitles.value,
+      tocItems: tocItems.value,
+      format: bookFormat.value,
+      pdfTocChecked: pdfTocChecked.value,
+    })
+  } catch (error) {
+    console.error('[Reader] Failed to rebuild PDF page-aligned text:', error)
+  }
+}
+
 function readingProgressSnapshot() {
   let progress = 0
   let status = 'Unread'
@@ -945,6 +1003,11 @@ function handlePdfLoaded(payload) {
 async function loadBook(id) {
   readerReady.value = false
   restoredInitialPdfScroll.value = false
+
+  if (!initialized.value) {
+    await fetchAllData()
+  }
+
   const cached = books.value.find(b => b.id === id)
   if (cached) {
     book.value = cached
@@ -976,6 +1039,8 @@ async function loadBook(id) {
   } finally {
     contentLoading.value = false
   }
+
+  await ensurePdfPageAlignedContent(id)
 
   await nextTick()
   await nextTick()

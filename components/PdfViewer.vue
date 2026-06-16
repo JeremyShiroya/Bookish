@@ -43,8 +43,12 @@
 
 <script setup>
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { stripHtml, splitToChunks } from '~/composables/useTTS'
-import { findPdfHighlightRange, highlightsForPdfRange } from '~/composables/usePdfHighlight'
+import { buildReadableChunks } from '~/composables/useTTS'
+import {
+  findPdfChunkRange,
+  findPdfHighlightRange,
+  highlightsForPdfRange,
+} from '~/composables/usePdfHighlight'
 
 const props = defineProps({
   src: { required: true },
@@ -119,6 +123,19 @@ const rectForTextItem = (item, viewport) => {
   }
 }
 
+const measureTextAdvances = (context, item, text, rect, styles) => {
+  const fontFamily = styles?.[item.fontName]?.fontFamily || 'serif'
+  const fontSize = Math.max(8, rect.height / 1.08)
+  context.save()
+  context.font = `${fontSize}px ${fontFamily}`
+  const advances = [0]
+  for (let offset = 1; offset <= text.length; offset += 1) {
+    advances.push(advances[offset - 1] + context.measureText(text[offset - 1]).width)
+  }
+  context.restore()
+  return advances
+}
+
 const renderPage = async (pageNumber, baseScale, generation) => {
   if (!pdfDocument || generation !== renderGeneration) return
 
@@ -145,13 +162,16 @@ const renderPage = async (pageNumber, baseScale, generation) => {
     const text = normalizeText(item.str)
     if (!text) continue
 
+    const rect = rectForTextItem(item, viewport)
     const start = flatPdfText.length
     flatPdfText += `${text} `
     textItemRefs.push({
       pageNumber,
       start,
       end: start + text.length - 1,
-      rect: rectForTextItem(item, viewport),
+      text,
+      advances: measureTextAdvances(context, item, text, rect, textContent.styles),
+      rect,
     })
   }
 }
@@ -225,41 +245,17 @@ const renderPdf = async () => {
 }
 
 const findChunkRange = (chunkIndex) => {
-  const chunks = splitToChunks(stripHtml(props.textContent || ''))
-  if (chunkIndex < 0 || chunkIndex >= chunks.length || !flatPdfText) return null
-
-  const flatLower = flatPdfText.toLowerCase()
-  let searchFrom = 0
-
-  for (let i = 0; i <= chunkIndex; i++) {
-    const target = normalizeText(chunks[i]).toLowerCase()
-    if (!target) continue
-
-    const keyLength = Math.min(120, target.length)
-    const key = target.slice(0, keyLength)
-    let position = flatLower.indexOf(key, searchFrom)
-
-    if (position === -1 && keyLength > 48) {
-      position = flatLower.indexOf(target.slice(0, 48), searchFrom)
-    }
-
-    if (position === -1) return null
-    if (i === chunkIndex) {
-      return {
-        start: position,
-        end: position + target.length,
-      }
-    }
-    searchFrom = position + Math.max(1, key.length)
-  }
-
-  return null
+  const chunks = buildReadableChunks(props.textContent || '').chunks
+  return findPdfChunkRange(flatPdfText, chunks, chunkIndex)
 }
 
 const updateHighlights = () => {
-  const range = props.activeChunkText
-    ? findPdfHighlightRange(flatPdfText, props.activeChunkText)
-    : findChunkRange(props.activeChunkIndex)
+  const indexedRange = findChunkRange(props.activeChunkIndex)
+  const range = indexedRange || (
+    props.activeChunkText
+      ? findPdfHighlightRange(flatPdfText, props.activeChunkText)
+      : null
+  )
 
   if (!range) {
     highlightsByPage.value = {}
@@ -307,11 +303,27 @@ const scrollToPage = (pageNumber, behavior = 'smooth', block = 'start') => {
   if (page) page.scrollIntoView({ behavior, block })
 }
 
+const getVisiblePage = () => {
+  const anchorY = 56
+  const pageRecords = [...pageWraps.entries()]
+    .map(([pageNumber, element]) => {
+      const rect = element.getBoundingClientRect()
+      return { pageNumber, top: rect.top, bottom: rect.bottom }
+    })
+    .filter(record => record.bottom > 0)
+
+  const atAnchor = pageRecords.find(record => record.top <= anchorY && record.bottom > anchorY)
+  if (atAnchor) return atAnchor.pageNumber
+
+  pageRecords.sort((a, b) => Math.abs(a.top - anchorY) - Math.abs(b.top - anchorY))
+  return pageRecords[0]?.pageNumber || 1
+}
+
 const scrollToActiveHighlight = () => {
   updateHighlights()
 }
 
-defineExpose({ scrollToPage, scrollToActiveHighlight })
+defineExpose({ getVisiblePage, scrollToPage, scrollToActiveHighlight })
 
 onMounted(renderPdf)
 onUnmounted(() => {

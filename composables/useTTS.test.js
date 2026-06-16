@@ -2,7 +2,38 @@ import { describe, it, expect } from 'vitest'
 import {
   stripHtml, splitToChunks, groupChunks, formatDuration, findContentStart,
   buildReadableChunks, buildChapterBoundariesFromHtml,
+  chunkIndexForProgress, chunkIndexForSection, isContentPageAligned,
+  takeMatchingPrefetch,
 } from './useTTS.js'
+
+describe('takeMatchingPrefetch', () => {
+  it('rejects late audio belonging to another sentence', () => {
+    expect(takeMatchingPrefetch({
+      chunkIdx: 12,
+      audio: 'stale-audio',
+      boundaries: [],
+    }, 9, 'Expected sentence.')).toBeNull()
+  })
+
+  it('accepts audio only for the exact active sentence', () => {
+    const prefetch = {
+      chunkIdx: 9,
+      chunkText: 'Matching sentence.',
+      audio: 'matching-audio',
+      boundaries: [{ offset: 0 }],
+    }
+    expect(takeMatchingPrefetch(prefetch, 9, 'Matching sentence.')).toEqual(prefetch)
+  })
+
+  it('rejects cached audio at the same index when its sentence text differs', () => {
+    expect(takeMatchingPrefetch({
+      chunkIdx: 9,
+      chunkText: 'He was directing his men.',
+      audio: 'wrong-audio',
+      boundaries: [],
+    }, 9, 'Lena had woken out of a dead sleep.')).toBeNull()
+  })
+})
 
 describe('buildReadableChunks', () => {
   const section = (text) => `<p>${text}</p>`
@@ -31,6 +62,48 @@ describe('buildReadableChunks', () => {
     const { chunks, sectionCounts } = buildReadableChunks('<p>Just one. Section here.</p>')
     expect(chunks).toEqual(['Just one.', 'Section here.'])
     expect(sectionCounts).toEqual([2])
+  })
+
+  it('preserves empty PDF page sections so page numbers remain stable', () => {
+    const html = [
+      '<section data-bookish-pdf-page="1"><p>Page one.</p></section>',
+      '<section data-bookish-pdf-page="2"></section>',
+      '<section data-bookish-pdf-page="3"><p>Page three.</p></section>',
+    ].join('<hr class="chapter-break" />')
+
+    const { chunks, sectionCounts } = buildReadableChunks(html)
+
+    expect(chunks).toEqual(['Page one.', 'Page three.'])
+    expect(sectionCounts).toEqual([1, 0, 1])
+    expect(isContentPageAligned(html, 3)).toBe(true)
+  })
+})
+
+describe('chunk index mapping', () => {
+  it('maps a PDF page section to the first chunk on that exact page', () => {
+    const sectionCounts = [2, 0, 3, 1]
+
+    expect(chunkIndexForSection(sectionCounts, 1)).toBe(2)
+    expect(chunkIndexForSection(sectionCounts, 2)).toBe(2)
+    expect(chunkIndexForSection(sectionCounts, 3)).toBe(5)
+  })
+
+  it('maps saved PDF progress back to a page boundary instead of a proportional chunk guess', () => {
+    const sectionCounts = [10, 1, 1, 1]
+
+    // 67% through four pages means page 3, whose first chunk is index 11.
+    // A proportional chunk guess would incorrectly land near index 8.
+    expect(chunkIndexForProgress(67, sectionCounts, 0)).toBe(11)
+  })
+
+  it('respects content-start when a new book has no saved progress', () => {
+    expect(chunkIndexForProgress(0, [3, 4, 5], 3)).toBe(3)
+  })
+
+  it('keeps saved progress on page boundaries even when prior PDF pages are blank', () => {
+    const sectionCounts = [10, 0, 1, 1]
+
+    expect(chunkIndexForProgress(67, sectionCounts, 0)).toBe(10)
   })
 })
 

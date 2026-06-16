@@ -3,8 +3,7 @@ import { useState } from '#app'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 
 let _currentAudio = null
-let _prefetchAudio = null
-let _prefetchBoundaries = null   // word boundaries for the pre-fetched next chunk
+let _prefetchChunk = null        // { chunkIdx, audio, boundaries }
 let _prefetchGeneration = 0      // incremented on cancel to invalidate in-flight pre-fetches
 let _chunks = []
 let _chunkIdx = 0
@@ -15,6 +14,12 @@ const DEFAULT_SENTENCE_MAX_CHARS = 480
 const AUDIO_CACHE_LIMIT = 8
 const WORDS_PER_MIN = 145
 export const BOOKISH_TTS_SESSION_KEY = 'bookish:tts-session'
+
+export function takeMatchingPrefetch(prefetch, chunkIdx, chunkText) {
+  return prefetch?.chunkIdx === chunkIdx && prefetch?.chunkText === chunkText
+    ? prefetch
+    : null
+}
 
 const EDGE_VOICES = [
   { id: 'en-US-ChristopherNeural', name: 'Christopher (US)' },
@@ -220,15 +225,33 @@ export function isRenderableSection(html) {
 
 const SECTION_TITLE_PATTERN = /^((?:Chapter|Part|Book)\s+(?:\d{1,4}|[IVXLCDM]+|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty)\b.{0,60}?|Prologue|Epilogue|Interlude|Preface|Foreword|Introduction|Afterword)/i
 
-// Splits assembled EPUB content into its renderable `<hr chapter-break>`
-// sections (the same parts the reader renders as `ch-N` elements and the
-// EPUB extractor emits one tocTitle per).
+const PDF_PAGE_MARKER_RE = /\bdata-bookish-pdf-page\b/i
+
+export function hasPdfPageMarkers(html) {
+  return PDF_PAGE_MARKER_RE.test(html || '')
+}
+
+// Splits assembled book content into `<hr chapter-break>` sections. EPUBs keep
+// only renderable sections. PDFs with explicit page markers keep empty sections
+// too, so page 74 always remains section 74 even when earlier PDF pages are
+// blank or image-only.
 export function splitContentSections(html) {
   if (!html) return []
   const cleaned = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+  const preserveEmptySections = hasPdfPageMarkers(cleaned)
   return cleaned
     .split(/<hr[^>]*chapter-break[^>]*\/?>/i)
-    .filter(isRenderableSection)
+    .filter(part => preserveEmptySections || isRenderableSection(part))
+}
+
+export function readableSectionCount(html) {
+  return splitContentSections(html).length
+}
+
+export function isContentPageAligned(html, pages) {
+  const expectedPages = Math.max(0, Number(pages) || 0)
+  if (!expectedPages) return true
+  return readableSectionCount(html) === expectedPages
 }
 
 // Canonical readable-chunk builder shared by TTS playback, the reader's flat
@@ -253,6 +276,30 @@ export function buildReadableChunks(html) {
     for (const chunk of partChunks) chunks.push(chunk)
   }
   return { chunks, sectionCounts }
+}
+
+export function chunkIndexForSection(sectionCounts, sectionIndex) {
+  const counts = Array.isArray(sectionCounts) ? sectionCounts : []
+  const totalChunks = counts.reduce((sum, count) => sum + Math.max(0, Number(count) || 0), 0)
+  if (totalChunks <= 0) return 0
+
+  const targetSection = Math.max(0, Math.min(counts.length - 1, Number(sectionIndex) || 0))
+  let offset = 0
+  for (let index = 0; index < targetSection; index += 1) {
+    offset += Math.max(0, Number(counts[index]) || 0)
+  }
+  return Math.max(0, Math.min(totalChunks - 1, offset))
+}
+
+export function chunkIndexForProgress(progress, sectionCounts, contentStart = 0) {
+  const counts = Array.isArray(sectionCounts) ? sectionCounts : []
+  const totalChunks = counts.reduce((sum, count) => sum + Math.max(0, Number(count) || 0), 0)
+  const safeContentStart = Math.max(0, Math.min(Math.max(0, totalChunks - 1), Number(contentStart) || 0))
+  const safeProgress = Math.max(0, Math.min(100, Number(progress) || 0))
+  if (safeProgress <= 0 || counts.length <= 1) return safeContentStart
+
+  const targetSection = Math.round((safeProgress / 100) * Math.max(0, counts.length - 1))
+  return Math.max(safeContentStart, chunkIndexForSection(counts, targetSection))
 }
 
 // Builds [{ chunkStart, chunkEnd, title }] from EPUB content HTML so the
@@ -464,6 +511,8 @@ export const useTTS = () => {
   const ttsVoiceId      = useState('tts:voice',        () => normalizeAvailableVoice(settings.value.ttsVoice))
   const ttsVoices       = useState('tts:voices',       () => EDGE_VOICES)
   const ttsCurrentChunk = useState('tts:currentChunk', () => '')
+  const ttsPlayingChunkIdx = useState('tts:playingChunkIdx', () => -1)
+  const ttsPlayingChunkText = useState('tts:playingChunkText', () => '')
   // Word-level highlight: index into the boundary array for the current chunk
   const ttsWordIdx      = useState('tts:wordIdx',      () => -1)
   // The boundary array for the currently-playing chunk (populated from TTS response)
@@ -523,7 +572,9 @@ export const useTTS = () => {
     _persistSession()
   }
 
-  const _audioCacheKey = (chunkIdx) => `${chunkIdx}:${ttsVoiceId.value}:${ttsSpeed.value}`
+  const _audioCacheKey = (chunkIdx) => (
+    `${ttsBook.value?.id || ''}:${chunkIdx}:${ttsVoiceId.value}:${ttsSpeed.value}`
+  )
 
   const _cacheAudio = (chunkIdx, data) => {
     if (!data?.audio) return
@@ -542,7 +593,13 @@ export const useTTS = () => {
     }
   }
 
-  const _getCachedAudio = (chunkIdx) => _audioCache.get(_audioCacheKey(chunkIdx)) ?? null
+  const _getCachedAudio = (chunkIdx, chunkText) => {
+    const key = _audioCacheKey(chunkIdx)
+    const cached = _audioCache.get(key) ?? null
+    if (cached?.chunkText === chunkText) return cached
+    if (cached) _audioCache.delete(key)
+    return null
+  }
 
   const _clearAudioCache = () => {
     for (const item of _audioCache.values()) {
@@ -558,9 +615,10 @@ export const useTTS = () => {
       _currentAudio.pause()
       _currentAudio = null
     }
-    _prefetchAudio = null
-    _prefetchBoundaries = null
+    _prefetchChunk = null
     _prefetchGeneration++
+    ttsPlayingChunkIdx.value = -1
+    ttsPlayingChunkText.value = ''
     // Stop the word-highlight rAF loop
     if (_rafId !== null) { cancelAnimationFrame(_rafId); _rafId = null }
     _currentBoundaries = []
@@ -570,14 +628,19 @@ export const useTTS = () => {
   const _fetchChunkAudio = async (chunkIdx) => {
     const chunk = _chunks[chunkIdx]
     if (!chunk) return null
-    const cached = _getCachedAudio(chunkIdx)
+    const cached = _getCachedAudio(chunkIdx, chunk)
     if (cached) return cached
     try {
       const data = await $fetch('/api/tts', {
         method: 'POST',
         body: { text: chunk, voice: normalizeAvailableVoice(ttsVoiceId.value), speed: ttsSpeed.value },
       })
-      const result = { audio: data.audio ?? null, boundaries: data.boundaries ?? [] }
+      const result = {
+        chunkIdx,
+        chunkText: chunk,
+        audio: data.audio ?? null,
+        boundaries: data.boundaries ?? [],
+      }
       _cacheAudio(chunkIdx, result)
       return result
     } catch (err) {
@@ -629,20 +692,28 @@ export const useTTS = () => {
       return
     }
     _updateProgress()
+    const requestedChunkIdx = _chunkIdx
+    const requestedChunkText = _chunks[requestedChunkIdx] || ''
 
     // Use pre-fetched result if available, otherwise fetch now
     let chunkData = null
-    if (_prefetchAudio) {
-      chunkData = { audio: _prefetchAudio, boundaries: _prefetchBoundaries ?? [] }
-      _prefetchAudio = null
-      _prefetchBoundaries = null
+    const prefetched = takeMatchingPrefetch(
+      _prefetchChunk,
+      requestedChunkIdx,
+      requestedChunkText,
+    )
+    if (prefetched) {
+      chunkData = { audio: prefetched.audio, boundaries: prefetched.boundaries ?? [] }
+      _prefetchChunk = null
     } else {
-      chunkData = await _fetchChunkAudio(_chunkIdx)
+      _prefetchChunk = null
+      chunkData = await _fetchChunkAudio(requestedChunkIdx)
     }
 
     // Bail if cancel/seek/voice-switch happened while we were awaiting the fetch
     if (_prefetchGeneration !== myGen) return
     if (ttsStatus.value !== 'playing') return
+    if (_chunkIdx !== requestedChunkIdx || _chunks[requestedChunkIdx] !== requestedChunkText) return
 
     if (!chunkData?.audio) {
       const { addToast } = useToast()
@@ -657,6 +728,8 @@ export const useTTS = () => {
     _currentBoundaries = chunkData.boundaries ?? []
     ttsBoundaries.value = _currentBoundaries   // expose via reactive state
     ttsWordIdx.value = -1                       // reset word index for new chunk
+    ttsPlayingChunkIdx.value = requestedChunkIdx
+    ttsPlayingChunkText.value = requestedChunkText
 
     // Pre-fetch next chunk while this one plays
     const nextIdx = _chunkIdx + 1
@@ -664,8 +737,7 @@ export const useTTS = () => {
       const gen = _prefetchGeneration
       _fetchChunkAudio(nextIdx).then(result => {
         if (_prefetchGeneration === gen && result) {
-          _prefetchAudio = result.audio
-          _prefetchBoundaries = result.boundaries
+          _prefetchChunk = result
         }
       })
     }
@@ -683,6 +755,8 @@ export const useTTS = () => {
     audio.onerror = () => {
       if (_currentAudio !== audio) return
       _currentAudio = null
+      ttsPlayingChunkIdx.value = -1
+      ttsPlayingChunkText.value = ''
       const { addToast } = useToast()
       addToast('TTS failed — check your connection.', 'error')
       ttsStatus.value = 'idle'
@@ -694,6 +768,8 @@ export const useTTS = () => {
     }).catch(() => {
       if (_prefetchGeneration === playGen && _currentAudio === audio) {
         _currentAudio = null
+        ttsPlayingChunkIdx.value = -1
+        ttsPlayingChunkText.value = ''
         ttsStatus.value = 'idle'
       }
     })
@@ -705,6 +781,8 @@ export const useTTS = () => {
     _chunks = []
     _chunkIdx = 0
     ttsCurrentChunk.value = ''
+    ttsPlayingChunkIdx.value = -1
+    ttsPlayingChunkText.value = ''
     ttsWordIdx.value = -1
   }
 
@@ -725,12 +803,39 @@ export const useTTS = () => {
       }
     }
 
-    const html = book?.content || stored?.content || ''
+    const isPdf = (book?.format || stored?.format || '').toLowerCase() === 'pdf'
+    let html = book?.content || stored?.content || ''
+    if (isPdf && stored?.source) {
+      const pageCount = stored?.pages || book?.pages || 0
+      const needsPageAlignedText = !stripHtml(html).trim() || !isContentPageAligned(html, pageCount)
+      if (needsPageAlignedText) {
+        try {
+          const { extractPdfContentFromSource } = await import('~/composables/usePdfExtractor.js')
+          const extracted = await extractPdfContentFromSource(stored.source)
+          if (extracted?.content) {
+            html = extracted.content
+            stored = {
+              ...stored,
+              content: extracted.content,
+              pages: extracted.pages || stored?.pages || book?.pages || 0,
+              tocItems: extracted.tocItems?.length ? extracted.tocItems : stored?.tocItems,
+              format: 'pdf',
+            }
+          }
+        } catch (e) {
+          console.error('[TTS] Failed to rebuild PDF page-aligned text:', e)
+        }
+      }
+    }
+
     let sentenceChunks = []
+    let sectionCounts = []
     if (stripHtml(html).trim()) {
       // EPUB / HTML: chunk section-by-section so chunk indices stay aligned
       // with chapter boundaries and the reader's highlight spans.
-      sentenceChunks = buildReadableChunks(html).chunks
+      const readable = buildReadableChunks(html)
+      sentenceChunks = readable.chunks
+      sectionCounts = readable.sectionCounts
     } else {
       // PDF / plain text: no chapter-break sections, chunk the extracted text.
       let text = ''
@@ -740,6 +845,7 @@ export const useTTS = () => {
         console.error('[TTS] Failed to extract readable PDF text:', e)
       }
       sentenceChunks = splitToChunks(text)
+      sectionCounts = [sentenceChunks.length]
     }
 
     if (!sentenceChunks.length) {
@@ -752,11 +858,9 @@ export const useTTS = () => {
 
     const contentStart = findContentStart(sentenceChunks)
     const hasRequestedChunkIdx = Number.isFinite(Number(options.startChunkIdx))
-    const savedSession = options.ignoreSavedSession ? null : readStoredTtsSession()
-    const savedChunkIdx = savedSession?.bookId === book?.id ? savedSession.chunkIdx : null
     const requestedChunkIdx = hasRequestedChunkIdx
       ? Number(options.startChunkIdx)
-      : savedChunkIdx
+      : chunkIndexForProgress(book?.progress, sectionCounts, contentStart)
     _chunks = sentenceChunks
     const startChunkIdx = Math.max(0, Math.min(_chunks.length - 1, requestedChunkIdx ?? contentStart))
     _chunkIdx = hasRequestedChunkIdx ? startChunkIdx : Math.max(contentStart, startChunkIdx)
@@ -958,6 +1062,7 @@ export const useTTS = () => {
     ttsBook, ttsStatus, ttsProgress, ttsChunkIdx, ttsTotalChunks,
     ttsElapsedSeconds, ttsTotalSeconds,
     ttsSpeed, ttsVolume, ttsVoiceId, ttsVoices, ttsCurrentChunk,
+    ttsPlayingChunkIdx, ttsPlayingChunkText,
     ttsWordIdx, ttsBoundaries, ttsChapterBoundaries,
     elapsedTime, totalTime,
     play, pause, resume, togglePlay, stop, restart, restoreLastSession,

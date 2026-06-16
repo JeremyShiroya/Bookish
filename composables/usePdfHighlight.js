@@ -62,6 +62,68 @@ export function findPdfHighlightRange(flatText, activeText) {
   return null
 }
 
+export function findPdfChunkRange(flatText, chunks, chunkIndex) {
+  if (!flatText || !Array.isArray(chunks) || chunkIndex < 0 || chunkIndex >= chunks.length) {
+    return null
+  }
+
+  const index = buildSearchIndex(flatText)
+  let searchFrom = 0
+
+  for (let currentIndex = 0; currentIndex <= chunkIndex; currentIndex += 1) {
+    let position = -1
+    let matchedLength = 0
+
+    for (const needle of candidateNeedles(chunks[currentIndex])) {
+      position = index.text.indexOf(needle, searchFrom)
+      if (position !== -1) {
+        matchedLength = needle.length
+        break
+      }
+    }
+
+    if (position === -1) return null
+    if (currentIndex === chunkIndex) {
+      return {
+        start: index.map[position],
+        end: index.map[position + matchedLength - 1],
+      }
+    }
+    searchFrom = position + Math.max(1, matchedLength)
+  }
+
+  return null
+}
+
+export function mergePdfHighlightRects(rects) {
+  const merged = []
+
+  for (const rect of rects) {
+    const previous = merged[merged.length - 1]
+    if (!previous) {
+      merged.push({ ...rect })
+      continue
+    }
+
+    const sameLineTolerance = Math.max(2, Math.min(previous.height, rect.height) * 0.35)
+    const gap = rect.left - (previous.left + previous.width)
+    const maxGap = Math.max(previous.height, rect.height) * 1.5
+    const sameLine = Math.abs(rect.top - previous.top) <= sameLineTolerance
+
+    if (sameLine && gap >= -1 && gap <= maxGap) {
+      const right = Math.max(previous.left + previous.width, rect.left + rect.width)
+      previous.top = Math.min(previous.top, rect.top)
+      previous.height = Math.max(previous.height, rect.height)
+      previous.width = right - previous.left
+      continue
+    }
+
+    merged.push({ ...rect })
+  }
+
+  return merged
+}
+
 export function highlightsForPdfRange(textItemRefs, range) {
   if (!range) return {}
 
@@ -77,19 +139,30 @@ export function highlightsForPdfRange(textItemRefs, range) {
 
     const startOffset = overlapStart - item.start
     const endOffset = overlapEnd - item.start + 1
-    const leftRatio = startOffset / textLength
-    const widthRatio = (endOffset - startOffset) / textLength
-    const leftPadding = startOffset === 0 ? 2 : 0
-    const rightPadding = endOffset === textLength ? 2 : 0
+    const advances = item.advances
+    const measuredWidth = Array.isArray(advances) && advances.length === textLength + 1
+      ? advances[textLength]
+      : 0
+    const leftRatio = measuredWidth > 0
+      ? advances[startOffset] / measuredWidth
+      : startOffset / textLength
+    const rightRatio = measuredWidth > 0
+      ? advances[endOffset] / measuredWidth
+      : endOffset / textLength
+    const edgePadding = 2
 
     if (!highlights[item.pageNumber]) highlights[item.pageNumber] = []
 
     highlights[item.pageNumber].push({
-      left: Math.max(0, item.rect.left + (item.rect.width * leftRatio) - leftPadding),
+      left: Math.max(0, item.rect.left + (item.rect.width * leftRatio) - edgePadding),
       top: Math.max(0, item.rect.top - 1),
-      width: (item.rect.width * widthRatio) + leftPadding + rightPadding,
+      width: (item.rect.width * (rightRatio - leftRatio)) + (edgePadding * 2),
       height: item.rect.height + 2,
     })
+  }
+
+  for (const pageNumber of Object.keys(highlights)) {
+    highlights[pageNumber] = mergePdfHighlightRects(highlights[pageNumber])
   }
 
   return highlights

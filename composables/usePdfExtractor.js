@@ -1,6 +1,59 @@
 const escapeHtml = (str) =>
   str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
+const PDF_PAGE_BREAK = '\n<hr class="chapter-break" />\n'
+
+function linesToParagraphHtml(lines) {
+  const paragraphs = []
+  let para = []
+  let lastY = null
+
+  for (const line of lines) {
+    const gap = lastY !== null ? lastY - line.y : 0
+    if (lastY !== null && gap > 18) {
+      if (para.length) paragraphs.push(para.join(' '))
+      para = [line.text.trim()]
+    } else {
+      para.push(line.text.trim())
+    }
+    lastY = line.y
+  }
+  if (para.length) paragraphs.push(para.join(' '))
+
+  return paragraphs
+    .map(p => p.trim())
+    .filter(p => p.length > 0)
+    .map(p => `<p>${escapeHtml(p)}</p>`)
+    .join('\n')
+}
+
+function wrapPdfPageHtml(pageNum, pageHtml) {
+  const body = pageHtml ? `\n${pageHtml}\n` : ''
+  return `<section data-bookish-pdf-page="${pageNum}">${body}</section>`
+}
+
+async function extractPdfPageContent(pdf) {
+  const pageLinesForToc = []
+  const pageSections = []
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum)
+    const textContent = await page.getTextContent()
+    const lines = bucketTextLines(textContent.items)
+
+    if (lines.length) {
+      pageLinesForToc.push({ page: pageNum, lines: lines.map(line => line.text) })
+    }
+
+    pageSections.push(wrapPdfPageHtml(pageNum, linesToParagraphHtml(lines)))
+  }
+
+  return {
+    content: pageSections.join(PDF_PAGE_BREAK),
+    pageLinesForToc,
+  }
+}
+
 async function resolveOutlinePage(pdf, dest) {
   try {
     const resolvedDest = typeof dest === 'string'
@@ -217,45 +270,7 @@ export async function extractPdf(file) {
     const pdf = await loadPdfDocument(arrayBuffer)
     const numPages = pdf.numPages
     let tocItems = await extractPdfOutline(pdf)
-    const pageLinesForToc = []
-    let html = ''
-
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum)
-      const textContent = await page.getTextContent()
-
-      const lines = bucketTextLines(textContent.items)
-      if (!lines.length) continue
-
-      pageLinesForToc.push({ page: pageNum, lines: lines.map(line => line.text) })
-
-      const paragraphs = []
-      let para = []
-      let lastY = null
-
-      for (const line of lines) {
-        const gap = lastY !== null ? lastY - line.y : 0
-        if (lastY !== null && gap > 18) {
-          if (para.length) paragraphs.push(para.join(' '))
-          para = [line.text.trim()]
-        } else {
-          para.push(line.text.trim())
-        }
-        lastY = line.y
-      }
-      if (para.length) paragraphs.push(para.join(' '))
-
-      const pageHtml = paragraphs
-        .map(p => p.trim())
-        .filter(p => p.length > 0)
-        .map(p => `<p>${escapeHtml(p)}</p>`)
-        .join('\n')
-
-      if (pageHtml) {
-        html += pageHtml
-        if (pageNum < pdf.numPages) html += '\n<hr class="chapter-break" />\n'
-      }
-    }
+    const { content: html, pageLinesForToc } = await extractPdfPageContent(pdf)
 
     if (!tocItems.length) tocItems = extractVisiblePdfToc(pageLinesForToc)
 
@@ -263,6 +278,28 @@ export async function extractPdf(file) {
   } catch (error) {
     console.warn('[PDF] Text extraction failed; preserving original PDF source for page rendering.', error)
     return { content: null, pages: 0, source, tocItems: [] }
+  }
+}
+
+export async function extractPdfContentFromSource(source) {
+  let pdf = null
+
+  try {
+    pdf = await loadPdfDocument(source)
+    if (!pdf) return { content: null, pages: 0, tocItems: [] }
+
+    let tocItems = await extractPdfOutline(pdf)
+    const { content, pageLinesForToc } = await extractPdfPageContent(pdf)
+    if (!tocItems.length) tocItems = extractVisiblePdfToc(pageLinesForToc)
+
+    return { content: content || null, pages: pdf.numPages, tocItems }
+  } catch (error) {
+    console.warn('[PDF] Page-aligned text extraction failed.', error)
+    return { content: null, pages: 0, tocItems: [] }
+  } finally {
+    try {
+      await pdf?.destroy?.()
+    } catch {}
   }
 }
 
