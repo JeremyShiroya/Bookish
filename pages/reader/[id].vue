@@ -224,6 +224,7 @@ const {
   play: playTTS,
   pause: pauseTTS,
   resume: resumeTTS,
+  prewarmText,
 } = useTTS()
 
 const MIN_ZOOM = 0.5
@@ -516,6 +517,9 @@ function requestReadCurrentPosition() {
   pendingReadFromHerePage.value = targetPdfChunk?.page || targetPage
   pendingReadFromHereChunk.value = targetChunkId
   confirmReadFromHereOpen.value = true
+
+  const targetText = allReadableChunks.value[targetChunkId]
+  if (targetText) prewarmText(targetText)
 }
 
 function cancelReadFromHere() {

@@ -31,6 +31,8 @@ const DEFAULT_TTS_VOICE = EDGE_VOICES[0].id
 const KOKORO_VOICE_PREFIX = 'kokoro:'
 
 let _audioCache = new Map()
+let _prewarmCache = new Map()
+const PREWARM_CACHE_LIMIT = 4
 
 const isKokoroVoice = (voiceId) => String(voiceId || '').startsWith(KOKORO_VOICE_PREFIX)
 const normalizeAvailableVoice = (voiceId) => {
@@ -99,6 +101,10 @@ export function takeMatchingPrefetch(prefetch, chunkIdx, chunkText) {
   return prefetch?.chunkIdx === chunkIdx && prefetch?.chunkText === chunkText
     ? prefetch
     : null
+}
+
+export function ttsPrewarmKey(text, voice, speed) {
+  return `${String(text || '')}::${String(voice || '')}::${String(speed || '')}`
 }
 
 if (import.meta.hot) {
@@ -605,6 +611,7 @@ export const useTTS = () => {
       if (item?.objectUrl) URL.revokeObjectURL(item.audio)
     }
     _audioCache.clear()
+    _prewarmCache.clear()
   }
 
   const _cancelAudio = () => {
@@ -629,10 +636,26 @@ export const useTTS = () => {
     if (!chunk) return null
     const cached = _getCachedAudio(chunkIdx, chunk)
     if (cached) return cached
+
+    const voice = normalizeAvailableVoice(ttsVoiceId.value)
+    const prewarmKey = ttsPrewarmKey(chunk, voice, ttsSpeed.value)
+    const prewarmed = _prewarmCache.get(prewarmKey)
+    if (prewarmed) {
+      _prewarmCache.delete(prewarmKey)
+      const result = {
+        chunkIdx,
+        chunkText: chunk,
+        audio: prewarmed.audio,
+        boundaries: prewarmed.boundaries ?? [],
+      }
+      _cacheAudio(chunkIdx, result)
+      return result
+    }
+
     try {
       const data = await $fetch('/api/tts', {
         method: 'POST',
-        body: { text: chunk, voice: normalizeAvailableVoice(ttsVoiceId.value), speed: ttsSpeed.value },
+        body: { text: chunk, voice, speed: ttsSpeed.value },
       })
       const result = {
         chunkIdx,
@@ -694,6 +717,11 @@ export const useTTS = () => {
     const requestedChunkIdx = _chunkIdx
     const requestedChunkText = _chunks[requestedChunkIdx] || ''
 
+    // Show the sentence highlight immediately, before the audio fetch returns.
+    // Any non-success path below resets these to -1 / ''.
+    ttsPlayingChunkIdx.value = requestedChunkIdx
+    ttsPlayingChunkText.value = requestedChunkText
+
     // Use pre-fetched result if available, otherwise fetch now
     let chunkData = null
     const prefetched = takeMatchingPrefetch(
@@ -717,6 +745,8 @@ export const useTTS = () => {
     if (!chunkData?.audio) {
       const { addToast } = useToast()
       addToast('TTS failed — check your connection.', 'error')
+      ttsPlayingChunkIdx.value = -1
+      ttsPlayingChunkText.value = ''
       ttsStatus.value = 'idle'
       return
     }
@@ -739,6 +769,12 @@ export const useTTS = () => {
           _prefetchChunk = result
         }
       })
+    }
+
+    // Warm one more chunk ahead into the per-index audio cache.
+    const nextIdx2 = _chunkIdx + 2
+    if (nextIdx2 < _chunks.length) {
+      _fetchChunkAudio(nextIdx2).catch(() => {})
     }
 
     audio.onended = () => {
@@ -961,6 +997,30 @@ export const useTTS = () => {
     }
   }
 
+  // Fetch audio for a sentence ahead of play time (e.g. while the user reads the
+  // "Read from here" prompt) so playback can start without waiting on the
+  // network. Best-effort; normal playback re-fetches if this hasn't landed.
+  const prewarmText = async (text) => {
+    const value = String(text || '').trim()
+    if (!value) return
+    const voice = normalizeAvailableVoice(ttsVoiceId.value)
+    const key = ttsPrewarmKey(value, voice, ttsSpeed.value)
+    if (_prewarmCache.has(key)) return
+    try {
+      const data = await $fetch('/api/tts', {
+        method: 'POST',
+        body: { text: value, voice, speed: ttsSpeed.value },
+      })
+      if (!data?.audio) return
+      _prewarmCache.set(key, { audio: data.audio, boundaries: data.boundaries ?? [] })
+      while (_prewarmCache.size > PREWARM_CACHE_LIMIT) {
+        _prewarmCache.delete(_prewarmCache.keys().next().value)
+      }
+    } catch {
+      // Prewarm is best-effort; normal fetch will run at play time.
+    }
+  }
+
   const seekToProgress = (pct) => {
     if (!_chunks.length) return
     _cancelAudio()
@@ -1055,6 +1115,6 @@ export const useTTS = () => {
     elapsedTime, totalTime,
     play, pause, resume, togglePlay, stop, restart, restoreLastSession,
     setSpeed, setVolume, setVoice, seekToProgress, skipChunks, skipSeconds, seekToChunk,
-    setChapterBoundaries,
+    setChapterBoundaries, prewarmText,
   }
 }

@@ -3,7 +3,7 @@ import {
   stripHtml, splitToChunks, groupChunks, formatDuration, findContentStart,
   buildReadableChunks, buildChapterBoundariesFromHtml,
   chunkIndexForPdfProgress, chunkIndexForProgress,
-  resolvePlaybackChunks, takeMatchingPrefetch,
+  resolvePlaybackChunks, takeMatchingPrefetch, ttsPrewarmKey,
 } from './useTTS.js'
 
 describe('takeMatchingPrefetch', () => {
@@ -335,5 +335,17 @@ describe('formatDuration', () => {
   it('formats large values as hours, minutes, and seconds', () => {
     expect(formatDuration(3600)).toBe('1:00:00')
     expect(formatDuration(60188)).toBe('16:43:08')
+  })
+})
+
+describe('ttsPrewarmKey', () => {
+  it('differs when voice or speed differ', () => {
+    const base = ttsPrewarmKey('Hello there.', 'en-US-JennyNeural', 1)
+    expect(base).not.toBe(ttsPrewarmKey('Hello there.', 'en-US-GuyNeural', 1))
+    expect(base).not.toBe(ttsPrewarmKey('Hello there.', 'en-US-JennyNeural', 1.5))
+  })
+
+  it('matches for identical text, voice, and speed', () => {
+    expect(ttsPrewarmKey('Hi.', 'v', 1)).toBe(ttsPrewarmKey('Hi.', 'v', 1))
   })
 })
