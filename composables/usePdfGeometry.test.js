@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   chunkHighlightRects,
+  chunkSubRangeRects,
   itemSpanRect,
   scrollTargetForChunk,
 } from './usePdfGeometry.js'
+import { buildPdfManifest } from './usePdfManifest.js'
 
 const page = {
   page: 2,
@@ -63,5 +65,36 @@ describe('PDF highlight geometry', () => {
       top: 90,
       left: 100,
     })
+  })
+})
+
+describe('PDF word sub-range geometry', () => {
+  const builtManifest = buildPdfManifest([{
+    page: 1,
+    width: 600,
+    height: 800,
+    items: [
+      { str: 'Prefix. Start', width: 130, height: 10, transform: [1, 0, 0, 10, 20, 700] },
+      { str: 'middle', width: 60, height: 10, transform: [1, 0, 0, 10, 160, 700] },
+      { str: 'end. Suffix.', width: 120, height: 10, transform: [1, 0, 0, 10, 20, 680] },
+    ],
+  }])
+  const builtChunk = builtManifest.chunks.find(entry => entry.text === 'Start middle end.')
+  const vp = [1, 0, 0, -1, 0, 800]
+
+  it('draws the word rectangle clipped to the source item', () => {
+    const rects = chunkSubRangeRects(builtManifest, builtChunk.id, 0, 5, vp)
+    expect(rects).toHaveLength(1)
+    expect(rects[0].left).toBeCloseTo(100)
+    expect(rects[0].width).toBeCloseTo(50)
+    expect(rects[0].top).toBe(90)
+  })
+
+  it('returns [] for an empty word range', () => {
+    expect(chunkSubRangeRects(builtManifest, builtChunk.id, 3, 3, vp)).toEqual([])
+  })
+
+  it('returns [] for an unknown chunk', () => {
+    expect(chunkSubRangeRects(builtManifest, 999, 0, 5, vp)).toEqual([])
   })
 })

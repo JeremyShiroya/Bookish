@@ -1,4 +1,4 @@
-import { chunkForId } from './usePdfManifest.js'
+import { chunkForId, wordSpansWithinChunk } from './usePdfManifest.js'
 
 function multiply(first, second) {
   return [
@@ -38,13 +38,10 @@ export function itemSpanRect(item, span, viewportTransform) {
   }
 }
 
-export function chunkHighlightRects(manifest, chunkId, viewportTransform) {
-  const chunk = chunkForId(manifest, chunkId)
-  if (!chunk) return []
-  const page = manifest?.pages?.find(entry => entry.page === chunk.page)
-  if (!page) return []
+export function spansToRects(page, spans, viewportTransform) {
+  if (!page || !Array.isArray(spans) || !spans.length) return []
 
-  const rects = chunk.spans
+  const rects = spans
     .map(span => itemSpanRect(page.items?.[span.itemIndex], span, viewportTransform))
     .filter(Boolean)
 
@@ -69,6 +66,23 @@ export function chunkHighlightRects(manifest, chunkId, viewportTransform) {
   }
 
   return merged
+}
+
+export function chunkHighlightRects(manifest, chunkId, viewportTransform) {
+  const chunk = chunkForId(manifest, chunkId)
+  if (!chunk) return []
+  const page = manifest?.pages?.find(entry => entry.page === chunk.page)
+  if (!page) return []
+  return spansToRects(page, chunk.spans, viewportTransform)
+}
+
+export function chunkSubRangeRects(manifest, chunkId, charStart, charEnd, viewportTransform) {
+  const chunk = chunkForId(manifest, chunkId)
+  if (!chunk) return []
+  const page = manifest?.pages?.find(entry => entry.page === chunk.page)
+  if (!page) return []
+  const spans = wordSpansWithinChunk(manifest, chunkId, charStart, charEnd)
+  return spansToRects(page, spans, viewportTransform)
 }
 
 export function scrollTargetForChunk(manifest, chunkId, viewportTransform) {
