@@ -45,7 +45,7 @@
           @click="requestReadCurrentPosition"
           title="Read from here"
         >
-          <i class="ri-speak-line"></i>
+          <i class="ri-file-transfer-line"></i>
         </button>
         <button
           class="tb-btn"
@@ -121,6 +121,7 @@
           :zoom="zoomLevel"
           :manifest="pdfManifest"
           :active-chunk-id="activeTtsChunkIndex"
+          :active-word="activeWordRange"
           @page-change="handlePdfPageChange"
           @loaded="handlePdfLoaded"
         />
@@ -218,6 +219,8 @@ const {
   ttsChunkIdx,
   ttsPlayingChunkIdx,
   ttsStatus,
+  ttsWordIdx,
+  ttsBoundaries,
   play: playTTS,
   pause: pauseTTS,
   resume: resumeTTS,
@@ -376,6 +379,15 @@ const tocEmptyMessage = computed(() => {
 const activeTtsChunkIndex = computed(() => {
   if (ttsBook.value?.id !== book.value?.id || ttsStatus.value === 'idle') return -1
   return ttsPlayingChunkIdx.value
+})
+
+const activeWordRange = computed(() => {
+  if (activeTtsChunkIndex.value < 0) return null
+  const boundary = ttsBoundaries.value?.[ttsWordIdx.value]
+  if (!boundary || typeof boundary.charIndex !== 'number' || boundary.charIndex < 0) return null
+  const end = boundary.charIndex + (boundary.word?.length || 0)
+  if (end <= boundary.charIndex) return null
+  return { start: boundary.charIndex, end }
 })
 
 const isCurrentBookNarrating = computed(() => (

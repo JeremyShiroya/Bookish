@@ -36,6 +36,19 @@
             }"
           ></span>
         </div>
+        <div class="pdf-word-highlight-layer" aria-hidden="true">
+          <span
+            v-for="(highlight, index) in wordHighlightsByPage[page.number] || []"
+            :key="index"
+            class="pdf-word-highlight"
+            :style="{
+              left: `${highlight.left}px`,
+              top: `${highlight.top}px`,
+              width: `${highlight.width}px`,
+              height: `${highlight.height}px`,
+            }"
+          ></span>
+        </div>
       </div>
     </template>
   </div>
@@ -43,13 +56,14 @@
 
 <script setup>
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { chunkHighlightRects, scrollTargetForChunk } from '~/composables/usePdfGeometry'
+import { chunkHighlightRects, chunkSubRangeRects, scrollTargetForChunk } from '~/composables/usePdfGeometry'
 
 const props = defineProps({
   src: { required: true },
   zoom: { type: Number, default: 1 },
   manifest: { type: Object, default: null },
   activeChunkId: { type: Number, default: -1 },
+  activeWord: { type: Object, default: null },
 })
 
 const emit = defineEmits(['page-change', 'loaded'])
@@ -138,6 +152,33 @@ const updateHighlights = () => {
   }
 }
 
+const wordHighlightsByPage = ref({})
+
+const updateWordHighlights = () => {
+  const chunk = props.manifest?.chunks?.find(entry => entry.id === props.activeChunkId)
+  const range = props.activeWord
+  const viewportTransform = chunk ? viewportTransforms.get(chunk.page) : null
+  if (!chunk || !range || !viewportTransform || !(range.end > range.start)) {
+    wordHighlightsByPage.value = {}
+    return
+  }
+
+  wordHighlightsByPage.value = {
+    [chunk.page]: chunkSubRangeRects(props.manifest, chunk.id, range.start, range.end, viewportTransform)
+      .map(rect => ({
+        left: Math.max(0, rect.left - 1),
+        top: Math.max(0, rect.top - 1),
+        width: rect.width + 2,
+        height: rect.height + 2,
+      })),
+  }
+}
+
+const refreshHighlights = () => {
+  updateHighlights()
+  updateWordHighlights()
+}
+
 const buildPages = async () => {
   if (!pdfDocument) return
   const firstPage = await pdfDocument.getPage(1)
@@ -166,7 +207,7 @@ const buildPages = async () => {
     await renderPage(pageNumber, baseScale, generation)
   }
 
-  updateHighlights()
+  refreshHighlights()
   emit('loaded', { pages: pdfDocument.numPages })
 }
 
@@ -248,8 +289,9 @@ onUnmounted(() => pageObserver?.disconnect())
 
 watch(() => props.src, renderPdf)
 watch(() => props.zoom, renderPdf)
-watch(() => props.manifest, updateHighlights, { deep: true })
-watch(() => props.activeChunkId, updateHighlights)
+watch(() => props.manifest, refreshHighlights, { deep: true })
+watch(() => props.activeChunkId, refreshHighlights)
+watch(() => props.activeWord, updateWordHighlights)
 </script>
 
 <style scoped>
@@ -290,6 +332,20 @@ watch(() => props.activeChunkId, updateHighlights)
   background: var(--color-reader-highlight);
   border-radius: 2px;
   box-shadow: 0 0 0 1px var(--color-reader-highlight-border);
+  mix-blend-mode: multiply;
+}
+
+.pdf-word-highlight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.pdf-word-highlight {
+  position: absolute;
+  background: var(--color-reader-word-highlight);
+  border-radius: 2px;
   mix-blend-mode: multiply;
 }
 
