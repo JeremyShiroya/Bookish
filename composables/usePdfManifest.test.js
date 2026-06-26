@@ -5,6 +5,7 @@ import {
   chunkForId,
   firstChunkForPage,
   pageForChunk,
+  wordSpansWithinChunk,
 } from './usePdfManifest.js'
 
 const item = (str, x, y, width = str.length * 6, extra = {}) => ({
@@ -129,5 +130,64 @@ describe('manifest lookup helpers', () => {
     expect(chunkForId(manifest, chunk.id)).toEqual(chunk)
     expect(pageForChunk(manifest, chunk.id)).toBe(2)
     expect(pageForChunk(manifest, -1)).toBeNull()
+  })
+})
+
+describe('wordSpansWithinChunk', () => {
+  const manifest = buildPdfManifest([{
+    page: 1,
+    width: 600,
+    height: 800,
+    items: [
+      item('Prefix. Start', 10, 700),
+      item('middle', 100, 700),
+      item('end. Suffix.', 150, 700),
+    ],
+  }])
+  const chunk = manifest.chunks.find(entry => entry.text === 'Start middle end.')
+
+  it('records the chunk start offset within the page text', () => {
+    expect(chunk.textStart).toBe(8)
+  })
+
+  it('maps a word fully inside the first item to that item span', () => {
+    expect(wordSpansWithinChunk(manifest, chunk.id, 0, 5)).toEqual([
+      { itemIndex: 0, start: 8, end: 13 },
+    ])
+  })
+
+  it('maps a middle word to its own source item', () => {
+    expect(wordSpansWithinChunk(manifest, chunk.id, 6, 12)).toEqual([
+      { itemIndex: 1, start: 0, end: 6 },
+    ])
+  })
+
+  it('clamps a word range that runs past the chunk text', () => {
+    expect(wordSpansWithinChunk(manifest, chunk.id, 13, 999)).toEqual([
+      { itemIndex: 2, start: 0, end: 4 },
+    ])
+  })
+
+  it('maps a hyphenated word split across two PDF items to two spans', () => {
+    const m = buildPdfManifest([{
+      page: 1,
+      width: 600,
+      height: 800,
+      items: [item('Full-', 10, 700), item('time. Yes.', 40, 700)],
+    }])
+    const c = m.chunks.find(entry => entry.text === 'Full-time.')
+    expect(c.textStart).toBe(0)
+    expect(wordSpansWithinChunk(m, c.id, 0, 9)).toEqual([
+      { itemIndex: 0, start: 0, end: 5 },
+      { itemIndex: 1, start: 0, end: 4 },
+    ])
+  })
+
+  it('returns [] for an unknown chunk', () => {
+    expect(wordSpansWithinChunk(manifest, 999, 0, 5)).toEqual([])
+  })
+
+  it('returns [] for an empty range', () => {
+    expect(wordSpansWithinChunk(manifest, chunk.id, 3, 3)).toEqual([])
   })
 })

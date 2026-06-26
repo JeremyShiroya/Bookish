@@ -144,6 +144,7 @@ export function buildPdfManifest(pageRecords = []) {
         id,
         page: pageNumber,
         text: text.slice(range.start, range.end),
+        textStart: range.start,
         spans,
       })
       chunkIds.push(id)
@@ -163,6 +164,37 @@ export function buildPdfManifest(pageRecords = []) {
     pages,
     chunks,
   }
+}
+
+const _pagePointsCache = new WeakMap()
+
+function pagePointsFor(page) {
+  const items = page?.items || []
+  let cached = _pagePointsCache.get(items)
+  if (!cached) {
+    cached = appendPageText(items)
+    _pagePointsCache.set(items, cached)
+  }
+  return cached
+}
+
+// Resolves a character range WITHIN a chunk's text (e.g. a TTS word boundary)
+// to the participating PDF text-item spans, using the chunk's recorded
+// page-text offset. No text search — pure arithmetic on the page's points.
+export function wordSpansWithinChunk(manifest, chunkId, charStart, charEnd) {
+  const chunk = chunkForId(manifest, chunkId)
+  if (!chunk) return []
+  const page = manifest?.pages?.find(entry => entry.page === chunk.page)
+  if (!page) return []
+
+  const { points } = pagePointsFor(page)
+  const base = Number(chunk.textStart) || 0
+  const textLen = chunk.text.length
+  const start = base + Math.max(0, Math.min(textLen, Number(charStart) || 0))
+  const end = base + Math.max(0, Math.min(textLen, Number(charEnd) || 0))
+  if (end <= start) return []
+
+  return spansForRange(points, start, end)
 }
 
 export function chunkForId(manifest, chunkId) {
