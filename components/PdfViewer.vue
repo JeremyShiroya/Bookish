@@ -56,7 +56,7 @@
 
 <script setup>
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { chunkHighlightRects, chunkSubRangeRects, scrollTargetForChunk } from '~/composables/usePdfGeometry'
+import { chunkHighlightRects, chunkSubRangeRects, pagesToRender, scrollTargetForChunk } from '~/composables/usePdfGeometry'
 
 const props = defineProps({
   src: { required: true },
@@ -77,10 +77,13 @@ const highlightsByPage = ref({})
 const pageCanvases = new Map()
 const pageWraps = new Map()
 const viewportTransforms = new Map()
+const renderedPages = new Set()
+const _visiblePages = new Set()
 
 let pdfDocument = null
 let renderGeneration = 0
 let pageObserver = null
+let _baseScale = 1
 
 const dataUrlToBytes = (dataUrl) => {
   const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl
@@ -110,6 +113,8 @@ const resetPageRefs = () => {
   pageCanvases.clear()
   pageWraps.clear()
   viewportTransforms.clear()
+  renderedPages.clear()
+  _visiblePages.clear()
 }
 
 const renderPage = async (pageNumber, baseScale, generation) => {
@@ -131,6 +136,34 @@ const renderPage = async (pageNumber, baseScale, generation) => {
   const context = canvas.getContext('2d')
   context.setTransform(dpr, 0, 0, dpr, 0, 0)
   await page.render({ canvasContext: context, viewport }).promise
+}
+
+const renderPageIfNeeded = async (pageNumber, generation = renderGeneration) => {
+  if (!pdfDocument || renderedPages.has(pageNumber)) return
+  renderedPages.add(pageNumber)
+  await renderPage(pageNumber, _baseScale, generation)
+}
+
+const renderWindow = async (visiblePages) => {
+  const generation = renderGeneration
+  const target = pagesToRender(visiblePages, pdfDocument?.numPages || 0, 2)
+
+  // Evict canvases outside the window to cap memory on large documents.
+  for (const pageNumber of [...renderedPages]) {
+    if (!target.includes(pageNumber)) {
+      const canvas = pageCanvases.get(pageNumber)
+      if (canvas) {
+        canvas.width = 0
+        canvas.height = 0
+      }
+      renderedPages.delete(pageNumber)
+    }
+  }
+
+  for (const pageNumber of target) {
+    if (generation !== renderGeneration) return
+    await renderPageIfNeeded(pageNumber, generation)
+  }
 }
 
 const updateHighlights = () => {
@@ -185,11 +218,14 @@ const buildPages = async () => {
   const firstViewport = firstPage.getViewport({ scale: 1 })
   const availableWidth = Math.max(320, (viewerRef.value?.clientWidth || 820) - 32)
   const baseScale = availableWidth / firstViewport.width
+  _baseScale = baseScale
 
+  // Cheap layout pass: size + viewport transform for EVERY page, no canvas.
   const pageRecords = []
   for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
     const page = pageNumber === 1 ? firstPage : await pdfDocument.getPage(pageNumber)
     const viewport = page.getViewport({ scale: baseScale * props.zoom })
+    viewportTransforms.set(pageNumber, viewport.transform.slice())
     pageRecords.push({
       number: pageNumber,
       width: viewport.width,
@@ -202,13 +238,46 @@ const buildPages = async () => {
   await nextTick()
   setupPageObserver()
 
-  const generation = renderGeneration
-  for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
-    await renderPage(pageNumber, baseScale, generation)
-  }
+  renderedPages.clear()
+  await renderWindow([1])
 
   refreshHighlights()
   emit('loaded', { pages: pdfDocument.numPages })
+}
+
+const relayout = async () => {
+  if (!pdfDocument) return
+  const generation = ++renderGeneration
+
+  const firstPage = await pdfDocument.getPage(1)
+  const firstViewport = firstPage.getViewport({ scale: 1 })
+  const availableWidth = Math.max(320, (viewerRef.value?.clientWidth || 820) - 32)
+  const baseScale = availableWidth / firstViewport.width
+  _baseScale = baseScale
+
+  const pageRecords = []
+  for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
+    const page = pageNumber === 1 ? firstPage : await pdfDocument.getPage(pageNumber)
+    const viewport = page.getViewport({ scale: baseScale * props.zoom })
+    viewportTransforms.set(pageNumber, viewport.transform.slice())
+    pageRecords.push({ number: pageNumber, width: viewport.width, height: viewport.height })
+  }
+  if (generation !== renderGeneration) return
+
+  // Drop stale-size canvases; the visible window re-renders below.
+  for (const pageNumber of [...renderedPages]) {
+    const canvas = pageCanvases.get(pageNumber)
+    if (canvas) {
+      canvas.width = 0
+      canvas.height = 0
+    }
+  }
+  renderedPages.clear()
+
+  pages.value = pageRecords
+  await nextTick()
+  await renderWindow(_visiblePages.size ? [..._visiblePages] : [1])
+  refreshHighlights()
 }
 
 const renderPdf = async () => {
@@ -240,15 +309,25 @@ const renderPdf = async () => {
 const setupPageObserver = () => {
   pageObserver?.disconnect()
   pageObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const pageNumber = Number(entry.target?.dataset?.page)
+      if (!pageNumber) continue
+      if (entry.isIntersecting) _visiblePages.add(pageNumber)
+      else _visiblePages.delete(pageNumber)
+    }
+
     const best = entries
       .filter(entry => entry.isIntersecting)
       .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
-    const pageNumber = Number(best?.target?.dataset?.page)
-    if (pageNumber) emit('page-change', pageNumber)
+    const bestPage = Number(best?.target?.dataset?.page)
+    if (bestPage) emit('page-change', bestPage)
+
+    const visible = _visiblePages.size ? [..._visiblePages] : (bestPage ? [bestPage] : [1])
+    renderWindow(visible)
   }, {
     root: null,
-    rootMargin: '-48px 0px -120px 0px',
-    threshold: [0.1, 0.3, 0.5, 0.7],
+    rootMargin: '200px 0px 200px 0px',
+    threshold: [0, 0.1, 0.3, 0.5, 0.7],
   })
   for (const wrap of pageWraps.values()) pageObserver.observe(wrap)
 }
@@ -266,6 +345,7 @@ const getVisiblePage = () => {
 }
 
 const scrollToPage = (pageNumber, behavior = 'smooth', block = 'start') => {
+  renderPageIfNeeded(Number(pageNumber))
   pageWraps.get(Number(pageNumber))?.scrollIntoView({ behavior, block })
 }
 
@@ -274,6 +354,7 @@ const scrollToChunk = (chunkId, behavior = 'smooth') => {
   const viewportTransform = chunk ? viewportTransforms.get(chunk.page) : null
   if (!chunk || !viewportTransform) return
 
+  renderPageIfNeeded(chunk.page)
   const target = scrollTargetForChunk(props.manifest, chunk.id, viewportTransform)
   const pageWrap = pageWraps.get(chunk.page)
   if (!target || !pageWrap) return
@@ -288,7 +369,7 @@ onMounted(renderPdf)
 onUnmounted(() => pageObserver?.disconnect())
 
 watch(() => props.src, renderPdf)
-watch(() => props.zoom, renderPdf)
+watch(() => props.zoom, relayout)
 watch(() => props.manifest, refreshHighlights, { deep: true })
 watch(() => props.activeChunkId, refreshHighlights)
 watch(() => props.activeWord, updateWordHighlights)

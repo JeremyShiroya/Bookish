@@ -85,6 +85,23 @@ export function chunkSubRangeRects(manifest, chunkId, charStart, charEnd, viewpo
   return spansToRects(page, spans, viewportTransform)
 }
 
+export function pagesToRender(visiblePages, total, margin = 2) {
+  const safeTotal = Math.max(0, Number(total) || 0)
+  if (!safeTotal) return []
+  const safeMargin = Math.max(0, Number(margin) || 0)
+
+  const set = new Set()
+  for (const value of (visiblePages || [])) {
+    const page = Number(value)
+    if (!Number.isFinite(page)) continue
+    for (let i = page - safeMargin; i <= page + safeMargin; i += 1) {
+      if (i >= 1 && i <= safeTotal) set.add(i)
+    }
+  }
+
+  return [...set].sort((a, b) => a - b)
+}
+
 export function scrollTargetForChunk(manifest, chunkId, viewportTransform) {
   const chunk = chunkForId(manifest, chunkId)
   if (!chunk) return null

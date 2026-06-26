@@ -3,6 +3,7 @@ import {
   chunkHighlightRects,
   chunkSubRangeRects,
   itemSpanRect,
+  pagesToRender,
   scrollTargetForChunk,
 } from './usePdfGeometry.js'
 import { buildPdfManifest } from './usePdfManifest.js'
@@ -96,5 +97,21 @@ describe('PDF word sub-range geometry', () => {
 
   it('returns [] for an unknown chunk', () => {
     expect(chunkSubRangeRects(builtManifest, 999, 0, 5, vp)).toEqual([])
+  })
+})
+
+describe('pagesToRender', () => {
+  it('expands visible pages by the margin and clamps to range', () => {
+    expect(pagesToRender([1], 10, 2)).toEqual([1, 2, 3])
+    expect(pagesToRender([5], 10, 2)).toEqual([3, 4, 5, 6, 7])
+    expect(pagesToRender([10], 10, 2)).toEqual([8, 9, 10])
+  })
+
+  it('merges overlapping windows and dedupes', () => {
+    expect(pagesToRender([3, 4], 10, 1)).toEqual([2, 3, 4, 5])
+  })
+
+  it('returns [] when there are no pages', () => {
+    expect(pagesToRender([1], 0, 2)).toEqual([])
   })
 })
