@@ -646,6 +646,9 @@ function sanitizeHtml(html) {
 let _observer = null
 let _chunkEls = []
 let _activeEl = null
+let _ttsWordHighlight = null
+let _activeWordMap = null
+let _activeWordMapIdx = -1
 
 const normalizeForSearch = (value) => (value || '').replace(/\s+/g, ' ').trim()
 
@@ -795,6 +798,7 @@ function _buildChunkMap() {
   clearHtmlHighlight()
   unwrapTtsSpans(container)
   _chunkEls = []
+  _activeWordMapIdx = -1
 
   const { chunks, sectionCounts } = readableChunkData.value
   let offset = 0
@@ -834,6 +838,48 @@ function _highlightChunk(index) {
   // away, don't yank the viewport back — they can use "Jump to narration".
   const shouldFollow = !previousEl || _isNearViewport(previousEl) || _isNearViewport(el)
   if (shouldFollow) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+function _ensureWordHighlight() {
+  if (!import.meta.client || typeof Highlight === 'undefined' || !CSS?.highlights) return null
+  if (!_ttsWordHighlight) {
+    _ttsWordHighlight = new Highlight()
+    CSS.highlights.set('tts-word', _ttsWordHighlight)
+  }
+  return _ttsWordHighlight
+}
+
+function _updateEpubWordHighlight() {
+  const highlight = _ensureWordHighlight()
+  if (!highlight) return
+  highlight.clear()
+  if (isPdfBook.value) return
+
+  const chunkIdx = activeTtsChunkIndex.value
+  const range = activeWordRange.value
+  if (chunkIdx < 0 || !range) return
+
+  const el = _chunkEls[chunkIdx]
+  if (!el?.isConnected) return
+
+  if (_activeWordMapIdx !== chunkIdx || !_activeWordMap) {
+    _activeWordMap = buildTextIndex(el)
+    _activeWordMapIdx = chunkIdx
+  }
+
+  const map = _activeWordMap.map
+  const startPt = resolveRangePoint(map, range.start, 1)
+  const endPt = resolveRangePoint(map, range.end - 1, -1)
+  if (!startPt || !endPt) return
+
+  try {
+    const domRange = document.createRange()
+    domRange.setStart(startPt.node, startPt.offset)
+    domRange.setEnd(endPt.node, Math.min(endPt.node.nodeValue.length, endPt.offset + 1))
+    highlight.add(domRange)
+  } catch {
+    // Detached or overlapping range — leave only the sentence band.
+  }
 }
 
 async function ensurePdfToc(bookId) {
@@ -1097,6 +1143,10 @@ watch(activeTtsChunkIndex, (index) => {
   else _highlightChunk(index)
 })
 
+watch([activeTtsChunkIndex, ttsWordIdx], () => {
+  if (!isPdfBook.value) _updateEpubWordHighlight()
+})
+
 watch([currentPdfPage, currentChapterIdx], queueProgressSave)
 
 watch(tocOpen, async (open) => {
@@ -1129,6 +1179,9 @@ onUnmounted(async () => {
   if (_scrollRaf !== null) cancelAnimationFrame(_scrollRaf)
   if (_progressSaveTimer) clearTimeout(_progressSaveTimer)
   if (_observer) _observer.disconnect()
+
+  if (import.meta.client && CSS?.highlights) CSS.highlights.delete('tts-word')
+  _ttsWordHighlight = null
 
   if (!book.value) return
   await saveReadingProgress()

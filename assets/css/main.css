@@ -415,3 +415,10 @@ textarea {
     --layout-sidebar-width: 180px;
   }
 }
+
+/* Word-level read-aloud highlight (EPUB). Registered globally via the CSS
+   Custom Highlight API in the reader, so it cannot be Vue-scoped. */
+::highlight(tts-word) {
+  background-color: var(--color-reader-word-highlight);
+  border-radius: 2px;
+}
