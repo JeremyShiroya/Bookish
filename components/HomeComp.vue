@@ -19,141 +19,246 @@
     </EmptyState>
 
     <template v-else-if="initialized">
-      <section class="home-section">
-        <div class="section-header">
-          <h2 class="section-title">Recently Added</h2>
-          <NuxtLink to="/books" class="show-all-btn">
-            See all <i class="ri-arrow-right-s-line"></i>
-          </NuxtLink>
-        </div>
-        <div v-if="recentlyAddedBooks.length > 0" class="recent-grid">
-          <div
-            v-for="book in recentlyAddedBooks.slice(0, 3)"
-            :key="book.id"
-            class="recent-card"
-            @click="router.push(`/book/${book.id}`)"
+      <div class="mobile-home">
+        <header class="mobile-home-topbar">
+          <button
+            class="mobile-icon-btn"
+            type="button"
+            title="Open menu"
+            @click="mobileMenuOpen = true"
           >
-            <div class="recent-card-bg-container">
-              <div
-                class="recent-bg"
-                :style="{ backgroundImage: `url(${book.cover})` }"
-              ></div>
-              <div class="recent-bg-overlay"></div>
-            </div>
-            <img :src="book.cover" :alt="book.title" class="recent-cover" />
-            <div class="recent-info">
-              <h4 class="recent-title">{{ book.title }}</h4>
-              <p class="recent-meta">
-                {{ book.pages || "—" }} Pages • {{ book.format || "EPUB" }}
-              </p>
-            </div>
-            <button
-              class="recent-go-btn"
-              title="Listen"
-              @click.stop="handlePlay(book)"
-            >
-              <i class="ri-play-line"></i>
-            </button>
-          </div>
-        </div>
-        <EmptyState
-          v-else
-          title="Your library is clear"
-          description="Start building your digital library by uploading your first book."
-          icon="ri-folder-add-line"
-        >
-          <template #action>
-            <NuxtLink to="/books" class="add-btn">
-              <i class="ri-add-line"></i>
-              Add Book
-            </NuxtLink>
-          </template>
-        </EmptyState>
-      </section>
+            <i class="ri-menu-line"></i>
+          </button>
+          <button
+            class="mobile-icon-btn"
+            type="button"
+            title="Search books"
+            @click="router.push('/books')"
+          >
+            <i class="ri-search-line"></i>
+          </button>
+        </header>
 
-      <!-- Main Content Row: Popular Books and Your Authors -->
-      <div class="main-content-row">
-        <!-- Popular Books Column -->
-        <section class="popular-column">
-          <div class="section-header">
-            <h2 class="section-title">Popular Books</h2>
+        <div v-if="mobileMenuOpen" class="mobile-menu-panel">
+          <div class="mobile-menu-scrim" @click="mobileMenuOpen = false"></div>
+          <nav class="mobile-menu-sheet" aria-label="Mobile menu">
+            <button
+              class="mobile-menu-close"
+              type="button"
+              title="Close menu"
+              @click="mobileMenuOpen = false"
+            >
+              <i class="ri-close-line"></i>
+            </button>
+            <NuxtLink to="/" @click="mobileMenuOpen = false">Home</NuxtLink>
+            <NuxtLink to="/books" @click="mobileMenuOpen = false">Books</NuxtLink>
+            <NuxtLink to="/series" @click="mobileMenuOpen = false">Series</NuxtLink>
+            <NuxtLink to="/authors" @click="mobileMenuOpen = false">Authors</NuxtLink>
+            <NuxtLink to="/playlists" @click="mobileMenuOpen = false">Playlists</NuxtLink>
+            <NuxtLink to="/favourites" @click="mobileMenuOpen = false">Favourites</NuxtLink>
+          </nav>
+        </div>
+
+        <section class="mobile-home-section">
+          <h2 class="mobile-section-title">Continue Reading</h2>
+          <div v-if="continueReadingBooks.length > 0" class="continue-single">
+            <HomeContinueReadingCard
+              :book="continueReadingBooks[0]"
+              @open="openBook"
+            />
           </div>
-          <div v-if="popularBooks.length > 0" class="popular-grid">
-            <div
-              v-for="book in popularBooks"
+          <EmptyState
+            v-else
+            title="Your library is clear"
+            description="Start building your digital library by uploading your first book."
+            icon="ri-folder-add-line"
+          >
+            <template #action>
+              <NuxtLink to="/books" class="add-btn">
+                <i class="ri-add-line"></i>
+                Add Book
+              </NuxtLink>
+            </template>
+          </EmptyState>
+        </section>
+
+        <section class="mobile-home-section">
+          <div class="mobile-section-header">
+            <h2 class="mobile-section-title">Recently Added</h2>
+            <NuxtLink to="/books" class="mobile-see-all">
+              See all
+            </NuxtLink>
+          </div>
+          <div v-if="mobileRecentBooks.length > 0" class="book-grid">
+            <HomeBookRailCard
+              v-for="book in mobileRecentBooks"
               :key="book.id"
-              class="popular-card"
+              :book="book"
+              @open="openBook"
+            />
+          </div>
+        </section>
+
+        <section class="mobile-home-section mobile-series-section">
+          <div class="mobile-section-header">
+            <h2 class="mobile-section-title">Series</h2>
+            <NuxtLink to="/series" class="mobile-see-all">
+              See all
+            </NuxtLink>
+          </div>
+          <div v-if="mobileSeries.length > 0" class="series-list">
+            <HomeSeriesCard
+              v-for="series in mobileSeries"
+              :key="series.id"
+              :series="series"
+              @open="openSeries"
+            />
+          </div>
+          <EmptyState
+            v-else-if="books.length > 0"
+            title="No series yet"
+            description="Books with series metadata will appear here."
+            icon="ri-book-shelf-line"
+          />
+        </section>
+
+      </div>
+
+      <div class="desktop-home">
+        <section class="home-section">
+          <div class="section-header">
+            <h2 class="section-title">Recently Added</h2>
+            <NuxtLink to="/books" class="show-all-btn">
+              See all <i class="ri-arrow-right-s-line"></i>
+            </NuxtLink>
+          </div>
+          <div v-if="recentlyAddedBooks.length > 0" class="recent-grid">
+            <div
+              v-for="book in recentlyAddedBooks.slice(0, 3)"
+              :key="book.id"
+              class="recent-card"
               @click="router.push(`/book/${book.id}`)"
             >
-              <img :src="book.cover" :alt="book.title" class="popular-cover" />
-              <div class="popular-info">
-                <h4 class="popular-title">{{ book.title }}</h4>
-                <p class="popular-author">{{ book.author }}</p>
-                <div class="popular-rating" v-if="getGoodreadsRating(book)">
-                  <GoodreadsRatingDisplay :web-review="book.webReview" compact />
-                </div>
-                <p class="popular-blurb">{{ truncate(book.blurb, 90) }}</p>
+              <div class="recent-card-bg-container">
+                <div
+                  class="recent-bg"
+                  :style="{ backgroundImage: `url(${book.cover})` }"
+                ></div>
+                <div class="recent-bg-overlay"></div>
+              </div>
+              <img :src="book.cover" :alt="book.title" class="recent-cover" />
+              <div class="recent-info">
+                <h4 class="recent-title">{{ book.title }}</h4>
+                <p class="recent-meta">
+                  {{ book.pages || "-" }} Pages - {{ book.format || "EPUB" }}
+                </p>
               </div>
               <button
-                class="popular-play-btn"
+                class="recent-go-btn"
                 title="Listen"
                 @click.stop="handlePlay(book)"
               >
-                <i class="ri-play-fill"></i>
+                <i class="ri-play-line"></i>
               </button>
             </div>
           </div>
           <EmptyState
             v-else
-            title="No popular books"
-            description="Add and rate books to see your favorites here."
-            icon="ri-star-line"
-          />
+            title="Your library is clear"
+            description="Start building your digital library by uploading your first book."
+            icon="ri-folder-add-line"
+          >
+            <template #action>
+              <NuxtLink to="/books" class="add-btn">
+                <i class="ri-add-line"></i>
+                Add Book
+              </NuxtLink>
+            </template>
+          </EmptyState>
         </section>
 
-        <!-- Your Authors Column -->
-        <section class="your-authors-column">
-          <div class="section-header">
-            <h2 class="section-title">Your Authors</h2>
-          </div>
-          <div v-if="recentAuthors.length > 0" class="authors-list-card">
-            <div
-              v-for="author in recentAuthors"
-              :key="author.id"
-              class="author-list-item"
-              @click="router.push(`/author/${author.id}`)"
-            >
-              <div class="author-list-avatar">
-                <img
-                  v-if="author.image"
-                  :src="author.image"
-                  :alt="author.name"
-                />
-                <div v-else class="author-initial">
-                  {{ author.name.charAt(0) }}
+        <div class="main-content-row">
+          <section class="popular-column">
+            <div class="section-header">
+              <h2 class="section-title">Popular Books</h2>
+            </div>
+            <div v-if="popularBooks.length > 0" class="popular-grid">
+              <div
+                v-for="book in popularBooks"
+                :key="book.id"
+                class="popular-card"
+                @click="router.push(`/book/${book.id}`)"
+              >
+                <img :src="book.cover" :alt="book.title" class="popular-cover" />
+                <div class="popular-info">
+                  <h4 class="popular-title">{{ book.title }}</h4>
+                  <p class="popular-author">{{ book.author }}</p>
+                  <div class="popular-rating" v-if="getGoodreadsRating(book)">
+                    <GoodreadsRatingDisplay :web-review="book.webReview" compact />
+                  </div>
+                  <p class="popular-blurb">{{ truncate(book.blurb, 90) }}</p>
                 </div>
-              </div>
-              <div class="author-list-info">
-                <p class="author-list-name">{{ author.name }}</p>
-                <p class="author-list-count">
-                  {{ getAuthorBookCount(author.name) }} Books
-                </p>
+                <button
+                  class="popular-play-btn"
+                  title="Listen"
+                  @click.stop="handlePlay(book)"
+                >
+                  <i class="ri-play-fill"></i>
+                </button>
               </div>
             </div>
-          </div>
-          <EmptyState
-            v-else
-            title="No authors yet"
-            description="Your most read authors will appear here."
-            icon="ri-group-line"
-          />
-        </section>
+            <EmptyState
+              v-else
+              title="No popular books"
+              description="Add and rate books to see your favorites here."
+              icon="ri-star-line"
+            />
+          </section>
+
+          <section class="your-authors-column">
+            <div class="section-header">
+              <h2 class="section-title">Your Authors</h2>
+            </div>
+            <div v-if="recentAuthors.length > 0" class="authors-list-card">
+              <div
+                v-for="author in recentAuthors"
+                :key="author.id"
+                class="author-list-item"
+                @click="router.push(`/author/${author.id}`)"
+              >
+                <div class="author-list-avatar">
+                  <img
+                    v-if="author.image"
+                    :src="author.image"
+                    :alt="author.name"
+                  />
+                  <div v-else class="author-initial">
+                    {{ author.name.charAt(0) }}
+                  </div>
+                </div>
+                <div class="author-list-info">
+                  <p class="author-list-name">{{ author.name }}</p>
+                  <p class="author-list-count">
+                    {{ getAuthorBookCount(author.name) }} Books
+                  </p>
+                </div>
+              </div>
+            </div>
+            <EmptyState
+              v-else
+              title="No authors yet"
+              description="Your most read authors will appear here."
+              icon="ri-group-line"
+            />
+          </section>
+        </div>
       </div>
     </template>
   </div>
 </template>
 
 <script setup>
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import { getGoodreadsRating } from "~/composables/useGoodreadsRating";
@@ -168,6 +273,7 @@ const {
   recentlyAddedBooks,
   recentAuthors,
   popularBooks,
+  seriesList,
   loading,
   initialized,
   error,
@@ -175,9 +281,34 @@ const {
 } = useBooks();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const router = useRouter();
+const mobileMenuOpen = ref(false);
+
+const mobileRecentBooks = computed(() => (
+  recentlyAddedBooks.value.length > 0
+    ? recentlyAddedBooks.value.slice(0, 3)
+    : books.value.slice(0, 3)
+));
+
+const continueReadingBooks = computed(() => (
+  recentlyReadBooks.value.length > 0
+    ? recentlyReadBooks.value
+    : mobileRecentBooks.value
+));
+
+const mobileSeries = computed(() => seriesList.value.slice(0, 3));
+
+const openBook = (book) => {
+  if (!book?.id) return;
+  router.push(`/book/${book.id}`);
+};
+
+const openSeries = (series) => {
+  if (!series?.id) return;
+  router.push(`/serie/${series.id}`);
+};
 
 const handlePlay = (book) => {
-  if (ttsBook.value?.id === book.id && ttsStatus.value !== 'idle') {
+  if (ttsBook.value?.id === book.id && ttsStatus.value !== "idle") {
     toggleTTS();
     return;
   }
@@ -203,6 +334,14 @@ const truncate = (text, length) => {
 .home-container {
   padding: 0rem;
   margin: 0 auto;
+}
+
+.mobile-home {
+  display: none;
+}
+
+.desktop-home {
+  display: block;
 }
 
 .home-section {
@@ -401,13 +540,12 @@ const truncate = (text, length) => {
   font-family: inherit;
 }
 
-/* Main Content Layout */
 .main-content-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 4rem;
   margin-bottom: 6rem;
-  padding: 0 0.5rem; /* align with recent-grid padding */
+  padding: 0 0.5rem;
 }
 
 .popular-column {
@@ -418,7 +556,6 @@ const truncate = (text, length) => {
   grid-column: span 1;
 }
 
-/* Popular Books */
 .popular-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -515,16 +652,12 @@ const truncate = (text, length) => {
   background: var(--color-brand-primary-hover);
 }
 
-/* Your Authors */
 .authors-list-card {
-  /* background: var(--surface-color); */
   border-radius: 20px;
-  /* padding: 2rem 0; */
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   margin-top: 1.5rem;
-  /* box-shadow: var(--shadow-form-shell); */
 }
 
 .author-list-item {
@@ -584,22 +717,181 @@ const truncate = (text, length) => {
   margin: 0;
 }
 
+.home-loading {
+  padding: 0.5rem;
+}
+
 @media (max-width: 1024px) {
   .main-content-row {
     grid-template-columns: 1fr;
   }
+
   .recent-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 640px) {
-  .recent-grid {
-    grid-template-columns: minmax(0, 1fr);
+@media (max-width: 768px) {
+  .home-container {
+    width: 100%;
+  }
+
+  .desktop-home {
+    display: none;
+  }
+
+  .mobile-home {
+    display: block;
+    min-height: calc(100vh - 106px);
+    padding-bottom: 1rem;
+  }
+
+  .mobile-home-topbar {
+    display: flex;
+    height: 50px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .mobile-icon-btn {
+    display: inline-flex;
+    width: 34px;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #05080d;
+    cursor: pointer;
+    font-size: 1.72rem;
+    line-height: 1;
+  }
+
+  .mobile-icon-btn i {
+    line-height: 1;
+  }
+
+  .mobile-menu-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+  }
+
+  .mobile-menu-scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.28);
+  }
+
+  .mobile-menu-sheet {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    width: min(280px, 78vw);
+    height: 100%;
+    flex-direction: column;
+    gap: 2px;
+    padding: 18px;
+    background: var(--color-background-app);
+    box-shadow: 20px 0 40px rgba(15, 23, 42, 0.14);
+  }
+
+  .mobile-menu-sheet a,
+  .mobile-menu-close {
+    display: flex;
+    align-items: center;
+    min-height: 42px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-text-primary);
+    text-decoration: none;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+
+  .mobile-menu-sheet a {
+    padding: 0 10px;
+  }
+
+  .mobile-menu-sheet a.router-link-active {
+    background: var(--color-brand-primary-faint);
+    color: var(--color-brand-primary);
+  }
+
+  .mobile-menu-close {
+    width: 42px;
+    justify-content: center;
+    padding: 0;
+    margin-bottom: 10px;
+    font-size: 1.35rem;
+  }
+
+  .mobile-home-section {
+    margin-top: 22px;
+  }
+
+  .mobile-home-section:first-of-type {
+    margin-top: 0;
+  }
+
+  .mobile-section-title {
+    margin: 0;
+    color: #05080d;
+    font-size: 0.98rem;
+    line-height: 1.2;
+  }
+
+  .mobile-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 9px;
+  }
+
+  .mobile-section-header .mobile-section-title {
+    margin: 0;
+  }
+
+  .mobile-home-section > .mobile-section-title {
+    margin-bottom: 9px;
+  }
+
+  .mobile-see-all {
+    color: var(--color-brand-primary);
+    text-decoration: none;
+    font-size: 0.74rem;
+    line-height: 1;
+  }
+
+  .continue-single {
+    width: 100%;
+  }
+
+  .book-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .series-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .mobile-series-section {
+    margin-top: 19px;
   }
 }
 
-.home-loading {
-  padding: 0.5rem;
+@media (max-width: 360px) {
+  .book-grid {
+    gap: 10px;
+  }
 }
 </style>

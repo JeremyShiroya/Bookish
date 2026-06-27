@@ -6,6 +6,7 @@
         <slot />
       </div>
       <PlayingBar />
+      <MobileBottomNav />
     </main>
   </div>
 </template>
@@ -28,9 +29,18 @@
 }
 
 @media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+  }
+
   .page-container {
-    padding: 1.5rem;
-    padding-bottom: 110px;
+    padding: 1.125rem;
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+
+  :deep(.sidebar),
+  :deep(.playing-bar) {
+    display: none;
   }
 }
 </style>
