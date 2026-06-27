@@ -144,7 +144,7 @@ export const useBooks = () => {
         const existing = books.value.find(b => (
           b.author === authorName
           && b.authorBio
-          && b.authorDetailsVersion === 3
+          && b.authorDetailsVersion === 6
         ))
         if (existing) return true
       }
@@ -160,7 +160,7 @@ export const useBooks = () => {
       const hasAnything = details && (
         details.bio || details.birthDate || details.nationality ||
         details.validatedBooksCount !== null || details.validatedSeriesCount !== null ||
-        details.notableWorks?.length || details.spouseName
+        details.notableWorks?.length || details.spouseName || details.aiRejected
       )
       if (!hasAnything) return false
       const store = useLibraryStore()

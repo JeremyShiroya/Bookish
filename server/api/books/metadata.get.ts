@@ -6,6 +6,7 @@ import { searchGoodreads, scrapeGoodreadsBook, type GoodreadsBookDetails, type G
 import { searchOpenLibrary, type OLResult } from '../../utils/openLibraryApi';
 import { buildMetadataResults, type MetadataSource } from '../../utils/metadataAggregator';
 import { searchKnownPublisherSites, searchPublisherMetadata, type PublisherMetadataResult } from '../../utils/publisherMetadata';
+import { verifyBookMetadataResults } from '../../utils/aiMetadataVerifier';
 
 function firstValue<T>(...values: Array<T | null | undefined>) {
   return values.find((value) => value !== null && value !== undefined && value !== '') ?? null;
@@ -384,7 +385,9 @@ async function getMetadataResults(
     detail: results.length ? `Prepared ${results.length} metadata option${results.length === 1 ? '' : 's'}` : 'No metadata options could be prepared',
   });
 
-  return results;
+  const verifiedResults = await verifyBookMetadataResults(title, author, results);
+
+  return verifiedResults;
 }
 
 export default defineEventHandler(async (event) => {

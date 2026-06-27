@@ -13,13 +13,15 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import BookGroupDetail from '~/components/BookGroupDetail.vue';
+import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch';
 import { useBooks } from '~/composables/useBooks';
-import { formatSeriesCollectionProgress } from '~/composables/useSeriesProgress';
+import { ensureSeriesTotal, formatSeriesCollectionProgress } from '~/composables/useSeriesProgress';
 
 const route = useRoute();
-const { seriesList } = useBooks();
+const { seriesList, updateBook } = useBooks();
+const seriesTotalRefreshKey = ref('');
 
 const seriesName = computed(() => {
   try {
@@ -56,4 +58,25 @@ const derivedSeriesTotal = computed(() => {
 const seriesCountLabel = computed(() => (
   formatSeriesCollectionProgress(seriesBooks.value.length, derivedSeriesTotal.value)
 ));
+
+watch(seriesBooks, async (books) => {
+  if (!import.meta.client || !books.length || !seriesName.value) return;
+  const refreshKey = [
+    seriesName.value,
+    ...books.map(book => `${book.id || book.title}:${book.seriesTotal || ''}`),
+  ].join('|');
+  if (seriesTotalRefreshKey.value === refreshKey) return;
+  seriesTotalRefreshKey.value = refreshKey;
+
+  try {
+    await ensureSeriesTotal({
+      seriesName: seriesName.value,
+      books,
+      fetchMetadataResults: fetchBookMetadataResults,
+      updateBook,
+    });
+  } catch (error) {
+    console.warn('[series detail] Failed to verify series total:', error);
+  }
+}, { immediate: true });
 </script>

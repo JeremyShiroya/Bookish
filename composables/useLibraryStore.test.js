@@ -53,6 +53,43 @@ describe('useLibraryStore — books', () => {
     expect(jkrBooks.every(b => b.authorImage === 'https://example.com/jkr.jpg')).toBe(true)
     expect(otherBooks[0].authorImage).toBeNull()
   })
+
+  it('updateAuthorDetails can clear stale author profile fields', async () => {
+    const { addBook, updateAuthorDetails, getBooks } = useLibraryStore()
+    await addBook({
+      title: 'The Shining',
+      author: 'Stephen King',
+      authorBio: 'Wrong cached biography',
+      authorNationality: 'Wrong place',
+      authorNotableWorks: ['Wrong book'],
+      authorLatestWork: 'Wrong latest work',
+      authorDetailsVersion: 3,
+    })
+
+    await updateAuthorDetails('Stephen King', {
+      bio: null,
+      birthDate: null,
+      deathDate: null,
+      nationality: null,
+      notableWorks: [],
+      validatedBooksCount: null,
+      validatedSeriesCount: null,
+      latestWork: null,
+      spouseName: null,
+      hasChildren: null,
+      childrenCount: null,
+      source: 'none',
+      version: 6,
+      aiRejected: true,
+    })
+
+    const [book] = await getBooks()
+    expect(book.authorBio).toBeNull()
+    expect(book.authorNationality).toBeNull()
+    expect(book.authorNotableWorks).toEqual([])
+    expect(book.authorLatestWork).toBeNull()
+    expect(book.authorDetailsVersion).toBe(6)
+  })
 })
 
 describe('useLibraryStore — collections', () => {

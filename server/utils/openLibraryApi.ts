@@ -27,6 +27,12 @@ const openLibraryHeaders = {
   'Accept': 'application/json',
 };
 
+const OPEN_LIBRARY_KEY_RE = /^\/(?:works|books)\/OL\d+[WME]$/;
+
+function safeOpenLibraryKey(value: unknown): string | null {
+  return typeof value === 'string' && OPEN_LIBRARY_KEY_RE.test(value) ? value : null;
+}
+
 function normalizeSubjectGenre(subject: string) {
   const cleaned = subject.replace(/\s+/g, ' ').trim();
   const lower = cleaned.toLowerCase();
@@ -105,16 +111,19 @@ export async function searchOpenLibrary(title: string, author?: string): Promise
       docs.slice(0, 8).map(async (doc): Promise<OLResult> => {
         let blurb: string | null = null;
         let detailSubjects: string[] = [];
-        try {
-          const detailRes = await fetch(`https://openlibrary.org${doc.key}.json`, { headers: openLibraryHeaders });
-          if (detailRes.ok) {
-            const detail = await detailRes.json();
-            blurb = typeof detail.description === 'string'
-              ? detail.description
-              : detail.description?.value ?? null;
-            detailSubjects = Array.isArray(detail.subjects) ? detail.subjects : [];
-          }
-        } catch {}
+        const safeKey = safeOpenLibraryKey(doc.key);
+        if (safeKey) {
+          try {
+            const detailRes = await fetch(`https://openlibrary.org${safeKey}.json`, { headers: openLibraryHeaders });
+            if (detailRes.ok) {
+              const detail = await detailRes.json();
+              blurb = typeof detail.description === 'string'
+                ? detail.description
+                : detail.description?.value ?? null;
+              detailSubjects = Array.isArray(detail.subjects) ? detail.subjects : [];
+            }
+          } catch {}
+        }
 
         const isbn13s: string[] = doc.isbn
           ? (doc.isbn as string[]).filter((s: string) => s.length === 13)

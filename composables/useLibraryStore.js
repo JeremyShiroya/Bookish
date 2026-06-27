@@ -210,18 +210,18 @@ export const useLibraryStore = () => {
           for (const book of e.target.result) {
             if (book.author === authorName) {
               const patch = {}
-              if (details.bio) patch.authorBio = details.bio
+              if (details.bio !== undefined) patch.authorBio = details.bio
               if (details.birthDate !== undefined) patch.authorBirthDate = details.birthDate
               if (details.deathDate !== undefined) patch.authorDeathDate = details.deathDate
-              if (details.nationality) patch.authorNationality = details.nationality
-              if (details.notableWorks?.length) patch.authorNotableWorks = details.notableWorks
+              if (details.nationality !== undefined) patch.authorNationality = details.nationality
+              if (details.notableWorks !== undefined) patch.authorNotableWorks = details.notableWorks
               if (details.validatedBooksCount !== undefined) {
                 patch.authorValidatedBooksCount = details.validatedBooksCount
               }
               if (details.validatedSeriesCount !== undefined) {
                 patch.authorValidatedSeriesCount = details.validatedSeriesCount
               }
-              if (details.latestWork) patch.authorLatestWork = details.latestWork
+              if (details.latestWork !== undefined) patch.authorLatestWork = details.latestWork
               if (details.spouseName !== undefined) patch.authorSpouseName = details.spouseName
               if (details.hasChildren !== undefined) patch.authorHasChildren = details.hasChildren
               if (details.childrenCount !== undefined) patch.authorChildrenCount = details.childrenCount

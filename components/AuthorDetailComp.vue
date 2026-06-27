@@ -306,7 +306,7 @@ watchEffect(() => {
 const detailsFetchedFor = ref(null)
 watch(author, async (current) => {
   if (!current?.name || detailsFetchedFor.value === current.name) return
-  const needsFetch = !current.bio || !hasAnyDetail.value || authorDetails.value.version !== 3
+  const needsFetch = !current.bio || !hasAnyDetail.value || authorDetails.value.version !== 5
   if (!needsFetch) return
   detailsFetchedFor.value = current.name
   bioLoading.value = true

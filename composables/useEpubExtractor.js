@@ -1,5 +1,6 @@
 import JSZip from 'jszip'
 import { isRenderableSection } from '~/composables/useTTS'
+import { sanitizeBookHtml } from '~/composables/useHtmlSanitizer'
 
 function parseXml(text) {
   return new DOMParser().parseFromString(text, 'application/xml')
@@ -141,6 +142,9 @@ export async function extractEpub(file) {
     // ── 1. Locate OPF ──────────────────────────────────────────────────────
     const containerXml = await zip.file('META-INF/container.xml').async('string')
     const opfPath = parseXml(containerXml).querySelector('rootfile').getAttribute('full-path')
+    if (!opfPath || opfPath.includes('..')) {
+      throw new Error('Invalid EPUB: suspicious OPF path')
+    }
     const opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : ''
 
     // ── 2. Parse OPF manifest ──────────────────────────────────────────────
@@ -296,6 +300,7 @@ export async function extractEpub(file) {
           const src = img.getAttribute('src')
           if (!src || src.startsWith('data:') || /^https?:/.test(src)) return
           const resolved = resolvePath(zipPath, decodeURIComponent(src))
+          if (resolved.includes('..')) return
           const url = imageMap[resolved] ?? imageMap[opfDir + decodeURIComponent(src)]
           if (url) img.setAttribute('src', url)
           // No url found → leave as broken-img placeholder (doesn't cause errors)
@@ -307,6 +312,7 @@ export async function extractEpub(file) {
             const src = img.getAttribute(attr)
             if (!src || src.startsWith('data:') || /^https?:/.test(src)) continue
             const resolved = resolvePath(zipPath, decodeURIComponent(src))
+            if (resolved.includes('..')) continue
             const url = imageMap[resolved]
             if (url) { img.setAttribute(attr, url); break }
           }
@@ -326,7 +332,7 @@ export async function extractEpub(file) {
           if (href && !/^(https?:|mailto:)/.test(href)) a.removeAttribute('href')
         })
 
-        return body.innerHTML
+        return sanitizeBookHtml(body.innerHTML)
       })
     )
 

@@ -827,6 +827,11 @@ export async function searchGoodreads(title: string, author?: string): Promise<G
 }
 
 export async function scrapeGoodreadsBook(bookUrl: string, seed?: Partial<GoodreadsSearchResult>): Promise<GoodreadsBookDetails | null> {
+  if (!/^https:\/\/(?:www\.)?goodreads\.com\//i.test(bookUrl)) {
+    console.warn('scrapeGoodreadsBook: rejected non-Goodreads URL', bookUrl);
+    return null;
+  }
+
   try {
     const response = await fetch(bookUrl, { headers });
     if (!response.ok) return null;

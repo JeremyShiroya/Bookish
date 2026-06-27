@@ -104,9 +104,21 @@ Create a `.env` file in the project root:
 
 ```env
 DATABASE_URL=postgresql://<user>:<password>@<host>/<database>?sslmode=require
+
+# Optional: AI verification for fetched metadata and author details
+# BOOKISH_AI_PROVIDER=gemini
+# GEMINI_API_KEY=<your-google-ai-studio-key>
+# GEMINI_MODEL=gemini-2.5-flash
+
+# Or use Groq instead
+# BOOKISH_AI_PROVIDER=groq
+# GROQ_API_KEY=<your-groq-key>
+# GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
 Get your connection string from the [Neon Console](https://console.neon.tech) under **Connection Details → Connection string**.
+
+AI verification is optional. If no AI key is configured, Bookish still runs the normal metadata pipeline and applies local cleanup for obvious bad fields such as title/byline text being misread as a series.
 
 ### 4. Push the database schema
 

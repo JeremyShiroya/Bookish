@@ -1,5 +1,10 @@
 import { defineEventHandler, getQuery, createError } from 'h3'
-import { extractValidatedAuthorTotals, selectAuthorCandidate } from '../../utils/authorEnrichment'
+import {
+  extractAuthorBibliographySummary,
+  extractAuthorLeadFacts,
+  selectAuthorCandidate,
+} from '../../utils/authorEnrichment'
+import { verifyAuthorDetails } from '../../utils/aiAuthorVerifier'
 
 const JSON_HEADERS = {
   'User-Agent': 'Bookish/1.0 (author info lookup; contact: local-app)',
@@ -20,6 +25,10 @@ interface AuthorDetails {
   childrenCount: number | null
   source: string
   version: number
+  aiVerified?: boolean
+  aiRejected?: boolean
+  aiProvider?: string
+  aiWarnings?: string[]
 }
 
 async function fetchWikidataDetails(name: string): Promise<Partial<AuthorDetails> | null> {
@@ -95,6 +104,7 @@ async function fetchWikipediaBio(
   knownBooks: string[],
 ): Promise<{
   bio: string
+  birthDate: string | null
   notableWorks: string[]
   latestWork: string | null
   validatedBooksCount: number | null
@@ -120,6 +130,7 @@ async function fetchWikipediaBio(
       // Try to get notable works from the full page
       let notableWorks: string[] = []
       let latestWork: string | null = null
+      let birthDate: string | null = null
       let validatedBooksCount: number | null = null
       let validatedSeriesCount: number | null = null
       try {
@@ -129,9 +140,16 @@ async function fetchWikipediaBio(
         )
         const page = Object.values(pageRes.query?.pages || {})[0] as any
         const wikitext = page?.revisions?.[0]?.slots?.main?.['*'] || ''
-        const bibliography = extractValidatedAuthorTotals(wikitext)
-        validatedBooksCount = bibliography.fullLengthBooks
+        const leadFacts = extractAuthorLeadFacts(wikitext)
+        const bibliography = extractAuthorBibliographySummary(wikitext)
+        birthDate = leadFacts.birthDate
+        const countCandidates = [
+          bibliography.fullLengthBooks,
+          leadFacts.minimumFullLengthBooks,
+        ].filter((value): value is number => Number.isSafeInteger(value) && value > 0)
+        validatedBooksCount = countCandidates.length ? Math.max(...countCandidates) : null
         validatedSeriesCount = bibliography.series
+        latestWork = bibliography.latestWork
         // Extract notable works from the infobox. The value often spans
         // multiple lines and is wrapped in {{plainlist}}/{{flatlist}} templates,
         // so capture until the next infobox parameter and pull link/italic titles.
@@ -157,11 +175,14 @@ async function fetchWikipediaBio(
             })
             .slice(0, 6)
         }
+        if (!notableWorks.length) {
+          notableWorks = leadFacts.notableWorks
+        }
       } catch {}
 
-      latestWork = notableWorks.length > 0 ? notableWorks[notableWorks.length - 1] : null
       return {
         bio: bio.slice(0, 600),
+        birthDate,
         notableWorks,
         latestWork,
         validatedBooksCount,
@@ -242,35 +263,35 @@ export default defineEventHandler(async (event) => {
     const openLib = openLibResult.status === 'fulfilled' ? openLibResult.value : null
 
     const bio = wiki?.bio || openLib?.bio || null
-    // Wikipedia infoboxes often omit notable_works — fall back to the
+    // Wikipedia infoboxes often omit notable_works; fall back to the
     // author's most popular work from Open Library so the field still fills.
     const notableWorks = wiki?.notableWorks?.length
       ? wiki.notableWorks
       : (openLib?.topWork ? [openLib.topWork] : [])
     const details: AuthorDetails = {
       bio,
-      birthDate: wikidata?.birthDate || null,
+      birthDate: wikidata?.birthDate || wiki?.birthDate || null,
       deathDate: wikidata?.deathDate || null,
       nationality: wikidata?.nationality || null,
       notableWorks,
       validatedBooksCount: wiki?.validatedBooksCount ?? null,
       validatedSeriesCount: wiki?.validatedSeriesCount ?? null,
-      latestWork: wiki?.latestWork || notableWorks[notableWorks.length - 1] || null,
+      latestWork: wiki?.latestWork || null,
       spouseName: wikidata?.spouseName || null,
       hasChildren: wikidata?.hasChildren || null,
       childrenCount: wikidata?.childrenCount || null,
       source: bio ? (wiki?.bio ? 'wikipedia' : 'openlibrary') : 'none',
-      version: 3,
+      version: 6,
     }
 
-    return details
+    return await verifyAuthorDetails(name, knownBooks, details)
   } catch (error: any) {
     console.error('[Author Bio] Failed:', error)
     return {
       bio: null, birthDate: null, deathDate: null, nationality: null,
       notableWorks: [], validatedBooksCount: null, validatedSeriesCount: null, latestWork: null,
       spouseName: null, hasChildren: null, childrenCount: null, source: 'none',
-      version: 3,
+      version: 6,
     }
   }
 })

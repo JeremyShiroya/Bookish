@@ -381,4 +381,13 @@ describe('goodreadsScraper parsing helpers', () => {
       seriesTotal: '6',
     });
   });
+
+  it('rejects non-Goodreads URLs before scraping book details', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      throw new Error('fetch should not be called');
+    });
+
+    await expect(scrapeGoodreadsBook('https://example.com/book/show/1')).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

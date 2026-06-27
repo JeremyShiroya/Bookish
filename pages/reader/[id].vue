@@ -200,6 +200,7 @@ import { useBooks } from '~/composables/useBooks'
 import { isRenderableSection, buildReadableChunks, useTTS } from '~/composables/useTTS'
 import { useBookStorage } from '~/composables/useBookStorage'
 import { useBookishSettings } from '~/composables/useBookishSettings'
+import { sanitizeBookHtml } from '~/composables/useHtmlSanitizer'
 import {
   extractPdfContentFromSource,
   extractPdfTocFromSource,
@@ -627,24 +628,7 @@ function onKeydown(event) {
 }
 
 function sanitizeHtml(html) {
-  if (!html) return ''
-  if (!import.meta.client) return html
-
-  const div = document.createElement('div')
-  div.innerHTML = html
-  const blocked = ['script', 'iframe', 'object', 'embed', 'form', 'meta', 'link', 'base']
-  blocked.forEach(tag => div.querySelectorAll(tag).forEach(el => el.remove()))
-  div.querySelectorAll('*').forEach(el => {
-    Array.from(el.attributes).forEach(attr => {
-      if (attr.name.startsWith('on')) {
-        el.removeAttribute(attr.name)
-      } else if (['href', 'src', 'action', 'formaction'].includes(attr.name)) {
-        const value = attr.value.trim().toLowerCase().replace(/\s/g, '')
-        if (value.startsWith('javascript:')) el.removeAttribute(attr.name)
-      }
-    })
-  })
-  return div.innerHTML
+  return sanitizeBookHtml(html)
 }
 
 let _observer = null

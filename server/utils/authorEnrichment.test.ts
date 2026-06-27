@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  extractAuthorBibliographySummary,
+  extractAuthorLeadFacts,
   countDistinctAuthorSeries,
   extractValidatedAuthorTotals,
   selectAuthorCandidate,
@@ -86,6 +88,46 @@ describe('author enrichment helpers', () => {
     expect(extractValidatedAuthorTotals('== Biography ==\nKarin is an author.')).toEqual({
       fullLengthBooks: null,
       series: null,
+    })
+  })
+
+  it('extracts birth date and minimum novel count from author lead text', () => {
+    expect(extractAuthorLeadFacts(`
+{{Short description|American crime writer (born 1971)}}
+{{Infobox writer
+| birth_date = {{Birth date and age|1971|1|6}}
+}}
+'''Karin Slaughter''' (born January 6, 1971) is an American crime writer.
+She is the author of more than twenty-five novels, including ''Cop Town'', ''Pretty Girls'' and ''False Witness''.
+    `)).toEqual({
+      birthDate: '6 Jan 1971',
+      minimumFullLengthBooks: 26,
+      notableWorks: ['Cop Town', 'Pretty Girls', 'False Witness'],
+    })
+  })
+
+  it('summarizes dated full-length bibliography sections without short stories', () => {
+    expect(extractAuthorBibliographySummary(`
+==Writing==
+===North Falls series (2025 to present)===
+*''We Are All Guilty Here'', 2025<ref>{{cite web|website=[[Amazon (company)|Amazon]]}}</ref>
+*''The Secrets We Hide'', 2026
+===Will Trent series (2006 to present)===
+*''Triptych'', 2006
+*''This is Why We Lied'', 2024
+===Grant County series (2001 to 2007)===
+* ''Blindsighted'', 2001
+* ''Kisscut'', 2002
+===Standalone Novels===
+*''Cop Town'', 2014
+*''Girl, Forgotten'', 2022
+===Short Stories and Novellas===
+*''Cleaning the Gold'', 2019
+==References==
+    `, 2025)).toEqual({
+      fullLengthBooks: 7,
+      series: 3,
+      latestWork: 'We Are All Guilty Here',
     })
   })
 })
