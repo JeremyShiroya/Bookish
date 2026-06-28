@@ -1,10 +1,12 @@
 <template>
   <button class="continue-card" type="button" @click="$emit('open', book)">
-    <span
-      class="continue-bg"
-      :style="book.cover ? { backgroundImage: `url(${book.cover})` } : {}"
-    ></span>
-    <span class="continue-overlay"></span>
+    <span class="continue-card-bg-container">
+      <span
+        class="continue-bg"
+        :style="book.cover ? { backgroundImage: `url(${book.cover})` } : {}"
+      ></span>
+      <span class="continue-overlay"></span>
+    </span>
     <span class="continue-cover-wrap">
       <img
         v-if="book.cover"
@@ -16,14 +18,10 @@
     </span>
     <span class="continue-info">
       <span class="continue-title">{{ book.title }}</span>
-      <span class="continue-meta">{{ book.author || "Unknown author" }} · {{ bookYear }}</span>
-      <span class="continue-progress-track">
-        <span class="continue-progress-fill" :style="{ width: `${progress}%` }"></span>
-      </span>
-      <span class="continue-stats">
-        <span>{{ progress }}% complete</span>
-        <span>Page {{ currentPage }} of {{ totalPages }}</span>
-      </span>
+      <span class="continue-meta">{{ totalPagesLabel }} Pages - {{ bookFormat }}</span>
+    </span>
+    <span class="continue-play" title="Listen" aria-hidden="true">
+      <i class="ri-play-line"></i>
     </span>
   </button>
 </template>
@@ -40,61 +38,81 @@ const props = defineProps({
 
 defineEmits(["open"]);
 
-const progress = computed(() => Math.max(0, Math.min(100, Math.round(Number(props.book.progress) || 0))));
-const totalPages = computed(() => Math.max(1, Math.round(Number(props.book.pages) || 1)));
-const currentPage = computed(() => Math.max(1, Math.min(totalPages.value, Math.round((progress.value / 100) * totalPages.value) || 1)));
-const bookYear = computed(() => props.book.publishYear || props.book.publish_year || "2020");
+const totalPagesLabel = computed(() => props.book.pages || "-");
+const bookFormat = computed(() => props.book.format || "EPUB");
 const bookInitial = computed(() => props.book.title?.trim()?.charAt(0)?.toUpperCase() || "?");
 </script>
 
 <style scoped>
 .continue-card {
   position: relative;
-  display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  gap: 14px;
   width: 100%;
   min-width: 0;
-  height: 94px;
-  padding: 11px 16px 11px 12px;
+  height: 130px;
+  margin-top: 0;
+  padding: 0;
   overflow: hidden;
   border: 0;
-  border-radius: 15px;
+  border-radius: 16px;
+  background: transparent;
   color: var(--color-text-on-brand);
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.13);
+  box-shadow: none;
+  z-index: 1;
+}
+
+.continue-card-bg-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 16px;
+  z-index: -1;
 }
 
 .continue-bg,
 .continue-overlay {
   position: absolute;
-  inset: 0;
 }
 
 .continue-bg {
-  background: #233647;
+  top: -20px;
+  left: -20px;
+  right: -20px;
+  bottom: -20px;
+  background: linear-gradient(100deg, #5b5965 0%, #7e475f 54%, #8a8990 100%);
   background-size: cover;
   background-position: center;
-  filter: blur(18px) saturate(1.25);
+  filter: blur(25px) saturate(150%);
   transform: scale(1.2);
 }
 
 .continue-overlay {
+  inset: 0;
   background:
-    linear-gradient(90deg, rgba(13, 27, 38, 0.9), rgba(28, 47, 60, 0.64)),
-    rgba(13, 27, 38, 0.5);
+    linear-gradient(
+      135deg,
+      var(--color-background-overlay-strong) 0%,
+      var(--color-background-overlay-faint) 100%
+    ),
+    rgba(73, 69, 80, 0.18);
 }
 
 .continue-cover-wrap {
-  position: relative;
+  position: absolute;
+  top: 10px;
+  left: 15px;
   z-index: 1;
-  width: 56px;
-  height: 70px;
+  width: 72px;
+  height: 110px;
   overflow: hidden;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  box-shadow: none;
 }
 
 .continue-cover {
@@ -115,7 +133,13 @@ const bookInitial = computed(() => props.book.title?.trim()?.charAt(0)?.toUpperC
 .continue-info {
   position: relative;
   z-index: 1;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
   min-width: 0;
+  margin-left: 104px;
+  padding-right: 50px;
 }
 
 .continue-title,
@@ -127,40 +151,70 @@ const bookInitial = computed(() => props.book.title?.trim()?.charAt(0)?.toUpperC
 }
 
 .continue-title {
-  font-size: 1rem;
-  line-height: 1.1;
+  display: -webkit-box;
+  margin: 0 0 0.5rem;
+  overflow: hidden;
+  color: var(--color-text-on-brand);
+  font-size: 1.1rem;
+  line-height: 1.3;
+  text-shadow: var(--shadow-text-on-image);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
 }
 
 .continue-meta {
-  margin-top: 4px;
+  margin: 0;
   color: var(--color-text-on-image-secondary);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
+  font-weight: 400;
 }
 
-.continue-progress-track {
-  display: block;
-  height: 5px;
-  margin-top: 9px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.84);
-}
-
-.continue-progress-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--gradient-library-progress);
-}
-
-.continue-stats {
+.continue-play {
+  position: absolute;
+  top: 50%;
+  right: 15px;
+  z-index: 1;
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 7px;
-  color: var(--color-text-on-image-secondary);
-  font-size: 0.68rem;
-  line-height: 1;
-  white-space: nowrap;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--color-border-on-image-strong);
+  border-radius: 50%;
+  background: var(--color-surface-on-image-soft);
+  color: var(--color-text-on-brand);
+  font-size: 1rem;
+  transform: translateY(-50%);
+  transition: all 0.3s ease;
+}
+
+.continue-card:hover .continue-play {
+  background: var(--color-surface-on-image-hover);
+  border-color: var(--color-text-on-image-secondary);
+  transform: translateY(-50%) scale(1.05);
+}
+
+@media (max-width: 360px) {
+  .continue-card {
+    height: 124px;
+  }
+
+  .continue-cover-wrap {
+    top: 10px;
+    left: 13px;
+    width: 68px;
+    height: 104px;
+  }
+
+  .continue-info {
+    margin-left: 94px;
+    padding-right: 46px;
+  }
+
+  .continue-title {
+    font-size: 1rem;
+  }
 }
 </style>

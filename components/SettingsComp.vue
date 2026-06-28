@@ -710,7 +710,7 @@ onMounted(refreshStorageSummary)
   min-height: 24px;
   padding: 0 0.6rem;
   border-radius: 999px;
-  background: var(--color-brand-primary-soft);
+  background: var(--color-surface-hover);
   color: var(--color-brand-primary-hover);
   font-size: 0.74rem;
   margin-bottom: 0.75rem;

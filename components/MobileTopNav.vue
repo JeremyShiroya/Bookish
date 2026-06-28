@@ -1,9 +1,10 @@
 <template>
   <header class="mobile-top-nav">
-    <div class="streak-pill" title="Reading streak">
+    <div v-if="isHomePage" class="streak-pill" title="Reading streak">
       <i class="ri-fire-line"></i>
       <span>{{ streakCount }}</span>
     </div>
+    <h1 v-else class="mobile-page-title">{{ pageTitle }}</h1>
 
     <button
       class="mobile-menu-button"
@@ -38,11 +39,35 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useStreak } from '~/composables/useStreak'
 
 const menuOpen = ref(false)
+const route = useRoute()
 const { streakCount } = useStreak()
+
+const pageTitles = {
+  '/books': 'Books',
+  '/series': 'Series',
+  '/authors': 'Authors',
+  '/playlists': 'Playlists',
+  '/favourites': 'Favourites',
+  '/settings': 'Settings',
+  '/add': 'Add Book',
+  '/collections': 'Collections',
+  '/genres': 'Genres',
+}
+
+const isHomePage = computed(() => route.path === '/')
+const pageTitle = computed(() => {
+  if (pageTitles[route.path]) return pageTitles[route.path]
+  if (route.path.startsWith('/book/')) return 'Book'
+  if (route.path.startsWith('/author/')) return 'Author'
+  if (route.path.startsWith('/series/') || route.path.startsWith('/serie/')) return 'Series'
+  if (route.path.startsWith('/playlist/')) return 'Playlist'
+  if (route.path.startsWith('/edit/')) return 'Edit Book'
+  return 'Bookish'
+})
 </script>
 
 <style scoped>
@@ -56,7 +81,7 @@ const { streakCount } = useStreak()
   height: 58px;
   align-items: center;
   justify-content: space-between;
-  padding: calc(10px + env(safe-area-inset-top)) 22px 8px;
+  padding: calc(10px + env(safe-area-inset-top)) 10px 8px;
   background: var(--color-background-app);
 }
 
@@ -72,6 +97,17 @@ const { streakCount } = useStreak()
 
 .streak-pill i {
   font-size: 1.05rem;
+}
+
+.mobile-page-title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 1.08rem;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-menu-button,

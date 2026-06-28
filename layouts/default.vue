@@ -1,8 +1,8 @@
 <template>
   <div class="app-layout">
     <Sidebar />
-    <main class="main-content" :class="{ 'no-mobile-top-nav': hideMobileTopNav }">
-      <MobileTopNav v-if="!hideMobileTopNav" />
+    <main class="main-content">
+      <MobileTopNav />
       <div class="page-container">
         <slot />
       </div>
@@ -11,14 +11,6 @@
     </main>
   </div>
 </template>
-
-<script setup>
-const route = useRoute()
-
-const hideMobileTopNav = computed(() => (
-  route.path === '/books' || route.path.startsWith('/book/')
-))
-</script>
 
 <style scoped>
 .app-layout {
@@ -43,12 +35,8 @@ const hideMobileTopNav = computed(() => (
   }
 
   .page-container {
-    padding: calc(4.25rem + env(safe-area-inset-top)) 1.125rem 1.125rem;
+    padding: calc(4.25rem + env(safe-area-inset-top)) 10px 1.125rem;
     padding-bottom: calc(88px + env(safe-area-inset-bottom));
-  }
-
-  .main-content.no-mobile-top-nav .page-container {
-    padding-top: 1.125rem;
   }
 
   :deep(.sidebar),

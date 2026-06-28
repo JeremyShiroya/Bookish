@@ -231,13 +231,18 @@
                   <i class="ri-list-unordered"></i>
                 </button>
               </div>
+
+              <button class="add-book-btn mobile-add-book-btn" @click="router.push('/add')">
+                <i class="ri-add-line"></i>
+                Add Book
+              </button>
             </div>
           </div>
 
         <!-- Grid View -->
         <div v-if="viewMode === 'grid'" class="books-grid">
           <LibraryBookCard
-            v-for="book in paginatedBooks"
+            v-for="book in displayedBooks"
             :key="book.id"
             :book="book"
             :active="isBookActive(book)"
@@ -253,7 +258,7 @@
         <template v-else>
           <div class="mobile-table-card-list">
             <LibraryBookCard
-              v-for="book in paginatedBooks"
+              v-for="book in displayedBooks"
               :key="book.id"
               class="mobile-list-book-card"
               :book="book"
@@ -280,7 +285,7 @@
 
             <!-- Rows -->
             <div
-              v-for="book in paginatedBooks"
+              v-for="book in displayedBooks"
               :key="book.id"
               class="data-row"
               @click="router.push(`/book/${book.id}`)"
@@ -354,7 +359,7 @@
         </template>
 
           <!-- Pagination -->
-          <div v-if="totalPages > 1" class="pagination">
+          <div v-if="totalPages > 1 && !isMobileViewport" class="pagination">
             <button class="page-btn" :disabled="currentPage === 1" @click="currentPage--">
               <i class="ri-arrow-left-s-line"></i>
             </button>
@@ -589,6 +594,7 @@ const sortSummaryLabel = computed(() => {
 });
 
 const currentPage = ref(1);
+const isMobileViewport = ref(false);
 const itemsPerPage = computed(() => (
   viewMode.value === 'grid'
     ? Number(settings.value.libraryGridItemsPerPage) || 12
@@ -601,6 +607,10 @@ const paginatedBooks = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage.value;
   return filteredBooks.value.slice(start, start + itemsPerPage.value);
 });
+
+const displayedBooks = computed(() => (
+  isMobileViewport.value ? filteredBooks.value : paginatedBooks.value
+));
 
 const visiblePageNumbers = computed(() => {
   const total = totalPages.value;
@@ -736,12 +746,14 @@ const handleClickOutside = (event) => {
 };
 
 const handleResize = () => {
+  isMobileViewport.value = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
   updateChipHighlight();
   updateViewHighlight();
 };
 
 onMounted(() => {
   document.addEventListener("click", handleClickOutside);
+  handleResize();
   setTimeout(() => {
     updateChipHighlight();
     updateViewHighlight();
@@ -885,6 +897,10 @@ onUnmounted(() => {
 
 .add-book-btn i {
   font-size: 1.125rem;
+}
+
+.mobile-add-book-btn {
+  display: none;
 }
 
 .dropdown-menu {
@@ -2445,20 +2461,25 @@ onUnmounted(() => {
     display: none;
   }
 
+  .books-content {
+    padding-top: 0.05rem;
+  }
+
   .filters-container {
     justify-content: center;
   }
 
   .view-container:not(.is-card) .controls-row.in-container,
   .controls-row.in-container {
-    align-items: center;
-    flex-wrap: nowrap;
-    gap: 0.55rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.75rem;
     padding: 0 0 1rem;
   }
 
   .controls-left {
-    flex: 1 1 auto;
+    order: 2;
+    flex: 1 0 100%;
     min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
@@ -2469,8 +2490,11 @@ onUnmounted(() => {
   }
 
   .controls-right {
-    flex: 0 0 auto;
-    gap: 0.35rem;
+    order: 1;
+    display: flex;
+    flex: 1 0 100%;
+    justify-content: space-between;
+    gap: 0.75rem;
   }
 
   .filter-dropdown {
@@ -2491,39 +2515,57 @@ onUnmounted(() => {
 
   .status-chip {
     min-height: 26px;
-    padding: 0.36rem 0.75rem;
-    border-radius: 999px;
-    background: var(--color-surface-secondary);
+    padding: 0.36rem 0.8rem;
+    border-radius: 5px;
+    background: rgba(138, 43, 226, 0.1);
     color: var(--color-text-muted);
     font-size: 0.66rem;
     line-height: 1;
   }
 
   .status-chip.active {
-    background: var(--color-brand-primary);
-    color: var(--color-text-on-brand);
+    background: var(--color-brand-primary-soft);
+    color: var(--color-brand-primary);
   }
 
   .view-chip-icon {
-    width: 28px;
-    height: 28px;
-    min-height: 28px;
+    width: 26px;
+    height: 26px;
+    min-height: 26px;
     padding: 0;
-    border-radius: 7px;
-    background: transparent;
-    color: var(--color-text-primary);
-    font-size: 1.28rem;
+    border-radius: 6px;
+    background: rgba(138, 43, 226, 0.07);
+    color: var(--color-text-subtle);
+    font-size: 0.95rem;
   }
 
   .view-chip-icon.active {
-    background: transparent;
+    background: var(--color-brand-primary-soft);
     color: var(--color-brand-primary);
+  }
+
+  .mobile-add-book-btn {
+    display: inline-flex;
+    flex: 0 0 auto;
+    min-height: 30px;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.68rem;
+    line-height: 1;
+  }
+
+  .mobile-add-book-btn i {
+    font-size: 0.9rem;
   }
 
   .books-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem 0.9rem;
     justify-content: start;
+  }
+
+  .pagination {
+    display: none;
   }
 
   .mobile-table-card-list {
