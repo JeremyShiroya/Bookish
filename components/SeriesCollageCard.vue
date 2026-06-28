@@ -87,9 +87,9 @@ const fanStyle = (i, n) => {
 
 .series-meta {
   position: absolute;
-  top: 26px;
-  right: 26px;
-  left: 28px;
+  top: 20px;
+  right: 20px;
+  left: 20px;
   z-index: 40;
   display: flex;
   min-width: 0;
@@ -101,18 +101,18 @@ const fanStyle = (i, n) => {
   overflow: hidden;
   max-width: 100%;
   color: var(--color-text-primary);
-  font-size: 1.5rem;
+  font-size: 1.05rem;
   /* Overrides the global `span { font-weight: 400 !important }` reset. */
-  font-weight: 700 !important;
-  line-height: 1.1;
+  font-weight: 400 !important;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .series-count {
   color: var(--color-text-muted);
-  font-size: 1.05rem;
-  line-height: 1.1;
+  font-size: 0.8rem;
+  line-height: 1.2;
 }
 
 .series-fan {
@@ -158,11 +158,11 @@ const fanStyle = (i, n) => {
   }
 
   .series-name {
-    font-size: 1.3rem;
+    font-size: 1rem;
   }
 
   .series-count {
-    font-size: 0.95rem;
+    font-size: 0.76rem;
   }
 
   .fan-cover {
