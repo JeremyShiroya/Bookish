@@ -1276,13 +1276,20 @@ const handleUpdateBook = async () => {
 .metadata-cover {
   width: 80px;
   height: 120px;
+  flex-shrink: 0;
   object-fit: cover;
   border-radius: 6px;
+}
+
+.metadata-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .metadata-info h4 {
   margin: 0 0 0.5rem 0;
   font-size: 1rem;
+  overflow-wrap: anywhere;
 }
 
 .metadata-author {
@@ -1358,24 +1365,69 @@ const handleUpdateBook = async () => {
 }
 
 @media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
   .add-form {
     grid-template-columns: 1fr;
     padding: 1.5rem;
   }
-  
+
+  .media-column,
+  .details-column {
+    min-width: 0;
+  }
+
   .media-column {
     max-width: 300px;
     margin: 0 auto;
   }
-  
+
+  /* minmax(0, 1fr) keeps the track from growing to the 10-star row's
+     min-content width, which would otherwise overflow the viewport. */
   .form-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
-  
+
+  .form-group {
+    min-width: 0;
+  }
+
+  .fetch-metadata-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .fetch-info {
+    min-width: 0;
+  }
+
+  .btn-fetch {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .rating-input-container {
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .star-rating {
+    flex-wrap: wrap;
+  }
+
+  .rating-star {
+    font-size: 1.5rem;
+  }
+
   .page-actions {
     flex-direction: column;
   }
-  
+
   .btn-primary {
     width: 100%;
     justify-content: center;

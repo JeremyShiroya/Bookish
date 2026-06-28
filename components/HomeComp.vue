@@ -782,9 +782,9 @@ const truncate = (text, length) => {
     align-items: center;
     gap: 0.55rem;
     padding: 0 0.75rem;
-    border: 1px solid rgba(148, 163, 184, 0.32);
+    border: 1px solid var(--color-border-card);
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.72);
+    background: var(--color-surface-input);
     color: var(--color-text-muted);
     box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
   }
@@ -909,7 +909,7 @@ const truncate = (text, length) => {
 
   .mobile-section-title {
     margin: 0;
-    color: #05080d;
+    color: var(--color-text-primary);
     font-size: 0.98rem;
     line-height: 1.2;
   }

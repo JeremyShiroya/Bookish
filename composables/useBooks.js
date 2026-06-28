@@ -144,7 +144,7 @@ export const useBooks = () => {
         const existing = books.value.find(b => (
           b.author === authorName
           && b.authorBio
-          && b.authorDetailsVersion === 6
+          && b.authorDetailsVersion === 7
         ))
         if (existing) return true
       }

@@ -281,7 +281,7 @@ export default defineEventHandler(async (event) => {
       hasChildren: wikidata?.hasChildren || null,
       childrenCount: wikidata?.childrenCount || null,
       source: bio ? (wiki?.bio ? 'wikipedia' : 'openlibrary') : 'none',
-      version: 6,
+      version: 7,
     }
 
     return await verifyAuthorDetails(name, knownBooks, details)
@@ -291,7 +291,7 @@ export default defineEventHandler(async (event) => {
       bio: null, birthDate: null, deathDate: null, nationality: null,
       notableWorks: [], validatedBooksCount: null, validatedSeriesCount: null, latestWork: null,
       spouseName: null, hasChildren: null, childrenCount: null, source: 'none',
-      version: 6,
+      version: 7,
     }
   }
 })

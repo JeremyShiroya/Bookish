@@ -140,8 +140,10 @@ Known books in this user's library: ${JSON.stringify(knownBooks.slice(0, 8))}
 
 Rules:
 - Return only JSON.
-- JSON shape: {"isAuthorMatch": boolean, "bio": string|null, "notableWorks": string[], "latestWork": string|null, "warnings": string[]}
-- Do not invent facts. Only accept, reject, or lightly normalize supplied fields.
+- JSON shape: {"isAuthorMatch": boolean, "bio": string|null, "notableWorks": string[], "latestWork": string|null, "booksCount": number|null, "seriesCount": number|null, "warnings": string[]}
+- Do not invent biographical facts. Only accept, reject, or lightly normalize the supplied bio / notableWorks / latestWork.
+- booksCount = the total number of full-length published books (novels or non-fiction) written by this author. seriesCount = the number of distinct book series they have authored.
+- Cross-check the supplied validatedBooksCount and validatedSeriesCount against your own knowledge of this author: correct them when they look wrong, or supply them when missing. If you are not reasonably confident of an exact number, return null instead of guessing.
 - If the profile appears to be for a different person with the same or similar name, set isAuthorMatch to false.
 - Known books are strong evidence that the profile is correct, but absence of a known book is not automatic failure.
 - Keep bio concise and only if it describes the target author.
@@ -221,6 +223,21 @@ function applyPatch(details: AuthorDetails, payload: any, provider: AiProviderCo
   }
   if (Object.prototype.hasOwnProperty.call(payload || {}, 'latestWork')) {
     next.latestWork = payload.latestWork === null ? null : compact(payload.latestWork)
+  }
+  // Groq/Gemini cross-checks the scraped book/series totals. Apply the AI count
+  // when it is a valid non-negative integer; otherwise keep the scraped value.
+  const toCount = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === '') return null
+    const count = Number(value)
+    return Number.isSafeInteger(count) && count >= 0 ? count : null
+  }
+  if (Object.prototype.hasOwnProperty.call(payload || {}, 'booksCount')) {
+    const count = toCount(payload.booksCount)
+    if (count !== null) next.validatedBooksCount = count
+  }
+  if (Object.prototype.hasOwnProperty.call(payload || {}, 'seriesCount')) {
+    const count = toCount(payload.seriesCount)
+    if (count !== null) next.validatedSeriesCount = count
   }
   if (!next.aiWarnings?.length) delete next.aiWarnings
   return next

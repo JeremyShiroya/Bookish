@@ -79,10 +79,21 @@ const fanStyle = (i, n) => {
   overflow: hidden;
   border: 0;
   border-radius: 22px;
-  background: var(--color-surface-primary);
+  background: #e8e8f1;
   box-shadow: 0 16px 36px rgba(15, 23, 42, 0.1);
   cursor: pointer;
   text-align: left;
+  transition: transform 0.28s ease, box-shadow 0.28s ease;
+}
+
+/* Keep the dark-mode card on the themed dark surface. */
+:root[data-theme="dark"] .series-card {
+  background: var(--color-surface-primary);
+}
+
+.series-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 26px 52px rgba(15, 23, 42, 0.18);
 }
 
 .series-meta {
@@ -102,7 +113,6 @@ const fanStyle = (i, n) => {
   max-width: 100%;
   color: var(--color-text-primary);
   font-size: 1.05rem;
-  /* Overrides the global `span { font-weight: 400 !important }` reset. */
   font-weight: 400 !important;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -122,6 +132,14 @@ const fanStyle = (i, n) => {
   left: 0;
   z-index: 5;
   height: 132px;
+  transform-origin: center bottom;
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* On hover the fan scales from its base, so the outer books spread outward
+   and rise more than the inner ones — a subtle "fan opening" lift. */
+.series-card:hover .series-fan {
+  transform: scale(1.05) translateY(-6px);
 }
 
 .fan-cover {

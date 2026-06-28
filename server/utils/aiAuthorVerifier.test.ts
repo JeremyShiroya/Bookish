@@ -86,4 +86,58 @@ describe('AI author verifier', () => {
     expect(verified.aiVerified).toBe(true)
     expect(verified.source).toBe('wikipedia')
   })
+
+  it('applies Groq-cross-checked book and series totals', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            isAuthorMatch: true,
+            booksCount: 65,
+            seriesCount: 4,
+            warnings: [],
+          }),
+        },
+      }],
+    }), { status: 200 }))
+
+    const verified = await verifyAuthorDetails('Stephen King', ['The Shining'], {
+      ...authorDetails,
+      validatedBooksCount: null,
+      validatedSeriesCount: 2,
+    }, {
+      fetchFn,
+      env: { BOOKISH_AI_PROVIDER: 'groq', GROQ_API_KEY: 'test-key' },
+    })
+
+    expect(verified.validatedBooksCount).toBe(65)
+    expect(verified.validatedSeriesCount).toBe(4)
+  })
+
+  it('keeps the scraped total when Groq returns a null count', async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            isAuthorMatch: true,
+            booksCount: null,
+            seriesCount: null,
+            warnings: [],
+          }),
+        },
+      }],
+    }), { status: 200 }))
+
+    const verified = await verifyAuthorDetails('Stephen King', ['The Shining'], {
+      ...authorDetails,
+      validatedBooksCount: 12,
+      validatedSeriesCount: 3,
+    }, {
+      fetchFn,
+      env: { BOOKISH_AI_PROVIDER: 'groq', GROQ_API_KEY: 'test-key' },
+    })
+
+    expect(verified.validatedBooksCount).toBe(12)
+    expect(verified.validatedSeriesCount).toBe(3)
+  })
 })

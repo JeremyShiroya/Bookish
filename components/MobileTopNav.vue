@@ -65,7 +65,7 @@ const { streakCount } = useStreak()
   align-items: center;
   gap: 3px;
   min-width: 42px;
-  color: #05080d;
+  color: var(--color-text-primary);
   font-size: 0.95rem;
   line-height: 1;
 }
@@ -82,7 +82,7 @@ const { streakCount } = useStreak()
   padding: 0;
   border: 0;
   background: transparent;
-  color: #05080d;
+  color: var(--color-text-primary);
   cursor: pointer;
 }
 

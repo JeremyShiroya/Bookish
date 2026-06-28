@@ -615,6 +615,13 @@ watch([selectedStatus, sortBy, sortDirection, viewMode, itemsPerPage], () => {
   currentPage.value = 1;
 });
 
+// Jump back to the top of the page whenever the visible page changes, so paging
+// through the library doesn't leave you scrolled halfway down the previous page.
+watch(currentPage, () => {
+  if (typeof window === 'undefined') return;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
 const statusBadgeClass = (status) => {
   if (status === 'Reading') return 'status-reading';
   if (status === 'Read') return 'status-read';
@@ -1912,7 +1919,7 @@ onUnmounted(() => {
 .progress-bar {
   width: 100px;
   height: 6px;
-  background: rgba(15, 23, 42, 0.08);
+  background: var(--color-border-card);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -2486,8 +2493,8 @@ onUnmounted(() => {
     min-height: 26px;
     padding: 0.36rem 0.75rem;
     border-radius: 999px;
-    background: rgba(100, 116, 139, 0.16);
-    color: #7d8797;
+    background: var(--color-surface-secondary);
+    color: var(--color-text-muted);
     font-size: 0.66rem;
     line-height: 1;
   }
@@ -2504,7 +2511,7 @@ onUnmounted(() => {
     padding: 0;
     border-radius: 7px;
     background: transparent;
-    color: #111827;
+    color: var(--color-text-primary);
     font-size: 1.28rem;
   }
 

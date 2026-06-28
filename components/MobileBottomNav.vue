@@ -54,7 +54,7 @@ const isActive = (item) => {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  color: #7f899b;
+  color: var(--color-text-muted);
   text-decoration: none;
   font-size: 0.72rem;
   line-height: 1;

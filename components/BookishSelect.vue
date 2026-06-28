@@ -16,36 +16,45 @@
       <i class="ri-arrow-down-s-line bookish-listbox-arrow"></i>
     </button>
 
-    <ul
-      v-if="isOpen"
-      :id="`${resolvedId}-options`"
-      ref="menuRef"
-      class="bookish-listbox-menu"
-      role="listbox"
-      :aria-labelledby="resolvedId"
-      tabindex="-1"
-      @keydown="onMenuKeydown"
-    >
-      <li
-        v-for="(option, index) in normalizedOptions"
-        :key="String(option.value)"
-        class="bookish-listbox-option"
-        :class="{
-          selected: option.value === modelValue,
-          highlighted: index === highlightedIndex,
-          disabled: option.disabled,
-        }"
-        role="option"
-        :aria-selected="option.value === modelValue"
-        :aria-disabled="option.disabled"
-        @mouseenter="highlightedIndex = index"
-        @mousedown.prevent
-        @click="selectOption(option)"
+    <!--
+      Teleported to <body> with fixed positioning so the menu is never clipped by
+      an ancestor's `overflow: hidden` (e.g. the PlayingBar) or trapped in a
+      stacking context. Position is recomputed from the trigger on open/scroll.
+    -->
+    <Teleport to="body">
+      <ul
+        v-if="isOpen"
+        :id="`${resolvedId}-options`"
+        ref="menuRef"
+        class="bookish-listbox-menu"
+        :class="{ compact }"
+        :style="menuStyle"
+        role="listbox"
+        :aria-labelledby="resolvedId"
+        tabindex="-1"
+        @keydown="onMenuKeydown"
       >
-        <span>{{ option.label }}</span>
-        <i v-if="option.value === modelValue" class="ri-check-line"></i>
-      </li>
-    </ul>
+        <li
+          v-for="(option, index) in normalizedOptions"
+          :key="String(option.value)"
+          class="bookish-listbox-option"
+          :class="{
+            selected: option.value === modelValue,
+            highlighted: index === highlightedIndex,
+            disabled: option.disabled,
+          }"
+          role="option"
+          :aria-selected="option.value === modelValue"
+          :aria-disabled="option.disabled"
+          @mouseenter="highlightedIndex = index"
+          @mousedown.prevent
+          @click="selectOption(option)"
+        >
+          <span>{{ option.label }}</span>
+          <i v-if="option.value === modelValue" class="ri-check-line"></i>
+        </li>
+      </ul>
+    </Teleport>
   </div>
 </template>
 
@@ -69,21 +78,55 @@ const rootRef = ref(null)
 const menuRef = ref(null)
 const isOpen = ref(false)
 const highlightedIndex = ref(-1)
+const menuStyle = ref({})
 const normalizedOptions = computed(() => normalizeSelectOptions(props.options))
 const selectedIndex = computed(() => normalizedOptions.value.findIndex(option => option.value === props.modelValue))
 const selectedOption = computed(() => normalizedOptions.value[selectedIndex.value] || null)
 
+function updatePosition() {
+  const trigger = rootRef.value
+  if (!trigger) return
+  const r = trigger.getBoundingClientRect()
+  const width = props.compact ? Math.max(r.width, 190) : r.width
+  const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8)
+  const spaceBelow = window.innerHeight - r.bottom
+  const openUp = props.compact || spaceBelow < 260
+  const style = {
+    position: 'fixed',
+    left: `${left}px`,
+    width: `${width}px`,
+    right: 'auto',
+  }
+  if (openUp) {
+    style.bottom = `${Math.max(8, window.innerHeight - r.top + 6)}px`
+    style.top = 'auto'
+  } else {
+    style.top = `${r.bottom + 6}px`
+    style.bottom = 'auto'
+  }
+  menuStyle.value = style
+}
+
+function onReposition() {
+  if (isOpen.value) updatePosition()
+}
+
 function open() {
   if (props.disabled) return
+  updatePosition()
   isOpen.value = true
   highlightedIndex.value = selectedIndex.value >= 0
     ? selectedIndex.value
     : nextEnabledOptionIndex(normalizedOptions.value, -1, 1)
+  window.addEventListener('scroll', onReposition, true)
+  window.addEventListener('resize', onReposition)
   nextTick(() => menuRef.value?.focus?.())
 }
 
 function close() {
   isOpen.value = false
+  window.removeEventListener('scroll', onReposition, true)
+  window.removeEventListener('resize', onReposition)
 }
 
 function toggle() {
@@ -133,7 +176,8 @@ function onMenuKeydown(event) {
 }
 
 function onDocumentPointerDown(event) {
-  if (!rootRef.value?.contains(event.target)) close()
+  if (rootRef.value?.contains(event.target) || menuRef.value?.contains(event.target)) return
+  close()
 }
 
 watch(() => props.disabled, value => {
@@ -141,7 +185,11 @@ watch(() => props.disabled, value => {
 })
 
 onMounted(() => document.addEventListener('pointerdown', onDocumentPointerDown))
-onUnmounted(() => document.removeEventListener('pointerdown', onDocumentPointerDown))
+onUnmounted(() => {
+  document.removeEventListener('pointerdown', onDocumentPointerDown)
+  window.removeEventListener('scroll', onReposition, true)
+  window.removeEventListener('resize', onReposition)
+})
 </script>
 
 <style scoped>
@@ -197,11 +245,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', onDocumentPointerD
 }
 
 .bookish-listbox-menu {
-  position: absolute;
-  z-index: 1000;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
+  z-index: 2000;
   max-height: min(320px, 45vh);
   overflow-y: auto;
   margin: 0;
@@ -250,9 +294,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', onDocumentPointerD
   font-size: 0.76rem;
 }
 
-.compact .bookish-listbox-menu {
-  top: auto;
-  bottom: calc(100% + 6px);
+.bookish-listbox-menu.compact {
   min-width: 190px;
 }
 

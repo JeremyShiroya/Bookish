@@ -1486,6 +1486,7 @@ const saveBook = async () => {
 .metadata-cover {
   width: 70px;
   height: 105px;
+  flex-shrink: 0;
   object-fit: cover;
   border-radius: 6px;
   box-shadow: var(--shadow-control-subtle);
@@ -1493,10 +1494,19 @@ const saveBook = async () => {
 
 .metadata-info {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 0.25rem;
+}
+
+.metadata-info h4 {
+  overflow-wrap: anywhere;
+}
+
+.metadata-source-tags {
+  flex-wrap: wrap;
 }
 
 .metadata-info h4 {
@@ -1567,6 +1577,13 @@ const saveBook = async () => {
     padding: 1.5rem;
   }
 
+  /* Grid/flex children default to min-width:auto, so wide non-wrapping cards
+     would push the form past the viewport. Allow the tracks to shrink. */
+  .media-column,
+  .details-column {
+    min-width: 0;
+  }
+
   .media-column {
     flex-direction: row;
   }
@@ -1578,10 +1595,45 @@ const saveBook = async () => {
 
   .document-section {
     flex: 1;
+    min-width: 0;
   }
 
+  /* minmax(0, 1fr) stops the track from growing to the 10-star row's
+     min-content width (which otherwise overflows the viewport). */
   .form-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .form-group {
+    min-width: 0;
+  }
+
+  .rating-input-container {
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .star-rating {
+    flex-wrap: wrap;
+  }
+
+  .rating-star {
+    font-size: 1.5rem;
+  }
+
+  .fetch-metadata-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .fetch-info {
+    min-width: 0;
+  }
+
+  .btn-fetch {
+    width: 100%;
+    justify-content: center;
   }
 }
 
