@@ -22,7 +22,8 @@ const items = [
   { label: "Home", path: "/", icon: "ri-home-smile-2-fill" },
   { label: "Books", path: "/books", icon: "ri-book-open-line" },
   { label: "Series", path: "/series", icon: "ri-book-shelf-line" },
-  { label: "Profile", path: "/settings", icon: "ri-user-smile-line" },
+  { label: "Favourites", path: "/favourites", icon: "ri-heart-line" },
+  { label: "Playlists", path: "/playlists", icon: "ri-play-list-2-line" },
 ];
 
 const isActive = (item) => {
@@ -41,7 +42,7 @@ const isActive = (item) => {
   display: none;
   height: 76px;
   padding: 8px 22px calc(8px + env(safe-area-inset-bottom));
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: center;
   background: var(--color-background-app);
   border-top: 1px solid rgba(15, 23, 42, 0.03);

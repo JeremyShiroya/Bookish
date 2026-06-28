@@ -250,7 +250,24 @@
           />
         </div>
 
-        <div v-else class="data-table">
+        <template v-else>
+          <div class="mobile-table-card-list">
+            <LibraryBookCard
+              v-for="book in paginatedBooks"
+              :key="book.id"
+              class="mobile-list-book-card"
+              :book="book"
+              :active="isBookActive(book)"
+              @open="router.push(`/book/${book.id}`)"
+              @play="handlePlay"
+              @favourite="toggleFavourite(book.id)"
+              @playlist="selectedPlaylistBook = book"
+              @edit="router.push(`/edit/${book.id}`)"
+              @delete="openDeleteModal(book)"
+            />
+          </div>
+
+          <div class="data-table">
             <!-- Header -->
             <div class="data-header">
               <div class="col-book">Book</div>
@@ -334,6 +351,7 @@
               </div>
             </div>
           </div>
+        </template>
 
           <!-- Pagination -->
           <div v-if="totalPages > 1" class="pagination">
@@ -1693,6 +1711,10 @@ onUnmounted(() => {
   width: 100%;
 }
 
+.mobile-table-card-list {
+  display: none;
+}
+
 /* Pagination inside the container */
 .view-container .pagination {
   margin: 0;
@@ -2413,17 +2435,98 @@ onUnmounted(() => {
   }
 
   .books-header {
-    flex-direction: column;
-    align-items: stretch;
+    display: none;
   }
 
   .filters-container {
     justify-content: center;
   }
 
+  .view-container:not(.is-card) .controls-row.in-container,
+  .controls-row.in-container {
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.55rem;
+    padding: 0 0 1rem;
+  }
+
+  .controls-left {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .controls-left::-webkit-scrollbar {
+    display: none;
+  }
+
+  .controls-right {
+    flex: 0 0 auto;
+    gap: 0.35rem;
+  }
+
+  .filter-dropdown {
+    display: none;
+  }
+
+  .status-chips,
+  .view-chips {
+    gap: 0.3rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .chip-highlight {
+    display: none;
+  }
+
+  .status-chip {
+    min-height: 26px;
+    padding: 0.36rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(100, 116, 139, 0.16);
+    color: #7d8797;
+    font-size: 0.66rem;
+    line-height: 1;
+  }
+
+  .status-chip.active {
+    background: var(--color-brand-primary);
+    color: var(--color-text-on-brand);
+  }
+
+  .view-chip-icon {
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #111827;
+    font-size: 1.28rem;
+  }
+
+  .view-chip-icon.active {
+    background: transparent;
+    color: var(--color-brand-primary);
+  }
+
   .books-grid {
-    grid-template-columns: minmax(0, 1fr);
-    justify-content: stretch;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem 0.9rem;
+    justify-content: start;
+  }
+
+  .mobile-table-card-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .data-table {
+    display: none;
   }
 
   .list-header-row,

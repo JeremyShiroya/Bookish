@@ -20,47 +20,51 @@
 
     <template v-else-if="initialized">
       <div class="mobile-home">
-        <header class="mobile-home-topbar">
-          <button
-            class="mobile-icon-btn"
-            type="button"
-            title="Open menu"
-            @click="mobileMenuOpen = true"
-          >
-            <i class="ri-menu-line"></i>
-          </button>
-          <button
-            class="mobile-icon-btn"
-            type="button"
-            title="Search books"
-            @click="router.push('/books')"
-          >
+        <section class="mobile-search-section">
+          <label class="mobile-search-bar">
             <i class="ri-search-line"></i>
-          </button>
-        </header>
-
-        <div v-if="mobileMenuOpen" class="mobile-menu-panel">
-          <div class="mobile-menu-scrim" @click="mobileMenuOpen = false"></div>
-          <nav class="mobile-menu-sheet" aria-label="Mobile menu">
+            <input
+              v-model="homeSearch"
+              type="search"
+              placeholder="Search books"
+              autocomplete="off"
+            />
             <button
-              class="mobile-menu-close"
+              v-if="homeSearch"
+              class="mobile-search-clear"
               type="button"
-              title="Close menu"
-              @click="mobileMenuOpen = false"
+              title="Clear search"
+              @click="homeSearch = ''"
             >
               <i class="ri-close-line"></i>
             </button>
-            <NuxtLink to="/" @click="mobileMenuOpen = false">Home</NuxtLink>
-            <NuxtLink to="/books" @click="mobileMenuOpen = false">Books</NuxtLink>
-            <NuxtLink to="/series" @click="mobileMenuOpen = false">Series</NuxtLink>
-            <NuxtLink to="/authors" @click="mobileMenuOpen = false">Authors</NuxtLink>
-            <NuxtLink to="/playlists" @click="mobileMenuOpen = false">Playlists</NuxtLink>
-            <NuxtLink to="/favourites" @click="mobileMenuOpen = false">Favourites</NuxtLink>
-          </nav>
-        </div>
+          </label>
+
+          <div v-if="homeSearchResults.length > 0" class="mobile-search-results">
+            <button
+              v-for="book in homeSearchResults"
+              :key="book.id"
+              class="mobile-search-result"
+              type="button"
+              @click="openBook(book); homeSearch = ''"
+            >
+              <img v-if="book.cover" :src="book.cover" :alt="book.title" />
+              <span v-else class="mobile-search-cover-fallback">
+                {{ book.title?.charAt(0) || "B" }}
+              </span>
+              <span class="mobile-search-result-text">
+                <strong>{{ book.title }}</strong>
+                <small>{{ book.author || "Unknown author" }}</small>
+              </span>
+            </button>
+          </div>
+          <p v-else-if="homeSearch.trim()" class="mobile-search-empty">
+            No books found
+          </p>
+        </section>
 
         <section class="mobile-home-section">
-          <h2 class="mobile-section-title">Continue Reading</h2>
+          <h2 class="mobile-section-title">Currently Reading</h2>
           <div v-if="continueReadingBooks.length > 0" class="continue-single">
             <HomeContinueReadingCard
               :book="continueReadingBooks[0]"
@@ -107,7 +111,7 @@
             </NuxtLink>
           </div>
           <div v-if="mobileSeries.length > 0" class="series-list">
-            <HomeSeriesCard
+            <SeriesCollageCard
               v-for="series in mobileSeries"
               :key="series.id"
               :series="series"
@@ -281,7 +285,7 @@ const {
 } = useBooks();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const router = useRouter();
-const mobileMenuOpen = ref(false);
+const homeSearch = ref("");
 
 const mobileRecentBooks = computed(() => (
   recentlyAddedBooks.value.length > 0
@@ -296,6 +300,23 @@ const continueReadingBooks = computed(() => (
 ));
 
 const mobileSeries = computed(() => seriesList.value.slice(0, 3));
+
+const homeSearchResults = computed(() => {
+  const query = homeSearch.value.trim().toLowerCase();
+  if (!query) return [];
+
+  return books.value
+    .filter((book) => {
+      const searchable = [
+        book.title,
+        book.author,
+        book.series,
+        book.genre,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return searchable.includes(query);
+    })
+    .slice(0, 5);
+});
 
 const openBook = (book) => {
   if (!book?.id) return;
@@ -746,95 +767,143 @@ const truncate = (text, length) => {
     padding-bottom: 1rem;
   }
 
-  .mobile-home-topbar {
-    display: flex;
-    height: 50px;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-  }
-
-  .mobile-icon-btn {
-    display: inline-flex;
-    width: 34px;
-    height: 34px;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: #05080d;
-    cursor: pointer;
-    font-size: 1.72rem;
-    line-height: 1;
-  }
-
-  .mobile-icon-btn i {
-    line-height: 1;
-  }
-
-  .mobile-menu-panel {
-    position: fixed;
-    inset: 0;
-    z-index: 1200;
-  }
-
-  .mobile-menu-scrim {
-    position: absolute;
-    inset: 0;
-    background: rgba(15, 23, 42, 0.28);
-  }
-
-  .mobile-menu-sheet {
-    position: absolute;
-    top: 0;
-    left: 0;
-    display: flex;
-    width: min(280px, 78vw);
-    height: 100%;
-    flex-direction: column;
-    gap: 2px;
-    padding: 18px;
-    background: var(--color-background-app);
-    box-shadow: 20px 0 40px rgba(15, 23, 42, 0.14);
-  }
-
-  .mobile-menu-sheet a,
-  .mobile-menu-close {
-    display: flex;
-    align-items: center;
-    min-height: 42px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--color-text-primary);
-    text-decoration: none;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
-
-  .mobile-menu-sheet a {
-    padding: 0 10px;
-  }
-
-  .mobile-menu-sheet a.router-link-active {
-    background: var(--color-brand-primary-faint);
-    color: var(--color-brand-primary);
-  }
-
-  .mobile-menu-close {
-    width: 42px;
-    justify-content: center;
-    padding: 0;
-    margin-bottom: 10px;
-    font-size: 1.35rem;
-  }
-
   .mobile-home-section {
     margin-top: 22px;
   }
 
-  .mobile-home-section:first-of-type {
+  .mobile-search-section {
+    position: relative;
+    margin-bottom: 18px;
+  }
+
+  .mobile-search-bar {
+    display: flex;
+    height: 42px;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0 0.75rem;
+    border: 1px solid rgba(148, 163, 184, 0.32);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--color-text-muted);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+  }
+
+  .mobile-search-bar i {
+    flex: 0 0 auto;
+    font-size: 1.05rem;
+  }
+
+  .mobile-search-bar input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--color-text-primary);
+    font: inherit;
+    font-size: 0.9rem;
+  }
+
+  .mobile-search-bar input::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  .mobile-search-clear {
+    display: inline-flex;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(100, 116, 139, 0.14);
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  .mobile-search-results {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: 0;
+    z-index: 10;
+    display: grid;
+    gap: 4px;
+    padding: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 12px;
+    background: var(--color-background-app);
+    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
+  }
+
+  .mobile-search-result {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+    padding: 6px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .mobile-search-result:hover {
+    background: rgba(139, 92, 246, 0.08);
+  }
+
+  .mobile-search-result img,
+  .mobile-search-cover-fallback {
+    width: 34px;
+    height: 48px;
+    flex: 0 0 auto;
+    border-radius: 5px;
+    object-fit: cover;
+  }
+
+  .mobile-search-cover-fallback {
+    display: grid;
+    place-items: center;
+    background: var(--color-brand-primary-faint);
+    color: var(--color-brand-primary);
+    font-weight: 600;
+  }
+
+  .mobile-search-result-text {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+  }
+
+  .mobile-search-result-text strong,
+  .mobile-search-result-text small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-search-result-text strong {
+    color: var(--color-text-primary);
+    font-size: 0.82rem;
+    font-weight: 500;
+  }
+
+  .mobile-search-result-text small,
+  .mobile-search-empty {
+    color: var(--color-text-muted);
+    font-size: 0.7rem;
+  }
+
+  .mobile-search-empty {
+    margin: 7px 2px 0;
+  }
+
+  .mobile-search-section + .mobile-home-section {
     margin-top: 0;
   }
 
@@ -880,8 +949,8 @@ const truncate = (text, length) => {
 
   .series-list {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
   }
 
   .mobile-series-section {

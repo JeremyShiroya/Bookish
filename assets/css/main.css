@@ -349,6 +349,16 @@ textarea {
   font: inherit;
 }
 
+/* Remove the blue tap-highlight flash and focus outline app-wide. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus,
+:focus-visible {
+  outline: none;
+}
+
 .bookish-select-wrap {
   position: relative;
   min-width: 0;

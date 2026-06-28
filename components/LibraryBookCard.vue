@@ -412,4 +412,170 @@ const formatPersonalRating = (rating) => {
     height: 135px;
   }
 }
+
+@media (max-width: 768px) {
+  .library-book-card {
+    display: block;
+    min-height: 0;
+    height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+    background: transparent;
+    box-shadow: none;
+    color: var(--color-text-primary);
+  }
+
+  .library-book-card:hover {
+    transform: none;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .card-background,
+  .card-overlay,
+  .cover-actions,
+  .card-series,
+  .card-genre,
+  .card-progress,
+  .goodreads-row,
+  .personal-rating,
+  .card-actions {
+    display: none;
+  }
+
+  .card-cover {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 96 / 145;
+    border-radius: 7px;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+  }
+
+  .library-book-card:hover .card-cover img {
+    transform: none;
+  }
+
+  .card-info {
+    display: block;
+    height: auto;
+    min-width: 0;
+    padding: 0.42rem 0 0;
+  }
+
+  .card-info h3 {
+    display: -webkit-box;
+    margin: 0 0 0.13rem;
+    overflow: hidden;
+    color: var(--color-text-primary);
+    font-size: 0.72rem;
+    font-weight: 400;
+    line-height: 1.14;
+    text-shadow: none;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
+  .card-author {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 0.6rem;
+    line-height: 1.1;
+    text-shadow: none;
+  }
+
+  .library-book-card.mobile-list-book-card {
+    display: flex;
+    min-height: 232px;
+    height: 100%;
+    gap: 0.95rem;
+    overflow: hidden;
+    padding: 1rem;
+    border: 1px solid var(--color-border-on-image);
+    border-radius: 14px;
+    color: var(--color-text-on-brand);
+    box-shadow: var(--shadow-card);
+  }
+
+  .library-book-card.mobile-list-book-card:hover {
+    border-color: var(--color-border-on-image-strong);
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  .library-book-card.mobile-list-book-card .card-background,
+  .library-book-card.mobile-list-book-card .card-overlay,
+  .library-book-card.mobile-list-book-card .card-series,
+  .library-book-card.mobile-list-book-card .card-genre,
+  .library-book-card.mobile-list-book-card .card-progress,
+  .library-book-card.mobile-list-book-card .goodreads-row,
+  .library-book-card.mobile-list-book-card .personal-rating,
+  .library-book-card.mobile-list-book-card .card-actions {
+    display: flex;
+  }
+
+  .library-book-card.mobile-list-book-card .card-background,
+  .library-book-card.mobile-list-book-card .card-overlay {
+    display: block;
+  }
+
+  .library-book-card.mobile-list-book-card .cover-actions {
+    display: grid;
+  }
+
+  .library-book-card.mobile-list-book-card .card-cover {
+    width: 110px;
+    height: 160px;
+    aspect-ratio: auto;
+    border-radius: 8px;
+    box-shadow: var(--shadow-cover);
+  }
+
+  .library-book-card.mobile-list-book-card .card-info {
+    display: flex;
+    min-width: 0;
+    height: 100%;
+    flex: 1;
+    flex-direction: column;
+    padding: 0.05rem 0;
+  }
+
+  .library-book-card.mobile-list-book-card .card-info h3 {
+    margin: 0 0 0.25rem;
+    color: var(--color-text-on-image-primary);
+    font-size: 1.05rem;
+    font-weight: 500;
+    line-height: 1.18;
+    text-shadow: var(--shadow-text-on-image);
+    -webkit-line-clamp: 2;
+  }
+
+  .library-book-card.mobile-list-book-card .card-author,
+  .library-book-card.mobile-list-book-card .card-series {
+    color: var(--color-text-on-image-secondary);
+    font-size: 0.78rem;
+  }
+
+  .library-book-card.mobile-list-book-card .card-genre {
+    display: inline-flex;
+    font-size: 0.64rem;
+  }
+
+  .library-book-card.mobile-list-book-card .card-progress,
+  .library-book-card.mobile-list-book-card .goodreads-row,
+  .library-book-card.mobile-list-book-card .personal-rating {
+    font-size: 0.74rem;
+  }
+
+  .library-book-card.mobile-list-book-card .card-actions {
+    gap: 0.36rem;
+    padding-top: 0.55rem;
+  }
+
+  .library-book-card.mobile-list-book-card .action-button {
+    width: 34px;
+    height: 34px;
+    border-radius: 7px;
+  }
+}
 </style>
