@@ -1,73 +1,79 @@
 <template>
-  <header class="mobile-top-nav">
-    <div v-if="isHomePage" class="streak-pill" title="Reading streak">
-      <i class="ri-fire-line"></i>
-      <span>{{ streakCount }}</span>
-    </div>
-    <h1 v-else class="mobile-page-title">{{ pageTitle }}</h1>
-
+  <header class="mobile-top-nav" aria-label="Profile navigation">
     <button
-      class="mobile-menu-button"
+      class="profile-greeting"
       type="button"
-      title="Open menu"
-      @click="menuOpen = true"
+      aria-label="Open profile"
+      @click="openProfile"
     >
-      <i class="ri-menu-line"></i>
+      <div class="profile-avatar" aria-hidden="true">
+        <img :src="profileAvatarSrc" :alt="`${profile.displayName} avatar`" />
+      </div>
+      <div class="greeting-copy">
+        <span>Hello {{ firstName }},</span>
+        <strong>Welcome Back!</strong>
+      </div>
     </button>
 
-    <div v-if="menuOpen" class="mobile-menu-panel">
-      <div class="mobile-menu-scrim" @click="menuOpen = false"></div>
-      <nav class="mobile-menu-sheet" aria-label="Mobile menu">
-        <button
-          class="mobile-menu-close"
-          type="button"
-          title="Close menu"
-          @click="menuOpen = false"
-        >
-          <i class="ri-close-line"></i>
-        </button>
-        <NuxtLink to="/" @click="menuOpen = false">Home</NuxtLink>
-        <NuxtLink to="/books" @click="menuOpen = false">Books</NuxtLink>
-        <NuxtLink to="/series" @click="menuOpen = false">Series</NuxtLink>
-        <NuxtLink to="/authors" @click="menuOpen = false">Authors</NuxtLink>
-        <NuxtLink to="/playlists" @click="menuOpen = false">Playlists</NuxtLink>
-        <NuxtLink to="/favourites" @click="menuOpen = false">Favourites</NuxtLink>
-        <NuxtLink to="/settings" @click="menuOpen = false">Settings</NuxtLink>
-      </nav>
+    <div class="nav-actions">
+      <div class="streak-pill" title="Reading streak">
+        <i class="ri-flashlight-fill"></i>
+        <span>{{ streakCount }}</span>
+      </div>
+      <button
+        class="mobile-menu-button"
+        type="button"
+        aria-label="Open settings"
+        title="Open settings"
+        @click="openSettings"
+      >
+        <i class="ri-menu-line"></i>
+      </button>
     </div>
   </header>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { useStreak } from '~/composables/useStreak'
+import { computed, onBeforeUnmount, onMounted } from "vue";
+import { useStreak } from "~/composables/useStreak";
+import {
+  BOOKISH_PROFILE_UPDATED_EVENT,
+  useUserProfile,
+} from "~/composables/useUserProfile";
 
-const menuOpen = ref(false)
-const route = useRoute()
-const { streakCount } = useStreak()
+const router = useRouter();
+const { streakCount } = useStreak();
+const { profile, activeAvatarPreset, loadProfile } = useUserProfile();
 
-const pageTitles = {
-  '/books': 'Books',
-  '/series': 'Series',
-  '/authors': 'Authors',
-  '/playlists': 'Playlists',
-  '/favourites': 'Favourites',
-  '/settings': 'Settings',
-  '/add': 'Add Book',
-  '/collections': 'Collections',
-  '/genres': 'Genres',
-}
+const profileAvatarSrc = computed(() => {
+  return profile.value.avatarType === "image"
+    ? profile.value.avatarValue
+    : activeAvatarPreset.value.src;
+});
+const firstName = computed(() => {
+  return profile.value.displayName.trim().split(/\s+/)[0] || "Reader";
+});
 
-const isHomePage = computed(() => route.path === '/')
-const pageTitle = computed(() => {
-  if (pageTitles[route.path]) return pageTitles[route.path]
-  if (route.path.startsWith('/book/')) return 'Book'
-  if (route.path.startsWith('/author/')) return 'Author'
-  if (route.path.startsWith('/series/') || route.path.startsWith('/serie/')) return 'Series'
-  if (route.path.startsWith('/playlist/')) return 'Playlist'
-  if (route.path.startsWith('/edit/')) return 'Edit Book'
-  return 'Bookish'
-})
+const openProfile = () => {
+  router.push("/profile");
+};
+
+const openSettings = () => {
+  router.push("/settings");
+};
+
+const refreshProfile = () => {
+  loadProfile();
+};
+
+onMounted(() => {
+  refreshProfile();
+  window.addEventListener(BOOKISH_PROFILE_UPDATED_EVENT, refreshProfile);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener(BOOKISH_PROFILE_UPDATED_EVENT, refreshProfile);
+});
 </script>
 
 <style scoped>
@@ -78,41 +84,102 @@ const pageTitle = computed(() => {
   left: 0;
   z-index: 1100;
   display: none;
-  height: 58px;
+  min-height: 74px;
   align-items: center;
   justify-content: space-between;
-  padding: calc(10px + env(safe-area-inset-top)) 10px 8px;
+  gap: 0.7rem;
+  padding: calc(12px + env(safe-area-inset-top)) 1rem 0.7rem;
   background: var(--color-background-app);
+}
+
+.profile-greeting,
+.nav-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.profile-greeting {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  gap: 0.7rem;
+  text-align: left;
+}
+
+.profile-avatar {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  overflow: hidden;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.greeting-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  color: var(--color-text-primary);
+  line-height: 1.04;
+}
+
+.greeting-copy span,
+.greeting-copy strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greeting-copy span {
+  max-width: min(42vw, 220px);
+  font-size: 0.86rem;
+}
+
+.greeting-copy strong {
+  max-width: min(48vw, 240px);
+  font-size: 1.08rem;
+}
+
+.nav-actions {
+  gap: 0.6rem;
+  flex-shrink: 0;
 }
 
 .streak-pill {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  min-width: 42px;
-  color: var(--color-text-primary);
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 52px;
+  min-height: 32px;
+  padding: 0 0.75rem;
+  border-radius: 999px;
+  background: var(--color-brand-primary-muted);
+  color: var(--color-brand-primary);
   font-size: 0.95rem;
   line-height: 1;
 }
 
 .streak-pill i {
-  font-size: 1.05rem;
+  font-size: 1rem;
 }
 
-.mobile-page-title {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  color: var(--color-text-primary);
-  font-size: 1.08rem;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mobile-menu-button,
-.mobile-menu-close {
+.mobile-menu-button {
   display: inline-flex;
+  width: 38px;
+  height: 38px;
   align-items: center;
   justify-content: center;
   padding: 0;
@@ -120,69 +187,34 @@ const pageTitle = computed(() => {
   background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
-}
-
-.mobile-menu-button {
-  width: 36px;
-  height: 36px;
-  font-size: 1.62rem;
-}
-
-.mobile-menu-panel {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-}
-
-.mobile-menu-scrim {
-  position: absolute;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.28);
-}
-
-.mobile-menu-sheet {
-  position: absolute;
-  top: 0;
-  right: 0;
-  display: flex;
-  width: min(280px, 78vw);
-  height: 100%;
-  flex-direction: column;
-  gap: 2px;
-  padding: calc(18px + env(safe-area-inset-top)) 18px 18px;
-  background: var(--color-background-app);
-  box-shadow: -20px 0 40px rgba(15, 23, 42, 0.14);
-}
-
-.mobile-menu-sheet a,
-.mobile-menu-close {
-  min-height: 42px;
-  border-radius: 8px;
-  color: var(--color-text-primary);
-  text-decoration: none;
-  font-size: 0.95rem;
-}
-
-.mobile-menu-sheet a {
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-}
-
-.mobile-menu-sheet a.router-link-active {
-  background: var(--color-brand-primary-faint);
-  color: var(--color-brand-primary);
-}
-
-.mobile-menu-close {
-  width: 42px;
-  margin-bottom: 10px;
-  font-size: 1.35rem;
+  font-size: 1.85rem;
 }
 
 @media (max-width: 768px) {
   .mobile-top-nav {
     display: flex;
+  }
+}
+
+@media (max-width: 360px) {
+  .mobile-top-nav {
+    padding-right: 0.85rem;
+    padding-left: 0.85rem;
+  }
+
+  .profile-avatar {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+  }
+
+  .nav-actions {
+    gap: 0.45rem;
+  }
+
+  .streak-pill {
+    min-width: 50px;
+    padding: 0 0.65rem;
   }
 }
 </style>

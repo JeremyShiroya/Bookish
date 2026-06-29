@@ -3,11 +3,11 @@ import { BOOKISH_TTS_SESSION_KEY, readStoredTtsSession, writeStoredTtsSession } 
 
 const BACKUP_VERSION = 1
 const LIBRARY_DB_NAME = 'bookish-library'
-const LIBRARY_DB_VERSION = 1
+const LIBRARY_DB_VERSION = 2
 const STORAGE_DB_NAME = 'bookish-storage'
 const STORAGE_DB_VERSION = 2
 
-const LIBRARY_STORES = ['books', 'collections']
+const LIBRARY_STORES = ['books', 'collections', 'profiles']
 const STORAGE_STORES = ['book-content', 'book-pdf-source']
 
 function openBookishDB(name, version) {
@@ -18,6 +18,7 @@ function openBookishDB(name, version) {
       if (name === LIBRARY_DB_NAME) {
         if (!db.objectStoreNames.contains('books')) db.createObjectStore('books', { keyPath: 'id' })
         if (!db.objectStoreNames.contains('collections')) db.createObjectStore('collections', { keyPath: 'id' })
+        if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' })
       }
       if (name === STORAGE_DB_NAME) {
         if (!db.objectStoreNames.contains('book-content')) db.createObjectStore('book-content')
@@ -240,6 +241,7 @@ export const useLibraryBackup = () => {
       summary: {
         books: backup.indexedDB[LIBRARY_DB_NAME].books.length,
         collections: backup.indexedDB[LIBRARY_DB_NAME].collections.length,
+        profiles: backup.indexedDB[LIBRARY_DB_NAME].profiles.length,
         contentRecords: backup.indexedDB[STORAGE_DB_NAME]['book-content'].length,
         sourceRecords: backup.indexedDB[STORAGE_DB_NAME]['book-pdf-source'].length,
       },

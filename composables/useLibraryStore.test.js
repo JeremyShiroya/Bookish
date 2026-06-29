@@ -151,3 +151,33 @@ describe('useLibraryStore — collections', () => {
     expect(collections[0].id).toBe(keep.id)
   })
 })
+
+describe('useLibraryStore — profile', () => {
+  it('returns a default local profile when none has been saved', async () => {
+    const { getProfile } = useLibraryStore()
+
+    expect(await getProfile()).toMatchObject({
+      id: 'local',
+      displayName: 'Reader',
+      avatarType: 'image',
+      avatarValue: '/Images/User%20Avatars/default-user.jpeg',
+    })
+  })
+
+  it('saves a trimmed display name and selected avatar image', async () => {
+    const { getProfile, saveProfile } = useLibraryStore()
+
+    await saveProfile({
+      displayName: '  John  ',
+      avatarType: 'image',
+      avatarValue: '/Images/User%20Avatars/E-commerce-1.svg',
+    })
+
+    expect(await getProfile()).toMatchObject({
+      id: 'local',
+      displayName: 'John',
+      avatarType: 'image',
+      avatarValue: '/Images/User%20Avatars/E-commerce-1.svg',
+    })
+  })
+})

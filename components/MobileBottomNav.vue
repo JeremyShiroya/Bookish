@@ -19,7 +19,7 @@ import { useRoute } from "vue-router";
 const route = useRoute();
 
 const items = [
-  { label: "Home", path: "/", icon: "ri-home-smile-2-fill" },
+  { label: "Home", path: "/", icon: "ri-home-smile-2-line" },
   { label: "Books", path: "/books", icon: "ri-book-open-line" },
   { label: "Series", path: "/series", icon: "ri-book-shelf-line" },
   { label: "Favourites", path: "/favourites", icon: "ri-heart-line" },

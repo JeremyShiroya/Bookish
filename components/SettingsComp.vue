@@ -1,5 +1,28 @@
 <template>
   <main class="settings-page">
+    <section class="mobile-settings-shell" aria-label="Mobile settings">
+      <header class="mobile-settings-header">
+        <button type="button" aria-label="Back" title="Back" @click="goBack">
+          <i class="ri-arrow-left-s-line"></i>
+        </button>
+        <h1>Settings</h1>
+        <span aria-hidden="true"></span>
+      </header>
+
+      <nav class="mobile-settings-list" aria-label="Settings sections">
+        <button
+          v-for="row in mobileSettingsRows"
+          :key="row.label"
+          type="button"
+          @click="handleSettingsRow(row)"
+        >
+          <i :class="row.icon"></i>
+          <span>{{ row.label }}</span>
+          <i class="ri-arrow-right-s-line"></i>
+        </button>
+      </nav>
+    </section>
+
     <section class="settings-hero" aria-labelledby="settings-title">
       <div>
         <span class="eyebrow">Bookish Settings</span>
@@ -412,6 +435,7 @@ const { getStorageSummary } = useBookStorage()
 const { createDownload, importBookishData, wipeBookishData } = useLibraryBackup()
 const { ttsVoices, setSpeed, setVolume, setVoice, stop: stopTTS } = useTTS()
 const { addToast } = useToast()
+const router = useRouter()
 const runtimeConfig = useRuntimeConfig()
 const appVersion = runtimeConfig.public.appVersion || '0.0.0'
 const buildNumber = runtimeConfig.public.buildNumber || 'dev'
@@ -434,6 +458,16 @@ const readerThemes = [
 ]
 
 const speedOptions = [0.75, 1, 1.25, 1.5, 2]
+
+const mobileSettingsRows = [
+  { label: 'Audio', icon: 'ri-headphone-line' },
+  { label: 'Theme', icon: 'ri-moon-line' },
+  { label: 'Preferences', icon: 'ri-edit-box-line', comingSoon: true },
+  { label: 'Storage', icon: 'ri-database-2-line' },
+  { label: 'About', icon: 'ri-information-line', comingSoon: true },
+  { label: 'Privacy Policy', icon: 'ri-shield-keyhole-line', comingSoon: true },
+  { label: 'Buy me a coffee', icon: 'ri-cup-line', comingSoon: true },
+]
 
 const coverPreviewBooks = computed(() => recentlyAddedBooks.value.slice(0, 3))
 
@@ -493,6 +527,16 @@ const refreshStorageSummary = async () => {
   } finally {
     storageLoading.value = false
   }
+}
+
+const goBack = () => {
+  if (window.history.length > 1) router.back()
+  else router.push('/')
+}
+
+const handleSettingsRow = (row) => {
+  const suffix = row.comingSoon ? 'page' : 'settings page'
+  addToast(`${row.label} ${suffix} is coming later.`, 'info')
 }
 
 const authorFetchLoading = ref(false)
@@ -683,6 +727,10 @@ onMounted(refreshStorageSummary)
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.mobile-settings-shell {
+  display: none;
 }
 
 .settings-hero,
@@ -1200,6 +1248,88 @@ onMounted(refreshStorageSummary)
 }
 
 @media (max-width: 760px) {
+  .mobile-settings-shell {
+    display: block;
+    min-height: calc(100vh - 88px - env(safe-area-inset-bottom));
+    padding: 0 0.25rem 1.5rem;
+    background: var(--color-background-app);
+  }
+
+  .settings-hero,
+  .stats-grid,
+  .settings-grid,
+  .about-section {
+    display: none;
+  }
+
+  .mobile-settings-header {
+    position: relative;
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 42px;
+    align-items: center;
+    min-height: 42px;
+    margin-bottom: 1rem;
+  }
+
+  .mobile-settings-header button {
+    display: inline-flex;
+    width: 34px;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    font-size: 1.35rem;
+  }
+
+  .mobile-settings-header h1 {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 1.08rem;
+    line-height: 1;
+    text-align: center;
+  }
+
+  .mobile-settings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .mobile-settings-list button {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) 26px;
+    align-items: center;
+    min-height: 43px;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    padding: 0 0.55rem;
+    text-align: left;
+  }
+
+  .mobile-settings-list button > i:first-child {
+    color: var(--color-text-primary);
+    font-size: 1.08rem;
+  }
+
+  .mobile-settings-list button span {
+    overflow: hidden;
+    color: var(--color-text-secondary);
+    font-size: 0.98rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-settings-list button > i:last-child {
+    color: var(--color-text-muted);
+    font-size: 1.2rem;
+    justify-self: end;
+  }
+
   .settings-hero {
     grid-template-columns: 1fr;
     padding: 1rem;

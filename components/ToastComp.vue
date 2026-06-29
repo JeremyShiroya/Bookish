@@ -10,6 +10,7 @@
         <div class="toast-icon">
           <i v-if="toast.type === 'success'" class="ri-checkbox-circle-fill"></i>
           <i v-if="toast.type === 'error'" class="ri-error-warning-fill"></i>
+          <i v-if="toast.type === 'info'" class="ri-information-fill"></i>
         </div>
         <div class="toast-content">
           <p class="toast-message">{{ toast.message }}</p>
@@ -62,6 +63,10 @@ const { toasts, removeToast } = useToast();
   border-left: 4px solid var(--color-status-danger-bright);
 }
 
+.toast.info {
+  border-left: 4px solid var(--color-brand-secondary);
+}
+
 .toast-icon {
   font-size: 1.5rem;
   display: flex;
@@ -75,6 +80,10 @@ const { toasts, removeToast } = useToast();
 
 .toast.error .toast-icon {
   color: var(--color-status-danger-bright);
+}
+
+.toast.info .toast-icon {
+  color: var(--color-brand-secondary);
 }
 
 .toast-content {
@@ -121,5 +130,33 @@ const { toasts, removeToast } = useToast();
 .toast-leave-to {
   opacity: 0;
   transform: translateX(100%) scale(0.9);
+}
+
+@media (max-width: 768px) {
+  .toast-container {
+    top: auto;
+    right: 1rem;
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    left: 1rem;
+    gap: 0.65rem;
+    align-items: stretch;
+  }
+
+  .toast {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    padding: 0.85rem 0.95rem;
+    border-radius: 10px;
+  }
+
+  .toast-message {
+    font-size: 0.88rem;
+  }
+
+  .toast-enter-from,
+  .toast-leave-to {
+    transform: translateY(24px) scale(0.96);
+  }
 }
 </style>
