@@ -40,12 +40,13 @@ const isActive = (item) => {
   left: 0;
   z-index: 1100;
   display: none;
-  height: 76px;
-  padding: 8px 22px calc(8px + env(safe-area-inset-bottom));
+  height: var(--mobile-bottom-nav-height);
+  padding: 0 12px env(safe-area-inset-bottom);
   grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: center;
-  background: var(--color-background-app);
-  border-top: 1px solid rgba(15, 23, 42, 0.03);
+  background: var(--color-surface-primary);
+  border-top: 1px solid var(--mobile-divider-color);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .mobile-nav-item {
@@ -53,15 +54,19 @@ const isActive = (item) => {
   min-width: 0;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 4px;
+  height: var(--mobile-bottom-nav-height);
+  margin: 0 4px;
+  border-radius: var(--mobile-control-radius);
   color: var(--color-text-muted);
   text-decoration: none;
-  font-size: 0.72rem;
+  font-size: var(--mobile-caption-size);
   line-height: 1;
 }
 
 .mobile-nav-item i {
-  font-size: 1.48rem;
+  font-size: var(--mobile-icon-size);
   line-height: 1;
 }
 
@@ -69,9 +74,19 @@ const isActive = (item) => {
   color: var(--color-brand-primary);
 }
 
+.mobile-nav-item.active i {
+  font-size: var(--mobile-active-icon-size);
+}
+
 @media (max-width: 768px) {
   .mobile-bottom-nav {
     display: grid;
+  }
+}
+
+@media (max-width: 480px) {
+  .mobile-nav-item {
+    font-size: var(--mobile-tiny-size);
   }
 }
 </style>

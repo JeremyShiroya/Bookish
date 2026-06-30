@@ -225,6 +225,7 @@ import { useRouter } from 'vue-router'
 import { useTTS } from '~/composables/useTTS'
 import { useBooks } from '~/composables/useBooks'
 import { useBookishSettings } from '~/composables/useBookishSettings'
+import BookishSelect from './BookishSelect.vue'
 
 const router = useRouter()
 

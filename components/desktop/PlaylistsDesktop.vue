@@ -104,8 +104,8 @@ import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import { useToast } from "~/composables/useToast";
-import EmptyState from "./EmptyState.vue";
-import PlaylistEditModal from "./PlaylistEditModal.vue";
+import EmptyState from "../shared/EmptyState.vue";
+import PlaylistEditModal from "../shared/PlaylistEditModal.vue";
 
 const { collections, books, updatePlaylist, deletePlaylist } = useBooks();
 const { addToast } = useToast();
@@ -475,6 +475,41 @@ const coverFallback = (event, title) => {
 @media (max-width: 768px) {
   .playlists-header {
     display: none;
+  }
+
+  .playlists-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 0 var(--mobile-page-padding-inline);
+  }
+
+  .playlist-card {
+    border-radius: var(--mobile-card-radius);
+  }
+
+  .card-name {
+    top: 20px;
+    left: 16px;
+    right: 48%;
+    font-size: var(--mobile-body-size);
+    line-height: 1.25;
+  }
+
+  .card-badge {
+    bottom: 12px;
+    left: 16px;
+    padding: 6px 10px;
+    font-size: var(--mobile-caption-size);
+  }
+
+  .card-badge i {
+    font-size: 16px;
+  }
+
+  .add-btn {
+    min-height: var(--mobile-touch-target);
+    border-radius: var(--mobile-control-radius);
+    font-size: var(--mobile-subtext-size);
   }
 }
 </style>

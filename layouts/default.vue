@@ -13,6 +13,11 @@
 </template>
 
 <script setup>
+import Sidebar from '~/components/desktop/Sidebar.vue'
+import MobileBottomNav from '~/components/mobile/MobileBottomNav.vue'
+import MobileTopNav from '~/components/mobile/MobileTopNav.vue'
+import PlayingBar from '~/components/shared/PlayingBar.vue'
+
 const route = useRoute()
 
 const showsProfileTopNav = computed(() => {

@@ -78,9 +78,9 @@ const fanStyle = (i, n) => {
   padding: 0;
   overflow: hidden;
   border: 0;
-  border-radius: 22px;
+  border-radius: var(--mobile-card-radius);
   background: #e8e8f1;
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.1);
+  box-shadow: var(--mobile-card-shadow);
   cursor: pointer;
   text-align: left;
   transition: transform 0.28s ease, box-shadow 0.28s ease;
@@ -99,8 +99,8 @@ const fanStyle = (i, n) => {
 .series-meta {
   position: absolute;
   top: 20px;
-  right: 20px;
-  left: 20px;
+  right: 16px;
+  left: 16px;
   z-index: 40;
   display: flex;
   min-width: 0;
@@ -112,7 +112,7 @@ const fanStyle = (i, n) => {
   overflow: hidden;
   max-width: 100%;
   color: var(--color-text-primary);
-  font-size: 1.05rem;
+  font-size: var(--mobile-body-size);
   font-weight: 400 !important;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -121,7 +121,7 @@ const fanStyle = (i, n) => {
 
 .series-count {
   color: var(--color-text-muted);
-  font-size: 0.8rem;
+  font-size: var(--mobile-subtext-size);
   line-height: 1.2;
 }
 
@@ -176,11 +176,11 @@ const fanStyle = (i, n) => {
   }
 
   .series-name {
-    font-size: 1rem;
+    font-size: var(--mobile-body-size);
   }
 
   .series-count {
-    font-size: 0.76rem;
+    font-size: var(--mobile-caption-size);
   }
 
   .fan-cover {

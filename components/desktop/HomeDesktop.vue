@@ -19,115 +19,6 @@
     </EmptyState>
 
     <template v-else-if="initialized">
-      <div class="mobile-home">
-        <section class="mobile-search-section">
-          <label class="mobile-search-bar">
-            <i class="ri-search-line"></i>
-            <input
-              v-model="homeSearch"
-              type="search"
-              placeholder="Search books"
-              autocomplete="off"
-            />
-            <button
-              v-if="homeSearch"
-              class="mobile-search-clear"
-              type="button"
-              title="Clear search"
-              @click="homeSearch = ''"
-            >
-              <i class="ri-close-line"></i>
-            </button>
-          </label>
-
-          <div v-if="homeSearchResults.length > 0" class="mobile-search-results">
-            <button
-              v-for="book in homeSearchResults"
-              :key="book.id"
-              class="mobile-search-result"
-              type="button"
-              @click="openBook(book); homeSearch = ''"
-            >
-              <img v-if="book.cover" :src="book.cover" :alt="book.title" />
-              <span v-else class="mobile-search-cover-fallback">
-                {{ book.title?.charAt(0) || "B" }}
-              </span>
-              <span class="mobile-search-result-text">
-                <strong>{{ book.title }}</strong>
-                <small>{{ book.author || "Unknown author" }}</small>
-              </span>
-            </button>
-          </div>
-          <p v-else-if="homeSearch.trim()" class="mobile-search-empty">
-            No books found
-          </p>
-        </section>
-
-        <section class="mobile-home-section">
-          <h2 class="mobile-section-title">Currently Reading</h2>
-          <div v-if="continueReadingBooks.length > 0" class="continue-single">
-            <HomeContinueReadingCard
-              :book="continueReadingBooks[0]"
-              @open="openBook"
-            />
-          </div>
-          <EmptyState
-            v-else
-            title="Your library is clear"
-            description="Start building your digital library by uploading your first book."
-            icon="ri-folder-add-line"
-          >
-            <template #action>
-              <NuxtLink to="/books" class="add-btn">
-                <i class="ri-add-line"></i>
-                Add Book
-              </NuxtLink>
-            </template>
-          </EmptyState>
-        </section>
-
-        <section class="mobile-home-section">
-          <div class="mobile-section-header">
-            <h2 class="mobile-section-title">Recently Added</h2>
-            <NuxtLink to="/books" class="mobile-see-all">
-              See all
-            </NuxtLink>
-          </div>
-          <div v-if="mobileRecentBooks.length > 0" class="book-grid">
-            <HomeBookRailCard
-              v-for="book in mobileRecentBooks"
-              :key="book.id"
-              :book="book"
-              @open="openBook"
-            />
-          </div>
-        </section>
-
-        <section class="mobile-home-section mobile-series-section">
-          <div class="mobile-section-header">
-            <h2 class="mobile-section-title">Series</h2>
-            <NuxtLink to="/series" class="mobile-see-all">
-              See all
-            </NuxtLink>
-          </div>
-          <div v-if="mobileSeries.length > 0" class="series-list">
-            <SeriesCollageCard
-              v-for="series in mobileSeries"
-              :key="series.id"
-              :series="series"
-              @open="openSeries"
-            />
-          </div>
-          <EmptyState
-            v-else-if="books.length > 0"
-            title="No series yet"
-            description="Books with series metadata will appear here."
-            icon="ri-book-shelf-line"
-          />
-        </section>
-
-      </div>
-
       <div class="desktop-home">
         <section class="home-section">
           <div class="section-header">
@@ -267,9 +158,9 @@ import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import { getGoodreadsRating } from "~/composables/useGoodreadsRating";
 import { useTTS } from "~/composables/useTTS";
-import EmptyState from "./EmptyState.vue";
-import GoodreadsRatingDisplay from "./GoodreadsRatingDisplay.vue";
-import HomeSkeleton from "./HomeSkeleton.vue";
+import EmptyState from "../shared/EmptyState.vue";
+import GoodreadsRatingDisplay from "../shared/GoodreadsRatingDisplay.vue";
+import HomeSkeleton from "../shared/HomeSkeleton.vue";
 
 const {
   books,
@@ -764,26 +655,26 @@ const truncate = (text, length) => {
   .mobile-home {
     display: block;
     min-height: calc(100vh - 106px);
-    padding-bottom: 1rem;
+    padding: 0 var(--mobile-page-padding-inline) 16px;
   }
 
   .mobile-home-section {
-    margin-top: 22px;
+    margin-top: var(--mobile-section-gap);
   }
 
   .mobile-search-section {
     position: relative;
-    margin-bottom: 18px;
+    margin-bottom: 20px;
   }
 
   .mobile-search-bar {
     display: flex;
     height: 42px;
     align-items: center;
-    gap: 0.55rem;
-    padding: 0 0.75rem;
+    gap: 10px;
+    padding: 0 12px;
     border: 1px solid var(--color-border-card);
-    border-radius: 12px;
+    border-radius: var(--mobile-control-radius);
     background: var(--color-surface-input);
     color: var(--color-text-muted);
     box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
@@ -791,7 +682,7 @@ const truncate = (text, length) => {
 
   .mobile-search-bar i {
     flex: 0 0 auto;
-    font-size: 1.05rem;
+    font-size: 20px;
   }
 
   .mobile-search-bar input {
@@ -802,7 +693,7 @@ const truncate = (text, length) => {
     background: transparent;
     color: var(--color-text-primary);
     font: inherit;
-    font-size: 0.9rem;
+    font-size: var(--mobile-subtext-size);
   }
 
   .mobile-search-bar input::placeholder {
@@ -811,8 +702,8 @@ const truncate = (text, length) => {
 
   .mobile-search-clear {
     display: inline-flex;
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
@@ -834,7 +725,7 @@ const truncate = (text, length) => {
     gap: 4px;
     padding: 8px;
     border: 1px solid rgba(148, 163, 184, 0.24);
-    border-radius: 12px;
+    border-radius: var(--mobile-control-radius);
     background: var(--color-background-app);
     box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
   }
@@ -842,9 +733,9 @@ const truncate = (text, length) => {
   .mobile-search-result {
     display: flex;
     align-items: center;
-    gap: 0.65rem;
+    gap: 12px;
     min-width: 0;
-    padding: 6px;
+    padding: 8px;
     border: 0;
     border-radius: 8px;
     background: transparent;
@@ -889,14 +780,14 @@ const truncate = (text, length) => {
 
   .mobile-search-result-text strong {
     color: var(--color-text-primary);
-    font-size: 0.82rem;
+    font-size: var(--mobile-subtext-size);
     font-weight: 500;
   }
 
   .mobile-search-result-text small,
   .mobile-search-empty {
     color: var(--color-text-muted);
-    font-size: 0.7rem;
+    font-size: var(--mobile-caption-size);
   }
 
   .mobile-search-empty {
@@ -910,16 +801,16 @@ const truncate = (text, length) => {
   .mobile-section-title {
     margin: 0;
     color: var(--color-text-primary);
-    font-size: 0.98rem;
-    line-height: 1.2;
+    font-size: var(--mobile-section-title-size);
+    line-height: 1.25;
   }
 
   .mobile-section-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 9px;
+    gap: 16px;
+    margin-bottom: 10px;
   }
 
   .mobile-section-header .mobile-section-title {
@@ -927,13 +818,13 @@ const truncate = (text, length) => {
   }
 
   .mobile-home-section > .mobile-section-title {
-    margin-bottom: 9px;
+    margin-bottom: 10px;
   }
 
   .mobile-see-all {
     color: var(--color-brand-primary);
     text-decoration: none;
-    font-size: 0.74rem;
+    font-size: var(--mobile-subtext-size);
     line-height: 1;
   }
 
@@ -954,7 +845,7 @@ const truncate = (text, length) => {
   }
 
   .mobile-series-section {
-    margin-top: 19px;
+    margin-top: var(--mobile-section-gap);
   }
 }
 

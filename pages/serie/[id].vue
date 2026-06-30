@@ -14,7 +14,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
-import BookGroupDetail from '~/components/BookGroupDetail.vue';
+import BookGroupDetail from '~/components/shared/BookGroupDetail.vue';
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch';
 import { useBooks } from '~/composables/useBooks';
 import { ensureSeriesTotal, formatSeriesCollectionProgress } from '~/composables/useSeriesProgress';

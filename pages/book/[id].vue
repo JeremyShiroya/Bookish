@@ -146,7 +146,7 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import { useTTS } from "~/composables/useTTS";
-import GoodreadsRatingDisplay from "~/components/GoodreadsRatingDisplay.vue";
+import GoodreadsRatingDisplay from "~/components/shared/GoodreadsRatingDisplay.vue";
 
 const route = useRoute();
 const router = useRouter();

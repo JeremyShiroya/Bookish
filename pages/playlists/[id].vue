@@ -21,8 +21,8 @@
 
 <script setup>
 import { computed, ref } from 'vue';
-import BookGroupDetail from '~/components/BookGroupDetail.vue';
-import PlaylistEditModal from '~/components/PlaylistEditModal.vue';
+import BookGroupDetail from '~/components/shared/BookGroupDetail.vue';
+import PlaylistEditModal from '~/components/shared/PlaylistEditModal.vue';
 import { useBooks } from '~/composables/useBooks';
 import { useToast } from '~/composables/useToast';
 

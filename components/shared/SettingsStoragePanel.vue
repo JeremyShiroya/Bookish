@@ -385,23 +385,86 @@ onMounted(refreshStorageSummary)
 
 @media (max-width: 760px) {
   .settings-panel {
-    padding: 1rem;
+    padding: 16px;
+    border-radius: var(--mobile-card-radius);
+  }
+
+  .panel-heading {
+    gap: 12px;
+    padding-bottom: 16px;
+  }
+
+  .panel-heading > i {
+    width: var(--mobile-list-icon-size);
+    height: var(--mobile-list-icon-size);
+    font-size: var(--mobile-icon-size);
+  }
+
+  .panel-heading h2 {
+    font-size: var(--mobile-section-title-size);
+    line-height: 1.25;
+  }
+
+  .panel-heading p,
+  .setting-copy p,
+  .storage-metric span {
+    font-size: var(--mobile-subtext-size);
   }
 
   .storage-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
+    padding-top: 16px;
+  }
+
+  .storage-metric {
+    min-height: 84px;
+    border-radius: var(--mobile-control-radius);
+    padding: 16px;
+  }
+
+  .storage-metric strong {
+    font-size: var(--mobile-title-size);
+  }
+
+  .storage-status-line {
+    min-height: 58px;
+    margin-top: 16px;
+    border-radius: var(--mobile-control-radius);
+    font-size: var(--mobile-body-size);
+  }
+
+  .icon-action {
+    width: var(--mobile-touch-target);
+    height: var(--mobile-touch-target);
+    font-size: 20px;
+  }
+
+  .data-portability {
+    margin-top: 16px;
+    padding-top: 16px;
+  }
+
+  .setting-copy h3 {
+    font-size: var(--mobile-body-size);
+    line-height: 1.25;
+  }
+
+  .data-action {
+    min-height: var(--mobile-touch-target);
+    border-radius: var(--mobile-control-radius);
+    font-size: var(--mobile-body-size);
   }
 }
 
 @media (max-width: 480px) {
   .settings-panel {
-    border-radius: 7px;
-    padding: 0.8rem;
+    border-radius: var(--mobile-card-radius);
+    padding: 16px;
   }
 
   .panel-heading {
     align-items: flex-start;
-    gap: 0.65rem;
   }
 
   .storage-status-line {

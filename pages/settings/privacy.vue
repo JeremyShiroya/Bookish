@@ -119,4 +119,47 @@ h1 {
   color: var(--color-text-muted);
   line-height: 1.55;
 }
+
+@media (max-width: 760px) {
+  .privacy-card {
+    padding: 16px;
+    border-radius: var(--mobile-card-radius);
+  }
+
+  .privacy-heading {
+    align-items: flex-start;
+    gap: 12px;
+    padding-bottom: 16px;
+  }
+
+  .privacy-heading > i {
+    width: var(--mobile-list-icon-size);
+    height: var(--mobile-list-icon-size);
+    font-size: var(--mobile-icon-size);
+  }
+
+  .eyebrow,
+  .policy-section p {
+    font-size: var(--mobile-subtext-size);
+  }
+
+  h1 {
+    font-size: var(--mobile-title-size);
+    line-height: 1.2;
+  }
+
+  .policy-section {
+    padding: 16px 0;
+  }
+
+  .policy-section h2 {
+    margin-bottom: 6px;
+    font-size: var(--mobile-section-title-size);
+    line-height: 1.25;
+  }
+
+  .policy-section p {
+    line-height: 1.45;
+  }
+}
 </style>

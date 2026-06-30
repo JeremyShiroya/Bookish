@@ -58,6 +58,7 @@
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import EmptyState from "./EmptyState.vue";
+import SkeletonLoader from "./SkeletonLoader.vue";
 
 const { allAuthors, loading, initialized } = useBooks();
 const router = useRouter();

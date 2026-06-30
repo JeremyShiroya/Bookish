@@ -55,7 +55,7 @@ const bookInitial = computed(() => props.book.title?.trim()?.charAt(0)?.toUpperC
   padding: 0;
   overflow: hidden;
   border: 0;
-  border-radius: 16px;
+  border-radius: var(--mobile-card-radius);
   background: transparent;
   color: var(--color-text-on-brand);
   text-align: left;
@@ -71,7 +71,7 @@ const bookInitial = computed(() => props.book.title?.trim()?.charAt(0)?.toUpperC
   width: 100%;
   height: 100%;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: var(--mobile-card-radius);
   z-index: -1;
 }
 
@@ -106,7 +106,7 @@ const bookInitial = computed(() => props.book.title?.trim()?.charAt(0)?.toUpperC
 .continue-cover-wrap {
   position: absolute;
   top: 10px;
-  left: 15px;
+  left: 16px;
   z-index: 1;
   width: 72px;
   height: 110px;
@@ -138,7 +138,7 @@ const bookInitial = computed(() => props.book.title?.trim()?.charAt(0)?.toUpperC
   flex-direction: column;
   justify-content: center;
   min-width: 0;
-  margin-left: 104px;
+  margin-left: 108px;
   padding-right: 50px;
 }
 
@@ -155,7 +155,7 @@ const bookInitial = computed(() => props.book.title?.trim()?.charAt(0)?.toUpperC
   margin: 0 0 0.5rem;
   overflow: hidden;
   color: var(--color-text-on-brand);
-  font-size: 1.1rem;
+  font-size: var(--mobile-body-size);
   line-height: 1.3;
   text-shadow: var(--shadow-text-on-image);
   -webkit-box-orient: vertical;
@@ -166,26 +166,26 @@ const bookInitial = computed(() => props.book.title?.trim()?.charAt(0)?.toUpperC
 .continue-meta {
   margin: 0;
   color: var(--color-text-on-image-secondary);
-  font-size: 0.8rem;
+  font-size: var(--mobile-subtext-size);
   font-weight: 400;
 }
 
 .continue-play {
   position: absolute;
   top: 50%;
-  right: 15px;
+  right: 16px;
   z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: var(--mobile-touch-target);
+  height: var(--mobile-touch-target);
   padding: 0;
   border: 1px solid var(--color-border-on-image-strong);
   border-radius: 50%;
   background: var(--color-surface-on-image-soft);
   color: var(--color-text-on-brand);
-  font-size: 1rem;
+  font-size: 20px;
   transform: translateY(-50%);
   transition: all 0.3s ease;
 }

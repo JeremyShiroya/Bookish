@@ -1,37 +1,5 @@
 <template>
   <main class="settings-page">
-    <section class="mobile-settings-shell" aria-label="Mobile settings">
-      <header class="mobile-settings-header">
-        <button type="button" aria-label="Back" title="Back" @click="goBack">
-          <i class="ri-arrow-left-s-line"></i>
-        </button>
-        <h1>Settings</h1>
-        <span aria-hidden="true"></span>
-      </header>
-
-      <nav class="mobile-settings-list" aria-label="Settings sections">
-        <button
-          v-for="row in mobileSettingsRows"
-          :key="row.label"
-          type="button"
-          @click="handleSettingsRow(row)"
-        >
-          <i :class="row.icon"></i>
-          <span>{{ row.label }}</span>
-          <span
-            v-if="row.type === 'theme'"
-            class="theme-toggle"
-            role="switch"
-            aria-label="Toggle dark mode"
-            :aria-checked="settings.readerTheme === 'dark'"
-          >
-            <span></span>
-          </span>
-          <i v-else class="ri-arrow-right-s-line"></i>
-        </button>
-      </nav>
-    </section>
-
     <section class="settings-hero" aria-labelledby="settings-title">
       <div>
         <span class="eyebrow">Bookish Settings</span>
@@ -307,6 +275,8 @@ import {
   LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS,
 } from '~/composables/useBookishSettings'
 import { useToast } from '~/composables/useToast'
+import SettingsAudioPanel from '../shared/SettingsAudioPanel.vue'
+import SettingsStoragePanel from '../shared/SettingsStoragePanel.vue'
 
 const { books, authors, collections, genres, recentlyAddedBooks, fetchAndStoreAuthorDetails } = useBooks()
 const { settings, updateSettings } = useBookishSettings()
@@ -1038,7 +1008,7 @@ const coverStyle = (index) => ({
   .mobile-settings-shell {
     display: block;
     min-height: calc(100vh - 88px - env(safe-area-inset-bottom));
-    padding: 0 0.25rem 1.5rem;
+    padding: 0 var(--mobile-page-padding-inline) 24px;
     background: var(--color-background-app);
   }
 
@@ -1052,29 +1022,29 @@ const coverStyle = (index) => ({
   .mobile-settings-header {
     position: relative;
     display: grid;
-    grid-template-columns: 42px minmax(0, 1fr) 42px;
+    grid-template-columns: var(--mobile-touch-target) minmax(0, 1fr) var(--mobile-touch-target);
     align-items: center;
-    min-height: 42px;
-    margin-bottom: 1rem;
+    min-height: var(--mobile-touch-target);
+    margin-bottom: 16px;
   }
 
   .mobile-settings-header button {
     display: inline-flex;
-    width: 34px;
-    height: 34px;
+    width: var(--mobile-touch-target);
+    height: var(--mobile-touch-target);
     align-items: center;
     justify-content: center;
     border: 0;
     background: transparent;
     color: var(--color-text-primary);
     cursor: pointer;
-    font-size: 1.35rem;
+    font-size: var(--mobile-icon-size);
   }
 
   .mobile-settings-header h1 {
     margin: 0;
-    color: var(--color-text-secondary);
-    font-size: 1.08rem;
+    color: var(--color-text-primary);
+    font-size: var(--mobile-title-size);
     line-height: 1;
     text-align: center;
   }
@@ -1082,38 +1052,42 @@ const coverStyle = (index) => ({
   .mobile-settings-list {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 4px;
   }
 
   .mobile-settings-list button {
     display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) 26px;
+    grid-template-columns: 28px minmax(0, 1fr) var(--mobile-touch-target);
     align-items: center;
-    min-height: 43px;
+    min-height: var(--mobile-touch-target);
     border: 0;
     background: transparent;
     color: var(--color-text-secondary);
     cursor: pointer;
-    padding: 0 0.55rem;
+    padding: 0 0 0 2px;
     text-align: left;
   }
 
   .mobile-settings-list button > i:first-child {
     color: var(--color-text-primary);
-    font-size: 1.08rem;
+    font-size: 20px;
   }
 
   .mobile-settings-list button span {
     overflow: hidden;
     color: var(--color-text-secondary);
-    font-size: 0.98rem;
+    font-size: var(--mobile-body-size);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .mobile-settings-list button > i:last-child {
     color: var(--color-text-muted);
-    font-size: 1.2rem;
+    font-size: var(--mobile-icon-size);
+    justify-self: end;
+  }
+
+  .mobile-settings-list .theme-toggle {
     justify-self: end;
   }
 

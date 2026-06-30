@@ -6,7 +6,7 @@ const source = (path) => readFileSync(resolve(process.cwd(), path), 'utf8')
 
 describe('legacy reader pipelines', () => {
   it('does not build or search a DOM PDF text layer', () => {
-    const viewer = source('components/PdfViewer.vue')
+    const viewer = source('components/shared/PdfViewer.vue')
 
     expect(viewer).not.toContain('usePdfHighlight')
     expect(viewer).not.toContain('TextLayer')
@@ -25,7 +25,7 @@ describe('legacy reader pipelines', () => {
 
 describe('legacy author totals pipeline', () => {
   it('does not consume unvalidated provider work counts', () => {
-    const detail = source('components/AuthorDetailComp.vue')
+    const detail = source('components/shared/AuthorDetailComp.vue')
     const route = source('server/api/authors/bio.get.ts')
 
     expect(detail).not.toContain('authorBooksCount')

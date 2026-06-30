@@ -33,8 +33,8 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
-import EmptyState from "./EmptyState.vue";
-import SeriesCollageCard from "./SeriesCollageCard.vue";
+import EmptyState from "../shared/EmptyState.vue";
+import SeriesCollageCard from "../shared/SeriesCollageCard.vue";
 
 const { seriesList } = useBooks();
 const router = useRouter();
@@ -120,7 +120,15 @@ const openSeries = (series) => {
   }
 
   .series-grid {
-    gap: 1rem;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 0 var(--mobile-page-padding-inline);
+  }
+
+  .add-btn {
+    min-height: var(--mobile-touch-target);
+    border-radius: var(--mobile-control-radius);
+    font-size: var(--mobile-subtext-size);
   }
 }
 </style>

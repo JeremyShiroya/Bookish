@@ -7,7 +7,7 @@ const read = (path) => readFileSync(resolve(root, path), 'utf8')
 
 describe('settings pages wiring', () => {
   test('settings links route to audio, storage, about, and privacy pages', () => {
-    const settings = read('components/SettingsComp.vue')
+    const settings = read('components/mobile/SettingsMobile.vue')
 
     expect(existsSync(resolve(root, 'pages/settings/index.vue'))).toBe(true)
     expect(existsSync(resolve(root, 'pages/settings.vue'))).toBe(false)
@@ -25,7 +25,7 @@ describe('settings pages wiring', () => {
 
   test('audio settings page excludes track splitting controls', () => {
     const audioPage = read('pages/settings/audio.vue')
-    const audioPanel = read('components/SettingsAudioPanel.vue')
+    const audioPanel = read('components/shared/SettingsAudioPanel.vue')
 
     expect(audioPage).toContain('<SettingsAudioPanel')
     expect(audioPanel).toContain('Narrator voice')
@@ -35,17 +35,17 @@ describe('settings pages wiring', () => {
   })
 
   test('theme row uses a light and dark toggle without a trailing arrow', () => {
-    const settings = read('components/SettingsComp.vue')
+    const settings = read('components/mobile/SettingsMobile.vue')
 
     expect(settings).toContain('theme-toggle')
     expect(settings).toContain("aria-label=\"Toggle dark mode\"")
-    expect(settings).toContain("setReaderTheme(settings.readerTheme === 'dark' ? 'light' : 'dark')")
+    expect(settings).toContain("setReaderTheme(settings.value.readerTheme === 'dark' ? 'light' : 'dark')")
     expect(settings).not.toMatch(/label: 'Theme'[\s\S]*?ri-arrow-right-s-line/)
   })
 
   test('mobile page titles are hidden for series, playlists, and favourites', () => {
-    expect(read('components/SeriesComp.vue')).toMatch(/@media \(max-width: 768px\)[\s\S]*\.series-header\s*\{[\s\S]*display:\s*none/)
-    expect(read('components/PlaylistComp.vue')).toMatch(/@media \(max-width: 768px\)[\s\S]*\.playlists-header\s*\{[\s\S]*display:\s*none/)
-    expect(read('components/FavouritesComp.vue')).toMatch(/@media \(max-width: 768px\)[\s\S]*\.favourites-header\s*\{[\s\S]*display:\s*none/)
+    expect(read('components/mobile/SeriesMobile.vue')).toMatch(/@media \(max-width: 768px\)[\s\S]*\.series-header\s*\{[\s\S]*display:\s*none/)
+    expect(read('components/mobile/PlaylistsMobile.vue')).toMatch(/@media \(max-width: 768px\)[\s\S]*\.playlists-header\s*\{[\s\S]*display:\s*none/)
+    expect(read('components/mobile/FavouritesMobile.vue')).toMatch(/@media \(max-width: 768px\)[\s\S]*\.favourites-header\s*\{[\s\S]*display:\s*none/)
   })
 })

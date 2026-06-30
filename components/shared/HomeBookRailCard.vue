@@ -77,16 +77,16 @@ const bookInitial = computed(() => props.book.title?.trim()?.charAt(0)?.toUpperC
 }
 
 .home-book-title {
-  margin-top: 7px;
+  margin-top: 8px;
   color: var(--color-text-primary);
-  font-size: 0.74rem;
-  line-height: 1.15;
+  font-size: var(--mobile-caption-size);
+  line-height: 1.2;
 }
 
 .home-book-author {
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--color-text-muted);
-  font-size: 0.62rem;
-  line-height: 1.15;
+  font-size: var(--mobile-tiny-size);
+  line-height: 1.2;
 }
 </style>

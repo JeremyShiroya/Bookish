@@ -449,7 +449,7 @@ const formatPersonalRating = (rating) => {
     width: 100%;
     height: auto;
     aspect-ratio: 96 / 145;
-    border-radius: 7px;
+    border-radius: 8px;
     box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
   }
 
@@ -461,7 +461,7 @@ const formatPersonalRating = (rating) => {
     display: block;
     height: auto;
     min-width: 0;
-    padding: 0.42rem 0 0;
+    padding: 8px 0 0;
   }
 
   .card-info h3 {
@@ -469,9 +469,9 @@ const formatPersonalRating = (rating) => {
     margin: 0 0 0.13rem;
     overflow: hidden;
     color: var(--color-text-primary);
-    font-size: 0.72rem;
+    font-size: var(--mobile-caption-size);
     font-weight: 400;
-    line-height: 1.14;
+    line-height: 1.2;
     text-shadow: none;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
@@ -480,8 +480,8 @@ const formatPersonalRating = (rating) => {
   .card-author {
     margin: 0;
     color: var(--color-text-muted);
-    font-size: 0.6rem;
-    line-height: 1.1;
+    font-size: var(--mobile-tiny-size);
+    line-height: 1.2;
     text-shadow: none;
   }
 
@@ -489,11 +489,11 @@ const formatPersonalRating = (rating) => {
     display: flex;
     min-height: 232px;
     height: 100%;
-    gap: 0.95rem;
+    gap: 14px;
     overflow: hidden;
-    padding: 1rem;
+    padding: 16px;
     border: 1px solid var(--color-border-on-image);
-    border-radius: 14px;
+    border-radius: var(--mobile-card-radius);
     color: var(--color-text-on-brand);
     box-shadow: var(--shadow-card);
   }
@@ -543,7 +543,7 @@ const formatPersonalRating = (rating) => {
   .library-book-card.mobile-list-book-card .card-info h3 {
     margin: 0 0 0.25rem;
     color: var(--color-text-on-image-primary);
-    font-size: 1.05rem;
+    font-size: var(--mobile-body-size);
     font-weight: 500;
     line-height: 1.18;
     text-shadow: var(--shadow-text-on-image);
@@ -553,18 +553,18 @@ const formatPersonalRating = (rating) => {
   .library-book-card.mobile-list-book-card .card-author,
   .library-book-card.mobile-list-book-card .card-series {
     color: var(--color-text-on-image-secondary);
-    font-size: 0.78rem;
+    font-size: var(--mobile-subtext-size);
   }
 
   .library-book-card.mobile-list-book-card .card-genre {
     display: inline-flex;
-    font-size: 0.64rem;
+    font-size: var(--mobile-caption-size);
   }
 
   .library-book-card.mobile-list-book-card .card-progress,
   .library-book-card.mobile-list-book-card .goodreads-row,
   .library-book-card.mobile-list-book-card .personal-rating {
-    font-size: 0.74rem;
+    font-size: var(--mobile-caption-size);
   }
 
   .library-book-card.mobile-list-book-card .card-actions {
@@ -573,9 +573,9 @@ const formatPersonalRating = (rating) => {
   }
 
   .library-book-card.mobile-list-book-card .action-button {
-    width: 34px;
-    height: 34px;
-    border-radius: 7px;
+    width: var(--mobile-touch-target);
+    height: var(--mobile-touch-target);
+    border-radius: var(--mobile-control-radius);
   }
 }
 </style>

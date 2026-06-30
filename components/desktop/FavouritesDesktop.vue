@@ -59,10 +59,11 @@
 import { ref } from 'vue';
 import { useBooks } from "~/composables/useBooks";
 import { useTTS } from '~/composables/useTTS';
-import EmptyState from "./EmptyState.vue";
-import LibraryBookCard from './LibraryBookCard.vue';
-import AddToPlaylistModal from './AddToPlaylistModal.vue';
-import DeleteConfirmModal from './DeleteConfirmModal.vue';
+import EmptyState from "../shared/EmptyState.vue";
+import LibraryBookCard from '../shared/LibraryBookCard.vue';
+import AddToPlaylistModal from '../shared/AddToPlaylistModal.vue';
+import DeleteConfirmModal from '../shared/DeleteConfirmModal.vue';
+import SkeletonLoader from '../shared/SkeletonLoader.vue';
 
 const { favourites, toggleFavourite, deleteBook, loading, initialized } = useBooks();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
@@ -132,14 +133,50 @@ const confirmDelete = async () => {
     display: none;
   }
 
-  .books-grid {
-    grid-template-columns: 1fr;
+  .favourites-container {
+    padding: 0 var(--mobile-page-padding-inline);
   }
-}
 
-@media (max-width: 720px) {
   .books-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 14px;
+  }
+
+  .book-card {
+    width: 100%;
+  }
+
+  .book-cover {
+    border-radius: 8px;
+    margin-bottom: 8px;
+  }
+
+  .heart-btn {
+    opacity: 1;
+    transform: none;
+    width: 34px;
+    height: 34px;
+  }
+
+  .play-btn {
+    opacity: 1;
+    transform: none;
+    width: var(--mobile-touch-target);
+    height: var(--mobile-touch-target);
+  }
+
+  .play-btn i {
+    font-size: var(--mobile-icon-size);
+  }
+
+  .book-title {
+    font-size: var(--mobile-caption-size);
+    line-height: 1.2;
+  }
+
+  .book-author {
+    font-size: var(--mobile-tiny-size);
+    line-height: 1.2;
   }
 }
 

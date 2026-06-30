@@ -57,6 +57,7 @@
 <script setup>
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { chunkHighlightRects, chunkSubRangeRects, pagesToRender, scrollTargetForChunk } from '~/composables/usePdfGeometry'
+import SkeletonLoader from './SkeletonLoader.vue'
 
 const props = defineProps({
   src: { required: true },

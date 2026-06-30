@@ -84,11 +84,11 @@ onBeforeUnmount(() => {
   left: 0;
   z-index: 1100;
   display: none;
-  min-height: 74px;
+  min-height: 70px;
   align-items: center;
   justify-content: space-between;
-  gap: 0.7rem;
-  padding: calc(12px + env(safe-area-inset-top)) 1rem 0.7rem;
+  gap: 1rem;
+  padding: calc(12px + env(safe-area-inset-top)) var(--mobile-page-padding-inline) 0.75rem;
   background: var(--color-background-app);
 }
 
@@ -105,15 +105,15 @@ onBeforeUnmount(() => {
   background: transparent;
   color: inherit;
   cursor: pointer;
-  gap: 0.7rem;
+  gap: 10px;
   text-align: left;
 }
 
 .profile-avatar {
   position: relative;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+  width: var(--mobile-top-avatar-size);
+  height: var(--mobile-top-avatar-size);
+  flex: 0 0 var(--mobile-top-avatar-size);
   overflow: hidden;
   border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
@@ -131,7 +131,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   flex-direction: column;
   color: var(--color-text-primary);
-  line-height: 1.04;
+  line-height: 1.15;
 }
 
 .greeting-copy span,
@@ -144,16 +144,18 @@ onBeforeUnmount(() => {
 
 .greeting-copy span {
   max-width: min(42vw, 220px);
-  font-size: 0.86rem;
+  color: var(--color-text-muted);
+  font-size: var(--mobile-caption-size);
 }
 
 .greeting-copy strong {
   max-width: min(48vw, 240px);
-  font-size: 1.08rem;
+  color: var(--color-text-primary);
+  font-size: var(--mobile-body-size);
 }
 
 .nav-actions {
-  gap: 0.6rem;
+  gap: 8px;
   flex-shrink: 0;
 }
 
@@ -163,23 +165,23 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 0.25rem;
   min-width: 52px;
-  min-height: 32px;
-  padding: 0 0.75rem;
+  min-height: 34px;
+  padding: 0 12px;
   border-radius: 999px;
   background: var(--color-brand-primary-muted);
   color: var(--color-brand-primary);
-  font-size: 0.95rem;
+  font-size: var(--mobile-subtext-size);
   line-height: 1;
 }
 
 .streak-pill i {
-  font-size: 1rem;
+  font-size: 18px;
 }
 
 .mobile-menu-button {
   display: inline-flex;
-  width: 38px;
-  height: 38px;
+  width: var(--mobile-touch-target);
+  height: var(--mobile-touch-target);
   align-items: center;
   justify-content: center;
   padding: 0;
@@ -187,7 +189,7 @@ onBeforeUnmount(() => {
   background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
-  font-size: 1.85rem;
+  font-size: var(--mobile-icon-size);
 }
 
 @media (max-width: 768px) {
@@ -198,14 +200,14 @@ onBeforeUnmount(() => {
 
 @media (max-width: 360px) {
   .mobile-top-nav {
-    padding-right: 0.85rem;
-    padding-left: 0.85rem;
+    padding-right: 14px;
+    padding-left: 14px;
   }
 
   .profile-avatar {
-    width: 40px;
-    height: 40px;
-    flex-basis: 40px;
+    width: var(--mobile-top-avatar-size);
+    height: var(--mobile-top-avatar-size);
+    flex-basis: var(--mobile-top-avatar-size);
   }
 
   .nav-actions {

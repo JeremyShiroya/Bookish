@@ -339,7 +339,7 @@ defineProps({
 
 .skeleton-form .sk-card.document-row,
 .skeleton-form .sk-card.metadata-callout {
-  height: 76px;
+  height: var(--mobile-bottom-nav-height);
   background: var(--color-surface-primary);
   border: 1px solid var(--border-color);
   border-radius: 8px;

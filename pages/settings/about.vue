@@ -134,8 +134,57 @@ dd {
 }
 
 @media (max-width: 760px) {
+  .about-card {
+    padding: 16px;
+    border-radius: var(--mobile-card-radius);
+  }
+
+  .about-logo {
+    width: var(--mobile-list-icon-size);
+    height: var(--mobile-list-icon-size);
+    margin-bottom: 12px;
+  }
+
+  .eyebrow,
+  dt,
+  .about-section p {
+    font-size: var(--mobile-subtext-size);
+  }
+
+  h1 {
+    font-size: var(--mobile-title-size);
+    line-height: 1.2;
+  }
+
+  .lede {
+    margin-top: 8px;
+    font-size: var(--mobile-body-size);
+    line-height: 1.45;
+  }
+
   .about-details {
     grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 20px;
+  }
+
+  .about-details div,
+  .about-section {
+    border-radius: var(--mobile-control-radius);
+    padding: 16px;
+  }
+
+  .about-section {
+    margin-top: 12px;
+  }
+
+  .about-section h2 {
+    font-size: var(--mobile-section-title-size);
+    line-height: 1.25;
+  }
+
+  dd {
+    font-size: var(--mobile-body-size);
   }
 }
 </style>

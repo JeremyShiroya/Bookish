@@ -4,6 +4,10 @@
   </main>
 </template>
 
+<script setup>
+import SettingsStoragePanel from '~/components/shared/SettingsStoragePanel.vue'
+</script>
+
 <style scoped>
 .settings-detail-page {
   width: 100%;

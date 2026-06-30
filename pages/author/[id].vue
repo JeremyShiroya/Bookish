@@ -3,7 +3,7 @@
 </template>
 
 <script setup>
-import AuthorDetailComp from '~/components/AuthorDetailComp.vue';
+import AuthorDetailComp from '~/components/shared/AuthorDetailComp.vue';
 
 definePageMeta({
   layout: 'default'

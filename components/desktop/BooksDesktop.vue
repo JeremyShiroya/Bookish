@@ -410,10 +410,11 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
-import DeleteConfirmModal from "./DeleteConfirmModal.vue";
-import GoodreadsRatingDisplay from "./GoodreadsRatingDisplay.vue";
-import LibraryBookCard from "./LibraryBookCard.vue";
-import AddToPlaylistModal from "./AddToPlaylistModal.vue";
+import DeleteConfirmModal from "../shared/DeleteConfirmModal.vue";
+import GoodreadsRatingDisplay from "../shared/GoodreadsRatingDisplay.vue";
+import LibraryBookCard from "../shared/LibraryBookCard.vue";
+import AddToPlaylistModal from "../shared/AddToPlaylistModal.vue";
+import SkeletonLoader from "../shared/SkeletonLoader.vue";
 
 import { useBooks } from "~/composables/useBooks";
 import { getGoodreadsRating, parseGoodreadsReview } from "~/composables/useGoodreadsRating";
@@ -422,7 +423,7 @@ import { useBookishSettings } from "~/composables/useBookishSettings";
 import { useToast } from "~/composables/useToast";
 
 // Reactive data
-import EmptyState from "./EmptyState.vue";
+import EmptyState from "../shared/EmptyState.vue";
 
 const {
   books,
@@ -2473,8 +2474,8 @@ onUnmounted(() => {
   .controls-row.in-container {
     align-items: flex-start;
     flex-wrap: wrap;
-    gap: 0.75rem;
-    padding: 0 0 1rem;
+    gap: 12px;
+    padding: 0 var(--mobile-page-padding-inline) 16px;
   }
 
   .controls-left {
@@ -2503,7 +2504,7 @@ onUnmounted(() => {
 
   .status-chips,
   .view-chips {
-    gap: 0.3rem;
+    gap: 6px;
     padding: 0;
     border: 0;
     background: transparent;
@@ -2514,12 +2515,12 @@ onUnmounted(() => {
   }
 
   .status-chip {
-    min-height: 26px;
-    padding: 0.36rem 0.8rem;
-    border-radius: 5px;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: var(--mobile-control-radius);
     background: rgba(138, 43, 226, 0.1);
     color: var(--color-text-muted);
-    font-size: 0.66rem;
+    font-size: var(--mobile-caption-size);
     line-height: 1;
   }
 
@@ -2529,14 +2530,14 @@ onUnmounted(() => {
   }
 
   .view-chip-icon {
-    width: 26px;
-    height: 26px;
-    min-height: 26px;
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
     padding: 0;
-    border-radius: 6px;
+    border-radius: var(--mobile-control-radius);
     background: rgba(138, 43, 226, 0.07);
     color: var(--color-text-subtle);
-    font-size: 0.95rem;
+    font-size: 18px;
   }
 
   .view-chip-icon.active {
@@ -2547,21 +2548,22 @@ onUnmounted(() => {
   .mobile-add-book-btn {
     display: inline-flex;
     flex: 0 0 auto;
-    min-height: 30px;
-    padding: 0.4rem 0.8rem;
-    border-radius: 6px;
-    font-size: 0.68rem;
+    min-height: var(--mobile-touch-target);
+    padding: 0 14px;
+    border-radius: var(--mobile-control-radius);
+    font-size: var(--mobile-subtext-size);
     line-height: 1;
   }
 
   .mobile-add-book-btn i {
-    font-size: 0.9rem;
+    font-size: 18px;
   }
 
   .books-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1rem 0.9rem;
+    gap: 16px 14px;
     justify-content: start;
+    padding: 0 var(--mobile-page-padding-inline);
   }
 
   .pagination {
@@ -2571,7 +2573,8 @@ onUnmounted(() => {
   .mobile-table-card-list {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 1rem;
+    gap: 16px;
+    padding: 0 var(--mobile-page-padding-inline);
   }
 
   .data-table {

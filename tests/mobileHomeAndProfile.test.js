@@ -7,14 +7,14 @@ const read = (path) => readFileSync(resolve(root, path), 'utf8')
 
 describe('mobile home and profile refinements', () => {
   test('mobile home shows two series cards', () => {
-    const home = read('components/HomeComp.vue')
+    const home = read('components/mobile/HomeMobile.vue')
 
     expect(home).toContain('const mobileSeries = computed(() => seriesList.value.slice(0, 2));')
     expect(home).not.toContain('const mobileSeries = computed(() => seriesList.value.slice(0, 3));')
   })
 
   test('profile page has the redesigned layout structure', () => {
-    const profile = read('pages/profile.vue')
+    const profile = read('components/mobile/ProfileMobile.vue')
 
     expect(profile).toContain('profile-hero')
     expect(profile).toContain('profile-avatar-ring')

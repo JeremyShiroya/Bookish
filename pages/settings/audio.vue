@@ -4,6 +4,10 @@
   </main>
 </template>
 
+<script setup>
+import SettingsAudioPanel from '~/components/shared/SettingsAudioPanel.vue'
+</script>
+
 <style scoped>
 .settings-detail-page {
   width: 100%;

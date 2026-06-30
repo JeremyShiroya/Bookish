@@ -62,6 +62,7 @@
 import { computed } from 'vue'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 import { useTTS } from '~/composables/useTTS'
+import BookishSelect from './BookishSelect.vue'
 
 const { settings, updateSettings } = useBookishSettings()
 const { ttsVoices, setSpeed, setVolume, setVoice } = useTTS()
@@ -208,15 +209,50 @@ const setAudioVolume = (value) => {
 
 @media (max-width: 760px) {
   .settings-panel {
-    padding: 1rem;
+    padding: 16px;
+    border-radius: var(--mobile-card-radius);
+  }
+
+  .panel-heading {
+    gap: 12px;
+    padding-bottom: 16px;
+  }
+
+  .panel-heading > i {
+    width: var(--mobile-list-icon-size);
+    height: var(--mobile-list-icon-size);
+    font-size: var(--mobile-icon-size);
+  }
+
+  .panel-heading h2 {
+    font-size: var(--mobile-section-title-size);
+    line-height: 1.25;
+  }
+
+  .panel-heading p,
+  .setting-copy p {
+    font-size: var(--mobile-subtext-size);
   }
 
   .setting-row {
     grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 16px 0;
+  }
+
+  .setting-copy h3 {
+    font-size: var(--mobile-body-size);
+    line-height: 1.25;
   }
 
   .chip-group {
     justify-content: flex-start;
+  }
+
+  .chip-group button {
+    min-height: var(--mobile-touch-target);
+    border-radius: var(--mobile-control-radius);
+    font-size: var(--mobile-body-size);
   }
 
   .range-control {
@@ -226,17 +262,12 @@ const setAudioVolume = (value) => {
 
 @media (max-width: 480px) {
   .settings-panel {
-    border-radius: 7px;
-    padding: 0.8rem;
+    border-radius: var(--mobile-card-radius);
+    padding: 16px;
   }
 
   .panel-heading {
     align-items: flex-start;
-    gap: 0.65rem;
-  }
-
-  .setting-row {
-    gap: 0.75rem;
   }
 
   .chip-group {

@@ -8,6 +8,11 @@
   </div>
 </template>
 
+<script setup>
+import Sidebar from '~/components/desktop/Sidebar.vue'
+import PlayingBar from '~/components/shared/PlayingBar.vue'
+</script>
+
 <style scoped>
 .reader-layout {
   min-height: 100vh;

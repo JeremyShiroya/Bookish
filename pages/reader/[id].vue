@@ -209,6 +209,8 @@ import {
 } from '~/composables/usePdfExtractor'
 import { PDF_MANIFEST_VERSION, firstChunkForPage, pageForChunk } from '~/composables/usePdfManifest'
 import { pdfProgressForPage } from '~/composables/useReaderPosition'
+import PdfViewer from '~/components/shared/PdfViewer.vue'
+import SkeletonLoader from '~/components/shared/SkeletonLoader.vue'
 
 const route = useRoute()
 const router = useRouter()
