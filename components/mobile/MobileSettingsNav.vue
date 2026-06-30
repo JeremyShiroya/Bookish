@@ -79,7 +79,7 @@ const goBack = () => {
     grid-template-columns: 44px minmax(0, 1fr) 44px;
     align-items: center;
     padding: 0 16px;
-    min-height: 44px;
+    min-height: 70px;
     color: var(--color-text-primary);
     font-family: var(--mobile-font-family);
   }

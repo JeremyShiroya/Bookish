@@ -1,5 +1,7 @@
 <template>
   <main class="profile-page">
+    <MobileSettingsNav title="Profile" back-to="/settings" aria-label="Settings navigation" />
+
     <section class="profile-hero" aria-label="Profile details">
       <div class="profile-identity">
         <button
@@ -173,11 +175,7 @@ onMounted(async () => {
 
 .profile-hero,
 .appearance-panel {
-  border: 1px solid var(--color-border-card);
   border-radius: 14px;
-  background:
-    radial-gradient(circle at 12% 8%, var(--color-brand-primary-faint), transparent 34%),
-    var(--color-surface-card);
 }
 
 .profile-hero {
