@@ -472,7 +472,6 @@ const coverFallback = (event, title) => {
   box-shadow: var(--shadow-brand-button-hover);
 }
 
-@media (max-width: 768px) {
   .playlists-header {
     display: none;
   }
@@ -511,5 +510,5 @@ const coverFallback = (event, title) => {
     border-radius: var(--mobile-control-radius);
     font-size: var(--mobile-subtext-size);
   }
-}
+
 </style>

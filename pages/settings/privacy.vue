@@ -1,5 +1,6 @@
 <template>
   <main class="privacy-page">
+    <MobileSettingsNav title="Privacy Policy" />
     <section class="privacy-card" aria-labelledby="privacy-title">
       <div class="privacy-heading">
         <i class="ri-shield-keyhole-line"></i>
@@ -44,6 +45,10 @@
     </section>
   </main>
 </template>
+
+<script setup>
+import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue'
+</script>
 
 <style scoped>
 .privacy-page {

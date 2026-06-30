@@ -122,13 +122,6 @@ const confirmDelete = async () => {
   justify-content: start;
 }
 
-@media (max-width: 1100px) {
-  .books-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
   .favourites-header {
     display: none;
   }
@@ -178,7 +171,7 @@ const confirmDelete = async () => {
     font-size: var(--mobile-tiny-size);
     line-height: 1.2;
   }
-}
+
 
 .favourites-loading {
   padding: 0.5rem 0;

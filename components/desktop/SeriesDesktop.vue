@@ -114,21 +114,4 @@ const openSeries = (series) => {
   box-shadow: var(--shadow-brand-button-hover);
 }
 
-@media (max-width: 768px) {
-  .series-header {
-    display: none;
-  }
-
-  .series-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-    padding: 0 var(--mobile-page-padding-inline);
-  }
-
-  .add-btn {
-    min-height: var(--mobile-touch-target);
-    border-radius: var(--mobile-control-radius);
-    font-size: var(--mobile-subtext-size);
-  }
-}
 </style>

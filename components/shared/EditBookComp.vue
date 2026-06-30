@@ -22,28 +22,29 @@
               <i class="ri-close-line"></i>
             </button>
           </div>
-          <div v-if="showMetadataProgress" class="metadata-loading">
-            <MultiStepLoader
-              :loading="true"
-              :loading-states="metadataLoadingStates"
-              :duration="1450"
-              :loop="false"
-              eyebrow="Metadata fetch in progress"
-              detail="Publisher-site lookup runs after the normal providers return a publisher name."
-            />
-            <div v-if="!isFetchingMetadata" class="metadata-progress-actions">
-              <p class="metadata-progress-summary">
-                {{ metadataResults.length ? `${metadataResults.length} metadata option${metadataResults.length === 1 ? '' : 's'} ready.` : 'Search finished with no metadata options.' }}
-              </p>
-              <button class="btn-primary metadata-continue-button" type="button" @click="continueToMetadataResults">
-                Continue
-              </button>
+          <div class="metadata-modal-body">
+            <div v-if="showMetadataProgress" class="metadata-loading">
+              <MultiStepLoader
+                :loading="true"
+                :loading-states="metadataLoadingStates"
+                :duration="1450"
+                :loop="false"
+                eyebrow="Metadata fetch in progress"
+                detail="Publisher-site lookup runs after the normal providers return a publisher name."
+              />
+              <div v-if="!isFetchingMetadata" class="metadata-progress-actions">
+                <p class="metadata-progress-summary">
+                  {{ metadataResults.length ? `${metadataResults.length} metadata option${metadataResults.length === 1 ? '' : 's'} ready.` : 'Search finished with no metadata options.' }}
+                </p>
+                <button class="btn-primary metadata-continue-button" type="button" @click="continueToMetadataResults">
+                  Continue
+                </button>
+              </div>
             </div>
-          </div>
-          <div v-else-if="metadataResults.length === 0" class="metadata-empty">
-            <p>No results found for "{{ editBook.title }}" by "{{ editBook.author || 'any' }}".</p>
-          </div>
-          <div v-else class="metadata-results">
+            <div v-else-if="metadataResults.length === 0" class="metadata-empty">
+              <p>No results found for "{{ editBook.title }}" by "{{ editBook.author || 'any' }}".</p>
+            </div>
+            <div v-else class="metadata-results">
             <div 
               v-for="result in metadataResults" 
               :key="result.googleId" 
@@ -74,6 +75,7 @@
                   compact
                 />
               </div>
+            </div>
             </div>
           </div>
         </div>
@@ -1151,11 +1153,19 @@ const handleUpdateBook = async () => {
 .metadata-modal-container {
   background: var(--color-surface-primary);
   border-radius: 20px;
-  width: 90%;
+  width: min(600px, calc(100vw - 24px));
   max-width: 600px;
-  max-height: 80vh;
-  overflow-y: auto;
+  max-height: calc(100dvh - 24px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: var(--shadow-modal);
+}
+
+.metadata-modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .metadata-modal-header {
@@ -1345,12 +1355,16 @@ const handleUpdateBook = async () => {
 }
 
 .metadata-progress-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem 1.5rem 1.25rem;
   border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-primary);
 }
 
 .metadata-progress-summary {

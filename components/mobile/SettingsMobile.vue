@@ -1,23 +1,19 @@
 <template>
-  <main class="settings-page">
-    <section class="mobile-settings-shell" aria-label="Mobile settings">
-      <header class="mobile-settings-header">
-        <button type="button" aria-label="Back" title="Back" @click="goBack">
-          <i class="ri-arrow-left-s-line"></i>
-        </button>
-        <h1>Settings</h1>
-        <span aria-hidden="true"></span>
-      </header>
-
-      <nav class="mobile-settings-list" aria-label="Settings sections">
-        <button
+  <div class="profile">
+    <MobileSettingsNav title="Settings" />
+    <div class="profile-container">
+      <section class="section">
+        <div
           v-for="row in mobileSettingsRows"
           :key="row.label"
-          type="button"
+          class="setting-item"
           @click="handleSettingsRow(row)"
         >
-          <i :class="row.icon"></i>
-          <span>{{ row.label }}</span>
+          <div class="setting-info">
+            <i :class="row.icon"></i>
+            <span>{{ row.label }}</span>
+          </div>
+
           <span
             v-if="row.type === 'theme'"
             class="theme-toggle"
@@ -27,31 +23,25 @@
           >
             <span></span>
           </span>
-          <i v-else class="ri-arrow-right-s-line"></i>
-        </button>
-      </nav>
-    </section>
+          <i v-else class="ri-arrow-right-s-line right-icon"></i>
+        </div>
 
-  </main>
+        <div class="about-item">
+          <span>Bookish</span>
+        </div>
+      </section>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { useBooks } from '~/composables/useBooks'
-import {
-  useBookishSettings,
-  LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS,
-  LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS,
-} from '~/composables/useBookishSettings'
+import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue'
+import { useBookishSettings } from '~/composables/useBookishSettings'
 import { useToast } from '~/composables/useToast'
 
-const { books, authors, collections, genres, recentlyAddedBooks, fetchAndStoreAuthorDetails } = useBooks()
 const { settings, updateSettings } = useBookishSettings()
 const { addToast } = useToast()
 const router = useRouter()
-const runtimeConfig = useRuntimeConfig()
-const appVersion = runtimeConfig.public.appVersion || '0.0.0'
-const buildNumber = runtimeConfig.public.buildNumber || 'dev'
 
 const mobileSettingsRows = [
   { label: 'Audio', icon: 'ri-headphone-line', to: '/settings/audio' },
@@ -63,42 +53,8 @@ const mobileSettingsRows = [
   { label: 'Buy me a coffee', icon: 'ri-cup-line', comingSoon: true },
 ]
 
-const coverPreviewBooks = computed(() => recentlyAddedBooks.value.slice(0, 3))
-
-const statusCounts = computed(() => {
-  return books.value.reduce((counts, book) => {
-    const status = book.status || 'Unread'
-    counts[status] = (counts[status] || 0) + 1
-    return counts
-  }, {})
-})
-
-const booksWithCovers = computed(() => books.value.filter(book => !!book.cover).length)
-const booksWithWebReviews = computed(() => books.value.filter(book => !!book.webReview).length)
-
-const libraryStats = computed(() => [
-  { label: 'Books', value: books.value.length, icon: 'ri-book-open-line' },
-  { label: 'Authors', value: authors.value.length, icon: 'ri-group-line' },
-  { label: 'Playlists', value: collections.value.length, icon: 'ri-play-list-2-line' },
-  { label: 'Reading', value: statusCounts.value.Reading || 0, icon: 'ri-bookmark-3-line' },
-  { label: 'Read', value: statusCounts.value.Completed || statusCounts.value.Read || 0, icon: 'ri-checkbox-circle-line' },
-])
-
-const formatStats = computed(() => {
-  const counts = books.value.reduce((result, book) => {
-    const format = (book.format || 'unknown').toUpperCase()
-    result[format] = (result[format] || 0) + 1
-    return result
-  }, {})
-
-  return Object.entries(counts)
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-})
-
-const goBack = () => {
-  if (window.history.length > 1) router.back()
-  else router.push('/')
+const navigate = (path) => {
+  router.push(path)
 }
 
 const handleSettingsRow = (row) => {
@@ -108,871 +64,120 @@ const handleSettingsRow = (row) => {
   }
 
   if (row.to) {
-    router.push(row.to)
+    navigate(row.to)
     return
   }
 
-  const suffix = row.comingSoon ? 'page' : 'settings page'
-  addToast(`${row.label} ${suffix} is coming later.`, 'info')
-}
-
-const authorFetchLoading = ref(false)
-const authorFetchProgress = ref('')
-
-const fetchAllAuthorDetails = async () => {
-  if (authorFetchLoading.value) return
-  const names = authors.value.map(author => author.name).filter(Boolean)
-  if (!names.length) {
-    addToast('No authors in your library yet.', 'info')
-    return
-  }
-  authorFetchLoading.value = true
-  let successCount = 0
-  try {
-    for (let i = 0; i < names.length; i++) {
-      authorFetchProgress.value = `${i + 1} / ${names.length}`
-      const ok = await fetchAndStoreAuthorDetails(names[i], { force: true })
-      if (ok) successCount++
-    }
-    addToast(
-      `Author details updated for ${successCount} of ${names.length} authors.`,
-      successCount > 0 ? 'success' : 'error',
-    )
-  } finally {
-    authorFetchLoading.value = false
-    authorFetchProgress.value = ''
-  }
+  addToast(`${row.label} page is coming later.`, 'info')
 }
 
 const setReaderTheme = (readerTheme) => updateSettings({ readerTheme })
-const setReaderZoom = (value) => updateSettings({ readerZoom: Number(value) })
-
-const setLibraryView = (libraryView) => updateSettings({ libraryView })
-const setGroupDetailView = (groupDetailView) => updateSettings({ groupDetailView })
-const setLibrarySort = (librarySort, librarySortDirection) => updateSettings({ librarySort, librarySortDirection })
-const setLibraryGridItemsPerPage = (libraryGridItemsPerPage) => updateSettings({ libraryGridItemsPerPage })
-const setLibraryTableItemsPerPage = (libraryTableItemsPerPage) => updateSettings({ libraryTableItemsPerPage })
-const setMetadataAutoFill = (metadataAutoFill) => updateSettings({ metadataAutoFill })
-
-const gridItemsPerPageOptions = LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS
-const tableItemsPerPageOptions = LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS
-
-const defaultSortDescription = computed(() => {
-  const { librarySort, librarySortDirection } = settings.value
-  if (librarySort === 'name') return librarySortDirection === 'asc' ? 'Title A to Z' : 'Title Z to A'
-  if (librarySort === 'rating') return librarySortDirection === 'desc' ? 'Highest rated first' : 'Lowest rated first'
-  return librarySortDirection === 'desc' ? 'Newest releases first' : 'Oldest releases first'
-})
-
-const generateCoverPlaceholder = (title) => {
-  const colors = getThemeCssVars([
-    { name: '--color-book-cover-placeholder-one', fallback: '#8A2BE2' },
-    { name: '--color-book-cover-placeholder-two', fallback: '#6A0DAD' },
-    { name: '--color-book-cover-placeholder-three', fallback: '#2f7d62' },
-    { name: '--color-book-cover-placeholder-four', fallback: '#b45309' },
-    { name: '--color-brand-secondary', fallback: '#2563eb' },
-  ])
-  const hash = [...(title || 'Book')].reduce((acc, char) => acc + char.charCodeAt(0), 0)
-  const color = colors[hash % colors.length]
-  const initial = title?.trim()?.[0]?.toUpperCase() || '?'
-  const displayTitle = title && title.length > 18 ? `${title.substring(0, 18)}...` : title || 'Book'
-  const softText = getThemeCssVar('--color-book-cover-placeholder-text-soft', 'rgba(255,255,255,0.24)')
-  const strongText = getThemeCssVar('--color-book-cover-placeholder-text-strong', 'rgba(255,255,255,0.75)')
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="126" font-family="serif" font-size="96" fill="${softText}" text-anchor="middle" dominant-baseline="middle">${initial}</text><text x="100" y="230" font-family="sans-serif" font-size="11" fill="${strongText}" text-anchor="middle">${displayTitle}</text></svg>`
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`
-}
-
-const resolveBookCover = (book) => book.cover || generateCoverPlaceholder(book.title)
-
-const coverFallback = (event, title) => {
-  event.target.src = generateCoverPlaceholder(title)
-}
-
-const coverStyle = (index) => ({
-  transform: `translateX(${(index - 1) * -26}px) rotate(${(index - 1) * -7}deg)`,
-})
 </script>
 
 <style scoped>
-.settings-page {
-  width: 100%;
-  min-width: 0;
+.profile {
   display: flex;
+  min-height: 100vh;
   flex-direction: column;
-  gap: 1rem;
+  background-color: var(--color-background-app);
+  font-family: var(--mobile-font-family);
 }
 
-.mobile-settings-shell {
-  display: none;
+.profile-container {
+  flex: 1;
+  padding: 10px 0 100px;
 }
 
-.settings-hero,
-.settings-panel,
-.stat-item,
-.about-section {
-  background: var(--color-surface-card);
-  border: 1px solid var(--color-border-card);
-  border-radius: 10px;
+.section {
+  margin-bottom: 24px;
 }
 
-.settings-hero {
-  min-height: 220px;
-  padding: 1.5rem;
+.setting-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
-  gap: 1.5rem;
-  align-items: center;
-  overflow: hidden;
-}
-
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 0.6rem;
-  border-radius: 999px;
-  background: var(--color-surface-hover);
-  color: var(--color-brand-primary-hover);
-  font-size: 0.74rem;
-  margin-bottom: 0.75rem;
-}
-
-.settings-hero h1,
-.panel-heading h2,
-.setting-copy h3,
-.about-section h2 {
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.settings-hero h1 {
-  max-width: 640px;
-  font-size: clamp(1.7rem, 3vw, 2.5rem);
-  line-height: 1.08;
-}
-
-.settings-hero p,
-.panel-heading p,
-.setting-copy p,
-.stat-item span,
-.metadata-snapshot span,
-.storage-metric span,
-.about-section p,
-.about-section small {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.84rem;
-  line-height: 1.45;
-}
-
-.settings-hero p {
-  max-width: 640px;
-  margin-top: 0.75rem;
-  font-size: 0.95rem;
-}
-
-.hero-covers {
-  min-height: 170px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.hero-cover {
-  width: 92px;
-  aspect-ratio: 2 / 3;
-  border-radius: 7px;
-  overflow: hidden;
-  box-shadow: var(--shadow-card-raised);
-  margin-left: -16px;
-  background: var(--color-surface-secondary);
-}
-
-.hero-cover:first-child {
-  margin-left: 0;
-}
-
-.hero-cover img {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.placeholder-cover {
-  display: flex;
   align-items: center;
-  justify-content: center;
-  color: var(--color-brand-primary);
-  border: 1px dashed var(--color-border-strong);
-  box-shadow: none;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 8px;
+  padding: 14px 0;
+  background-color: var(--color-background-app);
+  cursor: pointer;
 }
 
-.placeholder-cover i {
-  font-size: 2rem;
+.setting-item:active {
+  background-color: var(--color-surface-hover);
 }
 
-.stats-grid {
+.setting-info {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 0.75rem;
+  align-items: center;
+  grid-template-columns: 20px minmax(0, 1fr);
+  column-gap: 12px;
   min-width: 0;
+  padding-left: 16px;
 }
 
-.stat-item {
-  min-height: 78px;
-  padding: 0.9rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.stat-item i,
-.panel-heading > i {
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-brand-primary-muted);
-  color: var(--color-brand-primary);
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.stat-item strong,
-.metadata-snapshot strong,
-.storage-metric strong {
-  display: block;
+.setting-info span {
+  min-width: 0;
+  overflow: hidden;
   color: var(--color-text-primary);
-  font-size: 1.2rem;
+  font-size: 18px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setting-info i {
+  color: var(--color-text-primary);
+  font-size: 20px;
   line-height: 1;
+  text-align: center;
 }
 
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  min-width: 0;
-}
-
-.settings-panel {
-  padding: 1.25rem;
-  min-width: 0;
-}
-
-.panel-heading {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--color-border-subtle);
-  min-width: 0;
-}
-
-.panel-heading h2 {
-  font-size: 1.1rem;
-}
-
-.panel-heading > div,
-.setting-copy {
-  min-width: 0;
-}
-
-.setting-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
-  gap: 1rem;
-  align-items: center;
-  padding: 1rem 0;
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
-.setting-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.setting-copy h3 {
-  font-size: 0.96rem;
-  margin-bottom: 0.2rem;
-}
-
-.segmented-control,
-.chip-group {
-  display: inline-flex;
-  justify-content: flex-end;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.segmented-control button,
-.chip-group button {
-  min-height: 36px;
-  border: 1px solid var(--color-border-card);
-  background: var(--color-surface-card);
+.right-icon {
+  padding-right: 16px;
   color: var(--color-text-muted);
-  border-radius: 8px;
-  padding: 0 0.8rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
-}
-
-.segmented-control button:hover,
-.chip-group button:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text-primary);
-}
-
-.segmented-control button.active,
-.chip-group button.active {
-  background: var(--purple-li-active);
-  border-color: var(--color-brand-primary);
-  color: var(--color-brand-primary);
-}
-
-.range-control {
-  width: min(280px, 100%);
-  display: grid;
-  grid-template-columns: 20px minmax(120px, 1fr) 20px;
-  align-items: center;
-  gap: 0.55rem;
-  color: var(--color-text-muted);
-}
-
-.range-control input {
-  width: 100%;
-  accent-color: var(--color-brand-primary);
-}
-
-.select-wrap {
-  position: relative;
-  width: min(260px, 100%);
-  min-width: 0;
-}
-
-.select-wrap select {
-  width: 100%;
-  min-height: 38px;
-  appearance: none;
-  border: 1px solid var(--color-border-card);
-  border-radius: 8px;
-  background: var(--color-surface-card);
-  color: var(--color-text-primary);
-  padding: 0 2.25rem 0 0.8rem;
-  font-family: inherit;
-}
-
-.select-wrap i {
-  position: absolute;
-  right: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--color-text-muted);
-  pointer-events: none;
-}
-
-.format-strip,
-.metadata-snapshot,
-.storage-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-  padding-top: 1rem;
-}
-
-.format-pill,
-.metadata-snapshot > div,
-.storage-metric {
-  min-height: 64px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
-  padding: 0.8rem;
-}
-
-.format-pill {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.format-pill span {
-  color: var(--color-text-muted);
-  font-size: 0.8rem;
-}
-
-.format-pill strong {
-  color: var(--color-brand-primary-hover);
-}
-
-.switch-control {
-  position: relative;
-  width: 52px;
-  height: 30px;
-}
-
-.switch-control input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.switch-control span {
-  position: absolute;
-  inset: 0;
-  background: var(--color-border-strong);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 0.16s ease;
-}
-
-.switch-control span::before {
-  content: "";
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  left: 4px;
-  top: 4px;
-  border-radius: 50%;
-  background: var(--color-surface-primary);
-  box-shadow: var(--shadow-control-subtle);
-  transition: transform 0.16s ease;
-}
-
-.switch-control input:checked + span {
-  background: var(--color-brand-primary);
-}
-
-.switch-control input:checked + span::before {
-  transform: translateX(22px);
-}
-
-.theme-mode-toggle {
-  min-height: 38px;
-  border: 1px solid var(--color-border-card);
-  border-radius: 999px;
-  background: var(--color-surface-card);
-  color: var(--color-text-muted);
-  padding: 0 0.8rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.55rem;
-  cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
-}
-
-.theme-mode-toggle:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text-primary);
+  font-size: 20px;
+  line-height: 1;
 }
 
 .theme-toggle {
   position: relative;
-  width: 48px;
-  height: 28px;
+  width: 42px;
+  height: 24px;
+  margin-right: 16px;
   border-radius: 999px;
-  background: var(--color-border-strong);
-  display: inline-flex;
-  flex-shrink: 0;
-  transition: background 0.16s ease;
+  background: var(--color-border-card);
+  transition: background-color 0.2s ease;
 }
 
-.theme-toggle > span {
+.theme-toggle span {
   position: absolute;
-  width: 20px;
-  height: 20px;
-  left: 4px;
-  top: 4px;
-  border-radius: 50%;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
   background: var(--color-surface-primary);
-  box-shadow: var(--shadow-control-subtle);
-  transition: transform 0.16s ease;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+  transition: transform 0.2s ease;
 }
 
-.theme-toggle[aria-checked="true"] {
+.theme-toggle[aria-checked='true'] {
   background: var(--color-brand-primary);
 }
 
-.theme-toggle[aria-checked="true"] > span {
-  transform: translateX(20px);
+.theme-toggle[aria-checked='true'] span {
+  transform: translateX(18px);
 }
 
-.storage-status-line {
+.about-item {
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.75rem;
-  margin-top: 1rem;
-  min-height: 42px;
-  padding: 0.65rem 0.75rem;
-  /* background-color: var(--color-status-success-soft); */
-  border-radius: 8px;
-  border: 1px solid var(--color-border-card);
-  color: var(--color-status-success);
-  font-size: 0.85rem;
-}
-
-.storage-status-line.warning {
-  color: var(--color-status-warning);
-}
-
-.data-portability {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--color-border-subtle);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 1rem;
-  align-items: center;
-}
-
-.data-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-}
-
-.data-action {
-  min-height: 36px;
-  border: 1px solid var(--color-border-card);
-  border-radius: 8px;
-  background: var(--color-surface-card);
-  color: var(--color-text-secondary);
-  padding: 0 0.75rem;
-  display: inline-flex;
+  width: 100%;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
-}
-
-.data-action:hover:not(:disabled) {
-  background: var(--color-surface-hover);
-  color: var(--color-brand-primary-hover);
-}
-
-.data-action.primary {
-  background: var(--color-brand-primary);
-  color: var(--color-text-on-brand);
-  border-color: var(--color-brand-primary);
-}
-
-.data-action.danger {
-  color: var(--color-status-danger);
-}
-
-.data-action:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.icon-action {
-  margin-left: auto;
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--color-border-card);
-  border-radius: 8px;
-  background: var(--color-surface-card);
-  color: var(--color-brand-primary-hover);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.icon-action:hover {
-  background: var(--color-surface-hover);
-}
-
-.about-section {
-  min-height: 240px;
-  padding: 2.2rem 1.5rem;
-  text-align: center;
-  background: var(--color-surface-card);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.55rem;
-}
-
-.about-logo {
-  width: 36px;
-  height: 36px;
-  object-fit: cover;
-}
-
-.about-section h2 {
-  font-size: 1.45rem;
-  margin-top: 0.4rem;
-}
-
-.heart-icon{
-  color: red;
-}
-
-.about-links {
-  display: flex;
-  justify-content: center;
-  gap: 2rem;
-  flex-wrap: wrap;
-  margin: 1rem 0 0.6rem;
-}
-
-.about-links a {
-  color: var(--color-text-primary);
-  text-decoration: none;
-  font-size: 0.86rem;
-}
-
-.about-links a:hover {
-  color: var(--color-brand-primary-hover);
-}
-
-.spin {
-  display: inline-block;
-  animation: spin 0.85s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-@media (max-width: 1180px) {
-  .stats-grid {
-    grid-template-columns: repeat(3, minmax(140px, 1fr));
-  }
-
-  .settings-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 760px) {
-  .mobile-settings-shell {
-    display: block;
-    min-height: calc(100vh - 88px - env(safe-area-inset-bottom));
-    padding: 0 var(--mobile-page-padding-inline) 24px;
-    background: var(--color-background-app);
-  }
-
-  .settings-hero,
-  .stats-grid,
-  .settings-grid,
-  .about-section {
-    display: none;
-  }
-
-  .mobile-settings-header {
-    position: relative;
-    display: grid;
-    grid-template-columns: var(--mobile-touch-target) minmax(0, 1fr) var(--mobile-touch-target);
-    align-items: center;
-    min-height: var(--mobile-touch-target);
-    margin-bottom: 16px;
-  }
-
-  .mobile-settings-header button {
-    display: inline-flex;
-    width: var(--mobile-touch-target);
-    height: var(--mobile-touch-target);
-    align-items: center;
-    justify-content: center;
-    border: 0;
-    background: transparent;
-    color: var(--color-text-primary);
-    cursor: pointer;
-    font-size: var(--mobile-icon-size);
-  }
-
-  .mobile-settings-header h1 {
-    margin: 0;
-    color: var(--color-text-primary);
-    font-size: var(--mobile-title-size);
-    line-height: 1;
-    text-align: center;
-  }
-
-  .mobile-settings-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .mobile-settings-list button {
-    display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) var(--mobile-touch-target);
-    align-items: center;
-    min-height: var(--mobile-touch-target);
-    border: 0;
-    background: transparent;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    padding: 0 0 0 2px;
-    text-align: left;
-  }
-
-  .mobile-settings-list button > i:first-child {
-    color: var(--color-text-primary);
-    font-size: 20px;
-  }
-
-  .mobile-settings-list button span {
-    overflow: hidden;
-    color: var(--color-text-secondary);
-    font-size: var(--mobile-body-size);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .mobile-settings-list button > i:last-child {
-    color: var(--color-text-muted);
-    font-size: var(--mobile-icon-size);
-    justify-self: end;
-  }
-
-  .mobile-settings-list .theme-toggle {
-    justify-self: end;
-  }
-
-  .settings-hero {
-    grid-template-columns: 1fr;
-    padding: 1rem;
-  }
-
-  .hero-covers {
-    justify-content: flex-start;
-    min-height: 140px;
-  }
-
-  .stats-grid,
-  .format-strip,
-  .metadata-snapshot,
-  .storage-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .setting-row {
-    grid-template-columns: 1fr;
-  }
-
-  .segmented-control,
-  .chip-group {
-    justify-content: flex-start;
-  }
-
-  .select-wrap,
-  .range-control {
-    width: 100%;
-  }
-
-  .settings-panel {
-    padding: 1rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .settings-page {
-    gap: 0.75rem;
-  }
-
-  .settings-hero,
-  .settings-panel,
-  .stat-item,
-  .about-section {
-    border-radius: 7px;
-  }
-
-  .settings-hero,
-  .settings-panel {
-    padding: 0.8rem;
-  }
-
-  .settings-hero h1 {
-    font-size: 1.4rem;
-  }
-
-  .stat-item {
-    min-height: 64px;
-    padding: 0.75rem;
-  }
-
-  .panel-heading {
-    align-items: flex-start;
-    gap: 0.65rem;
-  }
-
-  .setting-row {
-    gap: 0.75rem;
-  }
-
-  .segmented-control,
-  .chip-group {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
-  }
-
-  .chip-group[aria-label="Playback speed"] {
-    grid-template-columns: 1fr;
-  }
-
-  .segmented-control button,
-  .chip-group button {
-    width: 100%;
-    min-width: 0;
-    padding: 0 0.5rem;
-  }
-
-  .range-control {
-    grid-template-columns: 16px minmax(0, 1fr) 16px;
-    gap: 0.35rem;
-  }
-
-  .storage-status-line {
-    align-items: flex-start;
-  }
-
-  .data-portability {
-    grid-template-columns: 1fr;
-  }
-
-  .data-actions {
-    display: grid;
-    grid-template-columns: 1fr;
-    width: 100%;
-  }
-
-  .about-section {
-    min-height: 220px;
-    padding: 1.75rem 0.8rem;
-  }
-
-  .about-links {
-    gap: 0.8rem;
-  }
+  margin-bottom: 8px;
+  background-color: var(--color-background-app);
+  color: var(--color-text-muted);
+  font-size: 16px;
 }
 </style>

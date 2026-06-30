@@ -1,5 +1,6 @@
 <template>
   <main class="about-page">
+    <MobileSettingsNav title="About" />
     <section class="about-card" aria-labelledby="about-title">
       <img src="/Images/Logo.png" alt="Bookish" class="about-logo" />
       <p class="eyebrow">About Bookish</p>
@@ -44,6 +45,8 @@
 </template>
 
 <script setup>
+import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue'
+
 const runtimeConfig = useRuntimeConfig()
 const appVersion = runtimeConfig.public.appVersion || '0.0.0'
 const buildNumber = runtimeConfig.public.buildNumber || 'dev'

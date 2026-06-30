@@ -20,7 +20,7 @@ describe('settings pages wiring', () => {
     expect(settings).toContain("to: '/settings/storage'")
     expect(settings).toContain("to: '/settings/about'")
     expect(settings).toContain("to: '/settings/privacy'")
-    expect(settings).toContain('router.push(row.to)')
+    expect(settings).toContain('navigate(row.to)')
   })
 
   test('audio settings page excludes track splitting controls', () => {
@@ -43,9 +43,24 @@ describe('settings pages wiring', () => {
     expect(settings).not.toMatch(/label: 'Theme'[\s\S]*?ri-arrow-right-s-line/)
   })
 
+  test('mobile settings mirrors Najibudget list structure without nav or row buttons', () => {
+    const settings = read('components/mobile/SettingsMobile.vue')
+
+    expect(settings).toContain('class="profile"')
+    expect(settings).toContain('<MobileSettingsNav title="Settings"')
+    expect(settings).toContain('class="profile-container"')
+    expect(settings).toContain('class="section"')
+    expect(settings).toContain('class="setting-item"')
+    expect(settings).toContain('class="setting-info"')
+    expect(settings).toContain('grid-template-columns: minmax(0, 1fr) auto')
+    expect(settings).not.toContain('<button')
+    expect(settings).not.toContain('mobile-settings-header')
+    expect(settings).not.toContain('mobile-settings-list')
+  })
+
   test('mobile page titles are hidden for series, playlists, and favourites', () => {
-    expect(read('components/mobile/SeriesMobile.vue')).toMatch(/@media \(max-width: 768px\)[\s\S]*\.series-header\s*\{[\s\S]*display:\s*none/)
-    expect(read('components/mobile/PlaylistsMobile.vue')).toMatch(/@media \(max-width: 768px\)[\s\S]*\.playlists-header\s*\{[\s\S]*display:\s*none/)
-    expect(read('components/mobile/FavouritesMobile.vue')).toMatch(/@media \(max-width: 768px\)[\s\S]*\.favourites-header\s*\{[\s\S]*display:\s*none/)
+    expect(read('components/mobile/SeriesMobile.vue')).toMatch(/\.series-header\s*\{[\s\S]*display:\s*none/)
+    expect(read('components/mobile/PlaylistsMobile.vue')).toMatch(/\.playlists-header\s*\{[\s\S]*display:\s*none/)
+    expect(read('components/mobile/FavouritesMobile.vue')).toMatch(/\.favourites-header\s*\{[\s\S]*display:\s*none/)
   })
 })

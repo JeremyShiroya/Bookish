@@ -153,7 +153,6 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import { getGoodreadsRating } from "~/composables/useGoodreadsRating";
@@ -164,11 +163,9 @@ import HomeSkeleton from "../shared/HomeSkeleton.vue";
 
 const {
   books,
-  recentlyReadBooks,
   recentlyAddedBooks,
   recentAuthors,
   popularBooks,
-  seriesList,
   loading,
   initialized,
   error,
@@ -176,48 +173,6 @@ const {
 } = useBooks();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const router = useRouter();
-const homeSearch = ref("");
-
-const mobileRecentBooks = computed(() => (
-  recentlyAddedBooks.value.length > 0
-    ? recentlyAddedBooks.value.slice(0, 3)
-    : books.value.slice(0, 3)
-));
-
-const continueReadingBooks = computed(() => (
-  recentlyReadBooks.value.length > 0
-    ? recentlyReadBooks.value
-    : mobileRecentBooks.value
-));
-
-const mobileSeries = computed(() => seriesList.value.slice(0, 2));
-
-const homeSearchResults = computed(() => {
-  const query = homeSearch.value.trim().toLowerCase();
-  if (!query) return [];
-
-  return books.value
-    .filter((book) => {
-      const searchable = [
-        book.title,
-        book.author,
-        book.series,
-        book.genre,
-      ].filter(Boolean).join(" ").toLowerCase();
-      return searchable.includes(query);
-    })
-    .slice(0, 5);
-});
-
-const openBook = (book) => {
-  if (!book?.id) return;
-  router.push(`/book/${book.id}`);
-};
-
-const openSeries = (series) => {
-  if (!series?.id) return;
-  router.push(`/serie/${series.id}`);
-};
 
 const handlePlay = (book) => {
   if (ttsBook.value?.id === book.id && ttsStatus.value !== "idle") {
@@ -246,10 +201,6 @@ const truncate = (text, length) => {
 .home-container {
   padding: 0rem;
   margin: 0 auto;
-}
-
-.mobile-home {
-  display: none;
 }
 
 .desktop-home {
@@ -643,215 +594,4 @@ const truncate = (text, length) => {
   }
 }
 
-@media (max-width: 768px) {
-  .home-container {
-    width: 100%;
-  }
-
-  .desktop-home {
-    display: none;
-  }
-
-  .mobile-home {
-    display: block;
-    min-height: calc(100vh - 106px);
-    padding: 0 var(--mobile-page-padding-inline) 16px;
-  }
-
-  .mobile-home-section {
-    margin-top: var(--mobile-section-gap);
-  }
-
-  .mobile-search-section {
-    position: relative;
-    margin-bottom: 20px;
-  }
-
-  .mobile-search-bar {
-    display: flex;
-    height: 42px;
-    align-items: center;
-    gap: 10px;
-    padding: 0 12px;
-    border: 1px solid var(--color-border-card);
-    border-radius: var(--mobile-control-radius);
-    background: var(--color-surface-input);
-    color: var(--color-text-muted);
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
-  }
-
-  .mobile-search-bar i {
-    flex: 0 0 auto;
-    font-size: 20px;
-  }
-
-  .mobile-search-bar input {
-    width: 100%;
-    min-width: 0;
-    border: 0;
-    outline: 0;
-    background: transparent;
-    color: var(--color-text-primary);
-    font: inherit;
-    font-size: var(--mobile-subtext-size);
-  }
-
-  .mobile-search-bar input::placeholder {
-    color: var(--color-text-muted);
-  }
-
-  .mobile-search-clear {
-    display: inline-flex;
-    width: 28px;
-    height: 28px;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: 0;
-    border-radius: 50%;
-    background: rgba(100, 116, 139, 0.14);
-    color: var(--color-text-muted);
-    cursor: pointer;
-  }
-
-  .mobile-search-results {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    left: 0;
-    z-index: 10;
-    display: grid;
-    gap: 4px;
-    padding: 8px;
-    border: 1px solid rgba(148, 163, 184, 0.24);
-    border-radius: var(--mobile-control-radius);
-    background: var(--color-background-app);
-    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
-  }
-
-  .mobile-search-result {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-width: 0;
-    padding: 8px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-    text-align: left;
-  }
-
-  .mobile-search-result:hover {
-    background: rgba(139, 92, 246, 0.08);
-  }
-
-  .mobile-search-result img,
-  .mobile-search-cover-fallback {
-    width: 34px;
-    height: 48px;
-    flex: 0 0 auto;
-    border-radius: 5px;
-    object-fit: cover;
-  }
-
-  .mobile-search-cover-fallback {
-    display: grid;
-    place-items: center;
-    background: var(--color-brand-primary-faint);
-    color: var(--color-brand-primary);
-    font-weight: 600;
-  }
-
-  .mobile-search-result-text {
-    display: grid;
-    min-width: 0;
-    gap: 2px;
-  }
-
-  .mobile-search-result-text strong,
-  .mobile-search-result-text small {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .mobile-search-result-text strong {
-    color: var(--color-text-primary);
-    font-size: var(--mobile-subtext-size);
-    font-weight: 500;
-  }
-
-  .mobile-search-result-text small,
-  .mobile-search-empty {
-    color: var(--color-text-muted);
-    font-size: var(--mobile-caption-size);
-  }
-
-  .mobile-search-empty {
-    margin: 7px 2px 0;
-  }
-
-  .mobile-search-section + .mobile-home-section {
-    margin-top: 0;
-  }
-
-  .mobile-section-title {
-    margin: 0;
-    color: var(--color-text-primary);
-    font-size: var(--mobile-section-title-size);
-    line-height: 1.25;
-  }
-
-  .mobile-section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 10px;
-  }
-
-  .mobile-section-header .mobile-section-title {
-    margin: 0;
-  }
-
-  .mobile-home-section > .mobile-section-title {
-    margin-bottom: 10px;
-  }
-
-  .mobile-see-all {
-    color: var(--color-brand-primary);
-    text-decoration: none;
-    font-size: var(--mobile-subtext-size);
-    line-height: 1;
-  }
-
-  .continue-single {
-    width: 100%;
-  }
-
-  .book-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-  }
-
-  .series-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 12px;
-  }
-
-  .mobile-series-section {
-    margin-top: var(--mobile-section-gap);
-  }
-}
-
-@media (max-width: 360px) {
-  .book-grid {
-    gap: 10px;
-  }
-}
 </style>

@@ -128,58 +128,6 @@ const confirmDelete = async () => {
   }
 }
 
-@media (max-width: 768px) {
-  .favourites-header {
-    display: none;
-  }
-
-  .favourites-container {
-    padding: 0 var(--mobile-page-padding-inline);
-  }
-
-  .books-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px 14px;
-  }
-
-  .book-card {
-    width: 100%;
-  }
-
-  .book-cover {
-    border-radius: 8px;
-    margin-bottom: 8px;
-  }
-
-  .heart-btn {
-    opacity: 1;
-    transform: none;
-    width: 34px;
-    height: 34px;
-  }
-
-  .play-btn {
-    opacity: 1;
-    transform: none;
-    width: var(--mobile-touch-target);
-    height: var(--mobile-touch-target);
-  }
-
-  .play-btn i {
-    font-size: var(--mobile-icon-size);
-  }
-
-  .book-title {
-    font-size: var(--mobile-caption-size);
-    line-height: 1.2;
-  }
-
-  .book-author {
-    font-size: var(--mobile-tiny-size);
-    line-height: 1.2;
-  }
-}
-
 .favourites-loading {
   padding: 0.5rem 0;
 }

@@ -13,6 +13,15 @@ describe('mobile home and profile refinements', () => {
     expect(home).not.toContain('const mobileSeries = computed(() => seriesList.value.slice(0, 3));')
   })
 
+  test('mobile home currently reading uses the active reader book, not recently added fallback', () => {
+    const home = read('components/mobile/HomeMobile.vue')
+
+    expect(home).toContain('const currentReadingBook = computed(() => ttsBook.value || recentlyReadBooks.value[0] || null)')
+    expect(home).toContain(':book="currentReadingBook"')
+    expect(home).not.toContain('const continueReadingBooks = computed')
+    expect(home).not.toContain(':book="continueReadingBooks[0]"')
+  })
+
   test('profile page has the redesigned layout structure', () => {
     const profile = read('components/mobile/ProfileMobile.vue')
 

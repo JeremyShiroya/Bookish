@@ -279,23 +279,4 @@ watch(hoverIndex, updateHighlight);
   position: relative;
 }
 
-@media (max-width: 768px) {
-  .title {
-    font-size: 1rem;
-  }
-}
-
-@media screen and (max-width: 375px) {
-  .sidebar {
-    min-height: 100%;
-  }
-
-  .logo-image {
-    width: 40px;
-  }
-
-  .title {
-    font-size: 0.9rem;
-  }
-}
 </style>

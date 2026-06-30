@@ -1025,12 +1025,6 @@ onUnmounted(() => {
   align-items: start;
 }
 
-@media (max-width: 1100px) {
-  .books-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 .book-card.horizontal {
   display: flex;
   flex-direction: row;
@@ -2453,7 +2447,6 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-@media (max-width: 768px) {
   .books-container {
     padding: 0;
   }
@@ -2612,5 +2605,5 @@ onUnmounted(() => {
   .list-actions {
     opacity: 1;
   }
-}
+
 </style>

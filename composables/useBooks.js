@@ -7,6 +7,44 @@ import { useLibraryStore } from '~/composables/useLibraryStore';
 
 const coverCacheInFlight = new Set();
 
+export const normalizeLibrarySeriesName = (value) => String(value || '')
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-zA-Z0-9]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase();
+
+export const canonicalLibrarySeriesName = (value) => String(value || '')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+export const groupBooksBySeries = (sourceBooks = []) => {
+  const grouped = new Map();
+
+  for (const book of sourceBooks) {
+    const displayName = canonicalLibrarySeriesName(book?.series);
+    const key = normalizeLibrarySeriesName(displayName);
+    if (!key) continue;
+
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        id: encodeURIComponent(displayName),
+        name: displayName,
+        author: book.author,
+        books: [],
+      });
+    }
+
+    grouped.get(key).books.push({
+      ...book,
+      series: displayName,
+    });
+  }
+
+  return [...grouped.values()];
+};
+
 export const useBooks = () => {
   const books = useState('library:books', () => []);
   const collections = useState('library:collections', () => []);
@@ -117,18 +155,7 @@ export const useBooks = () => {
 
   const recentAuthors = computed(() => authors.value.slice(0, 4));
 
-  const seriesList = computed(() => {
-    const grouped = {};
-    books.value.forEach(book => {
-      if (book.series) {
-        if (!grouped[book.series]) {
-          grouped[book.series] = { id: encodeURIComponent(book.series), name: book.series, author: book.author, books: [] };
-        }
-        grouped[book.series].books.push(book);
-      }
-    });
-    return Object.values(grouped);
-  });
+  const seriesList = computed(() => groupBooksBySeries(books.value));
 
 
   const toggleFavourite = async (bookId) => {
@@ -179,7 +206,11 @@ export const useBooks = () => {
   const addBook = async (book) => {
     try {
       const store = useLibraryStore();
-      const savedBook = await store.addBook(book);
+      const bookToSave = {
+        ...book,
+        series: book?.series ? canonicalLibrarySeriesName(book.series) : book?.series,
+      };
+      const savedBook = await store.addBook(bookToSave);
       books.value.unshift(savedBook);
       // Fire-and-forget: fetch author bio/details if not already stored
       if (savedBook.author) fetchAndStoreAuthorDetails(savedBook.author)
@@ -192,15 +223,19 @@ export const useBooks = () => {
 
   const updateBook = async (updatedBook) => {
     const index = books.value.findIndex(b => b.id === updatedBook.id);
+    const normalizedUpdatedBook = {
+      ...updatedBook,
+      series: updatedBook?.series ? canonicalLibrarySeriesName(updatedBook.series) : updatedBook?.series,
+    };
     let previousBook = null;
     if (index !== -1) {
       previousBook = { ...books.value[index] };
-      books.value[index] = { ...books.value[index], ...updatedBook };
+      books.value[index] = { ...books.value[index], ...normalizedUpdatedBook };
     }
     try {
       const store = useLibraryStore();
       // Always write the full merged record so the store has a complete snapshot.
-      const result = await store.updateBook(index !== -1 ? books.value[index] : updatedBook);
+      const result = await store.updateBook(index !== -1 ? books.value[index] : normalizedUpdatedBook);
       if (index !== -1) books.value[index] = result;
       return result;
     } catch (err) {

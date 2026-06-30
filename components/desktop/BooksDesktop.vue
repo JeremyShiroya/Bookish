@@ -232,10 +232,6 @@
                 </button>
               </div>
 
-              <button class="add-book-btn mobile-add-book-btn" @click="router.push('/add')">
-                <i class="ri-add-line"></i>
-                Add Book
-              </button>
             </div>
           </div>
 
@@ -256,22 +252,6 @@
         </div>
 
         <template v-else>
-          <div class="mobile-table-card-list">
-            <LibraryBookCard
-              v-for="book in displayedBooks"
-              :key="book.id"
-              class="mobile-list-book-card"
-              :book="book"
-              :active="isBookActive(book)"
-              @open="router.push(`/book/${book.id}`)"
-              @play="handlePlay"
-              @favourite="toggleFavourite(book.id)"
-              @playlist="selectedPlaylistBook = book"
-              @edit="router.push(`/edit/${book.id}`)"
-              @delete="openDeleteModal(book)"
-            />
-          </div>
-
           <div class="data-table">
             <!-- Header -->
             <div class="data-header">
@@ -359,7 +339,7 @@
         </template>
 
           <!-- Pagination -->
-          <div v-if="totalPages > 1 && !isMobileViewport" class="pagination">
+          <div v-if="totalPages > 1" class="pagination">
             <button class="page-btn" :disabled="currentPage === 1" @click="currentPage--">
               <i class="ri-arrow-left-s-line"></i>
             </button>
@@ -595,7 +575,6 @@ const sortSummaryLabel = computed(() => {
 });
 
 const currentPage = ref(1);
-const isMobileViewport = ref(false);
 const itemsPerPage = computed(() => (
   viewMode.value === 'grid'
     ? Number(settings.value.libraryGridItemsPerPage) || 12
@@ -609,9 +588,7 @@ const paginatedBooks = computed(() => {
   return filteredBooks.value.slice(start, start + itemsPerPage.value);
 });
 
-const displayedBooks = computed(() => (
-  isMobileViewport.value ? filteredBooks.value : paginatedBooks.value
-));
+const displayedBooks = computed(() => paginatedBooks.value);
 
 const visiblePageNumbers = computed(() => {
   const total = totalPages.value;
@@ -747,7 +724,6 @@ const handleClickOutside = (event) => {
 };
 
 const handleResize = () => {
-  isMobileViewport.value = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
   updateChipHighlight();
   updateViewHighlight();
 };
@@ -898,10 +874,6 @@ onUnmounted(() => {
 
 .add-book-btn i {
   font-size: 1.125rem;
-}
-
-.mobile-add-book-btn {
-  display: none;
 }
 
 .dropdown-menu {
@@ -1735,10 +1707,6 @@ onUnmounted(() => {
   width: 100%;
 }
 
-.mobile-table-card-list {
-  display: none;
-}
-
 /* Pagination inside the container */
 .view-container .pagination {
   margin: 0;
@@ -2453,164 +2421,4 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-@media (max-width: 768px) {
-  .books-container {
-    padding: 0;
-  }
-
-  .books-header {
-    display: none;
-  }
-
-  .books-content {
-    padding-top: 0.05rem;
-  }
-
-  .filters-container {
-    justify-content: center;
-  }
-
-  .view-container:not(.is-card) .controls-row.in-container,
-  .controls-row.in-container {
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 0 var(--mobile-page-padding-inline) 16px;
-  }
-
-  .controls-left {
-    order: 2;
-    flex: 1 0 100%;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .controls-left::-webkit-scrollbar {
-    display: none;
-  }
-
-  .controls-right {
-    order: 1;
-    display: flex;
-    flex: 1 0 100%;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-
-  .filter-dropdown {
-    display: none;
-  }
-
-  .status-chips,
-  .view-chips {
-    gap: 6px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-
-  .chip-highlight {
-    display: none;
-  }
-
-  .status-chip {
-    min-height: 34px;
-    padding: 0 12px;
-    border-radius: var(--mobile-control-radius);
-    background: rgba(138, 43, 226, 0.1);
-    color: var(--color-text-muted);
-    font-size: var(--mobile-caption-size);
-    line-height: 1;
-  }
-
-  .status-chip.active {
-    background: var(--color-brand-primary-soft);
-    color: var(--color-brand-primary);
-  }
-
-  .view-chip-icon {
-    width: 34px;
-    height: 34px;
-    min-height: 34px;
-    padding: 0;
-    border-radius: var(--mobile-control-radius);
-    background: rgba(138, 43, 226, 0.07);
-    color: var(--color-text-subtle);
-    font-size: 18px;
-  }
-
-  .view-chip-icon.active {
-    background: var(--color-brand-primary-soft);
-    color: var(--color-brand-primary);
-  }
-
-  .mobile-add-book-btn {
-    display: inline-flex;
-    flex: 0 0 auto;
-    min-height: var(--mobile-touch-target);
-    padding: 0 14px;
-    border-radius: var(--mobile-control-radius);
-    font-size: var(--mobile-subtext-size);
-    line-height: 1;
-  }
-
-  .mobile-add-book-btn i {
-    font-size: 18px;
-  }
-
-  .books-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px 14px;
-    justify-content: start;
-    padding: 0 var(--mobile-page-padding-inline);
-  }
-
-  .pagination {
-    display: none;
-  }
-
-  .mobile-table-card-list {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-    padding: 0 var(--mobile-page-padding-inline);
-  }
-
-  .data-table {
-    display: none;
-  }
-
-  .list-header-row,
-  .redesigned-header {
-    display: none;
-  }
-
-  .list-row {
-    grid-template-columns: 46px minmax(0, 1fr) auto;
-    gap: 0.85rem;
-  }
-
-  .redesigned-list .list-row {
-    grid-template-columns: 46px minmax(0, 1fr) auto;
-    min-height: auto;
-  }
-
-  .list-meta,
-  .list-status-cell,
-  .list-progress-cell,
-  .list-goodreads-cell,
-  .list-rating-cell,
-  .list-format {
-    display: none;
-  }
-
-  .list-row {
-    padding: 0.6rem 0.75rem;
-  }
-
-  .list-actions {
-    opacity: 1;
-  }
-}
 </style>

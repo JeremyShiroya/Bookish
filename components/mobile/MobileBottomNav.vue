@@ -44,8 +44,7 @@ const isActive = (item) => {
   padding: 0 12px env(safe-area-inset-bottom);
   grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: center;
-  background: var(--color-surface-primary);
-  border-top: 1px solid var(--mobile-divider-color);
+  background: var(--color-background-app);
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 }
 
@@ -78,7 +77,7 @@ const isActive = (item) => {
   font-size: var(--mobile-active-icon-size);
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .mobile-bottom-nav {
     display: grid;
   }

@@ -1,10 +1,12 @@
 <template>
   <main class="settings-detail-page">
+    <MobileSettingsNav title="Audio" />
     <SettingsAudioPanel />
   </main>
 </template>
 
 <script setup>
+import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue'
 import SettingsAudioPanel from '~/components/shared/SettingsAudioPanel.vue'
 </script>
 

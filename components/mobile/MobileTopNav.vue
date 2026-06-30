@@ -192,11 +192,10 @@ onBeforeUnmount(() => {
   font-size: var(--mobile-icon-size);
 }
 
-@media (max-width: 768px) {
   .mobile-top-nav {
     display: flex;
   }
-}
+
 
 @media (max-width: 360px) {
   .mobile-top-nav {

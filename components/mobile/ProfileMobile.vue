@@ -547,7 +547,6 @@ onMounted(async () => {
   font-size: 0.72rem;
 }
 
-@media (max-width: 768px) {
   .profile-page {
     font-family: var(--mobile-font-family);
   }
@@ -702,7 +701,7 @@ onMounted(async () => {
   .avatar-option-name {
     font-size: var(--mobile-caption-size);
   }
-}
+
 
 @media (max-width: 430px) {
   .profile-actions {
@@ -714,15 +713,4 @@ onMounted(async () => {
   }
 }
 
-@media (min-width: 769px) {
-  .profile-page {
-    max-width: 900px;
-    margin: 0 auto;
-  }
-
-  .avatar-modal {
-    align-self: center;
-    border-radius: 18px;
-  }
-}
 </style>
