@@ -54,7 +54,7 @@ const showsProfileTopNav = computed(() => {
   }
 
   .page-container {
-    padding: calc(1rem + env(safe-area-inset-top)) 10px 1.125rem;
+    padding: calc(1rem + env(safe-area-inset-top)) 0px 1.125rem;
     padding-bottom: calc(88px + env(safe-area-inset-bottom));
   }
 
