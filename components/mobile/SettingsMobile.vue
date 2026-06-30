@@ -27,7 +27,7 @@
         </div>
 
         <div class="about-item">
-          <span>Version 1.2.0 • Build 163</span>
+          <span>Version 1.2.0</span>
         </div>
       </section>
     </div>
