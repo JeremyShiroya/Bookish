@@ -18,7 +18,16 @@
         >
           <i :class="row.icon"></i>
           <span>{{ row.label }}</span>
-          <i class="ri-arrow-right-s-line"></i>
+          <span
+            v-if="row.type === 'theme'"
+            class="theme-toggle"
+            role="switch"
+            aria-label="Toggle dark mode"
+            :aria-checked="settings.readerTheme === 'dark'"
+          >
+            <span></span>
+          </span>
+          <i v-else class="ri-arrow-right-s-line"></i>
         </button>
       </nav>
     </section>
@@ -69,17 +78,22 @@
             <h3>App theme</h3>
             <p>Switch Bookish between light and dark mode.</p>
           </div>
-          <div class="segmented-control" aria-label="App theme">
-            <button
-              v-for="theme in readerThemes"
-              :key="theme.value"
-              :class="{ active: settings.readerTheme === theme.value }"
-              @click="setReaderTheme(theme.value)"
+          <button
+            class="theme-mode-toggle"
+            type="button"
+            aria-label="Toggle dark mode"
+            @click="setReaderTheme(settings.readerTheme === 'dark' ? 'light' : 'dark')"
+          >
+            <i class="ri-sun-line"></i>
+            <span
+              class="theme-toggle"
+              role="switch"
+              :aria-checked="settings.readerTheme === 'dark'"
             >
-              <i :class="theme.icon"></i>
-              <span>{{ theme.label }}</span>
-            </button>
-          </div>
+              <span></span>
+            </span>
+            <i class="ri-moon-line"></i>
+          </button>
         </div>
 
         <div class="setting-row">
@@ -102,80 +116,7 @@
         </div>
       </article>
 
-      <article id="audio" class="settings-panel">
-        <div class="panel-heading">
-          <i class="ri-headphone-line"></i>
-          <div>
-            <h2>Audio</h2>
-            <p>Read-aloud defaults for the player bar.</p>
-          </div>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-copy">
-            <h3>Narrator voice</h3>
-            <p>{{ currentVoiceName }}</p>
-          </div>
-          <BookishSelect
-            :model-value="settings.ttsVoice"
-            :options="ttsVoices.map(voice => ({ value: voice.id, label: voice.name }))"
-            @update:model-value="setAudioVoice"
-          />
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-copy">
-            <h3>Playback speed</h3>
-            <p>{{ settings.ttsSpeed }}x default speed.</p>
-          </div>
-          <div class="chip-group" aria-label="Playback speed">
-            <button
-              v-for="speed in speedOptions"
-              :key="speed"
-              :class="{ active: settings.ttsSpeed === speed }"
-              @click="setAudioSpeed(speed)"
-            >
-              {{ speed === 1 ? '1x' : `${speed}x` }}
-            </button>
-          </div>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-copy">
-            <h3>Volume</h3>
-            <p>{{ Math.round(settings.ttsVolume * 100) }}% player volume.</p>
-          </div>
-          <div class="range-control">
-            <i class="ri-volume-down-line"></i>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              :value="settings.ttsVolume"
-              @input="setAudioVolume($event.target.value)"
-            />
-            <i class="ri-volume-up-line"></i>
-          </div>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-copy">
-            <h3>Track splitting</h3>
-            <p>{{ settings.trackSplitting ? 'Progress bar split into chapter sections.' : 'Standard progress bar with no chapter splits.' }}</p>
-          </div>
-          <div class="segmented-control" aria-label="Track splitting">
-            <button :class="{ active: !settings.trackSplitting }" @click="setTrackSplitting(false)">
-              <i class="ri-equalizer-line"></i>
-              <span>Standard</span>
-            </button>
-            <button :class="{ active: settings.trackSplitting }" @click="setTrackSplitting(true)">
-              <i class="ri-chapters-line"></i>
-              <span>Chapters</span>
-            </button>
-          </div>
-        </div>
-      </article>
+      <SettingsAudioPanel id="audio" />
 
       <article id="library" class="settings-panel">
         <div class="panel-heading">
@@ -340,66 +281,7 @@
         </div>
       </article>
 
-      <article id="storage" class="settings-panel">
-        <div class="panel-heading">
-          <i class="ri-database-2-line"></i>
-          <div>
-            <h2>Storage</h2>
-            <p>Read-only status for locally stored book content.</p>
-          </div>
-        </div>
-
-        <div class="storage-grid">
-          <div class="storage-metric">
-            <span>Readable records</span>
-            <strong>{{ storageSummary.contentCount }}</strong>
-          </div>
-          <div class="storage-metric">
-            <span>PDF sources</span>
-            <strong>{{ storageSummary.sourceCount }}</strong>
-          </div>
-          <div class="storage-metric">
-            <span>Estimated size</span>
-            <strong>{{ formattedStorageSize }}</strong>
-          </div>
-        </div>
-
-        <div class="storage-status-line" :class="{ warning: !storageSummary.available }">
-          <i :class="storageSummary.available ? 'ri-shield-check-line' : 'ri-error-warning-line'"></i>
-          <span>{{ storageMessage }}</span>
-          <button class="icon-action" title="Refresh storage status" @click="refreshStorageSummary">
-            <i :class="storageLoading ? 'ri-loader-4-line spin' : 'ri-refresh-line'"></i>
-          </button>
-        </div>
-
-        <div class="data-portability">
-          <div class="setting-copy">
-            <h3>Import and export</h3>
-            <p>Move your full Bookish library, playlists, reading content, audio session, and settings.</p>
-          </div>
-          <div class="data-actions">
-            <button class="data-action primary" :disabled="backupLoading" @click="exportData">
-              <i :class="backupLoading ? 'ri-loader-4-line spin' : 'ri-download-2-line'"></i>
-              <span>Export</span>
-            </button>
-            <button class="data-action" :disabled="backupLoading" @click="openImportPicker">
-              <i class="ri-upload-2-line"></i>
-              <span>Import</span>
-            </button>
-            <button class="data-action danger" :disabled="wipeLoading" @click="wipeData">
-              <i :class="wipeLoading ? 'ri-loader-4-line spin' : 'ri-delete-bin-6-line'"></i>
-              <span>Wipe</span>
-            </button>
-            <input
-              ref="importInputRef"
-              class="sr-only"
-              type="file"
-              accept="application/json,.json"
-              @change="importData"
-            />
-          </div>
-        </div>
-      </article>
+      <SettingsStoragePanel id="storage" />
     </section>
 
     <section class="about-section" aria-labelledby="about-title">
@@ -417,55 +299,30 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useBooks } from '~/composables/useBooks'
 import {
   useBookishSettings,
   LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS,
   LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS,
 } from '~/composables/useBookishSettings'
-import { useBookStorage } from '~/composables/useBookStorage'
-import { useLibraryBackup } from '~/composables/useLibraryBackup'
-import { useTTS } from '~/composables/useTTS'
 import { useToast } from '~/composables/useToast'
 
-const { books, authors, collections, genres, recentlyAddedBooks, fetchAllData, fetchAndStoreAuthorDetails } = useBooks()
-const { settings, updateSettings, loadSettings } = useBookishSettings()
-const { getStorageSummary } = useBookStorage()
-const { createDownload, importBookishData, wipeBookishData } = useLibraryBackup()
-const { ttsVoices, setSpeed, setVolume, setVoice, stop: stopTTS } = useTTS()
+const { books, authors, collections, genres, recentlyAddedBooks, fetchAndStoreAuthorDetails } = useBooks()
+const { settings, updateSettings } = useBookishSettings()
 const { addToast } = useToast()
 const router = useRouter()
 const runtimeConfig = useRuntimeConfig()
 const appVersion = runtimeConfig.public.appVersion || '0.0.0'
 const buildNumber = runtimeConfig.public.buildNumber || 'dev'
 
-const storageLoading = ref(false)
-const backupLoading = ref(false)
-const wipeLoading = ref(false)
-const importInputRef = ref(null)
-const storageSummary = ref({
-  available: true,
-  contentCount: 0,
-  sourceCount: 0,
-  totalBytes: 0,
-  error: null,
-})
-
-const readerThemes = [
-  { value: 'light', label: 'Light', icon: 'ri-sun-line' },
-  { value: 'dark', label: 'Dark', icon: 'ri-moon-line' },
-]
-
-const speedOptions = [0.75, 1, 1.25, 1.5, 2]
-
 const mobileSettingsRows = [
-  { label: 'Audio', icon: 'ri-headphone-line' },
-  { label: 'Theme', icon: 'ri-moon-line' },
+  { label: 'Audio', icon: 'ri-headphone-line', to: '/settings/audio' },
+  { label: 'Theme', icon: 'ri-moon-line', type: 'theme' },
   { label: 'Preferences', icon: 'ri-edit-box-line', comingSoon: true },
-  { label: 'Storage', icon: 'ri-database-2-line' },
-  { label: 'About', icon: 'ri-information-line', comingSoon: true },
-  { label: 'Privacy Policy', icon: 'ri-shield-keyhole-line', comingSoon: true },
+  { label: 'Storage', icon: 'ri-database-2-line', to: '/settings/storage' },
+  { label: 'About', icon: 'ri-information-line', to: '/settings/about' },
+  { label: 'Privacy Policy', icon: 'ri-shield-keyhole-line', to: '/settings/privacy' },
   { label: 'Buy me a coffee', icon: 'ri-cup-line', comingSoon: true },
 ]
 
@@ -502,39 +359,22 @@ const formatStats = computed(() => {
     .sort((a, b) => b.count - a.count)
 })
 
-const currentVoiceName = computed(() => {
-  return ttsVoices.value.find(voice => voice.id === settings.value.ttsVoice)?.name || 'Default narrator'
-})
-
-const formattedStorageSize = computed(() => formatBytes(storageSummary.value.totalBytes))
-
-const storageMessage = computed(() => {
-  if (!storageSummary.value.available) {
-    return storageSummary.value.error || 'Bookish cannot inspect local storage right now.'
-  }
-
-  if (storageSummary.value.contentCount === 0 && storageSummary.value.sourceCount === 0) {
-    return 'No locally cached reading content yet.'
-  }
-
-  return 'Local reading content is available for the reader and player.'
-})
-
-const refreshStorageSummary = async () => {
-  storageLoading.value = true
-  try {
-    storageSummary.value = await getStorageSummary()
-  } finally {
-    storageLoading.value = false
-  }
-}
-
 const goBack = () => {
   if (window.history.length > 1) router.back()
   else router.push('/')
 }
 
 const handleSettingsRow = (row) => {
+  if (row.type === 'theme') {
+    setReaderTheme(settings.value.readerTheme === 'dark' ? 'light' : 'dark')
+    return
+  }
+
+  if (row.to) {
+    router.push(row.to)
+    return
+  }
+
   const suffix = row.comingSoon ? 'page' : 'settings page'
   addToast(`${row.label} ${suffix} is coming later.`, 'info')
 }
@@ -567,94 +407,8 @@ const fetchAllAuthorDetails = async () => {
   }
 }
 
-const exportData = async () => {
-  backupLoading.value = true
-  let url = null
-  try {
-    const download = await createDownload()
-    url = download.url
-    const link = document.createElement('a')
-    link.href = download.url
-    link.download = download.filename
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    addToast('Bookish backup exported', 'success')
-  } catch (error) {
-    console.error('[Settings] Failed to export Bookish data:', error)
-    addToast(error?.message || 'Could not export Bookish data', 'error')
-  } finally {
-    if (url) setTimeout(() => URL.revokeObjectURL(url), 0)
-    backupLoading.value = false
-  }
-}
-
-const openImportPicker = () => {
-  importInputRef.value?.click()
-}
-
-const importData = async (event) => {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (!file) return
-
-  const confirmed = window.confirm('Importing a backup will replace the current Bookish data in this browser. Continue?')
-  if (!confirmed) return
-
-  backupLoading.value = true
-  try {
-    const backup = JSON.parse(await file.text())
-    stopTTS()
-    await importBookishData(backup)
-    loadSettings()
-    await fetchAllData(true)
-    await refreshStorageSummary()
-    addToast('Bookish backup imported', 'success')
-  } catch (error) {
-    console.error('[Settings] Failed to import Bookish data:', error)
-    addToast(error?.message || 'Could not import Bookish backup', 'error')
-  } finally {
-    backupLoading.value = false
-  }
-}
-
-const wipeData = async () => {
-  const confirmed = window.confirm('This will permanently remove all Bookish books, playlists, reading content, progress, audio state, and settings from this browser. Continue?')
-  if (!confirmed) return
-
-  wipeLoading.value = true
-  try {
-    stopTTS()
-    await wipeBookishData()
-    loadSettings()
-    await fetchAllData(true)
-    await refreshStorageSummary()
-    addToast('Bookish data wiped from this browser', 'success')
-  } catch (error) {
-    console.error('[Settings] Failed to wipe Bookish data:', error)
-    addToast(error?.message || 'Could not wipe Bookish data', 'error')
-  } finally {
-    wipeLoading.value = false
-  }
-}
-
 const setReaderTheme = (readerTheme) => updateSettings({ readerTheme })
 const setReaderZoom = (value) => updateSettings({ readerZoom: Number(value) })
-
-const setAudioVoice = (ttsVoice) => {
-  setVoice(ttsVoice)
-}
-
-const setAudioSpeed = (ttsSpeed) => {
-  updateSettings({ ttsSpeed })
-  setSpeed(ttsSpeed)
-}
-
-const setAudioVolume = (value) => {
-  const ttsVolume = Number(value)
-  updateSettings({ ttsVolume })
-  setVolume(ttsVolume)
-}
 
 const setLibraryView = (libraryView) => updateSettings({ libraryView })
 const setGroupDetailView = (groupDetailView) => updateSettings({ groupDetailView })
@@ -662,7 +416,6 @@ const setLibrarySort = (librarySort, librarySortDirection) => updateSettings({ l
 const setLibraryGridItemsPerPage = (libraryGridItemsPerPage) => updateSettings({ libraryGridItemsPerPage })
 const setLibraryTableItemsPerPage = (libraryTableItemsPerPage) => updateSettings({ libraryTableItemsPerPage })
 const setMetadataAutoFill = (metadataAutoFill) => updateSettings({ metadataAutoFill })
-const setTrackSplitting = (trackSplitting) => updateSettings({ trackSplitting })
 
 const gridItemsPerPageOptions = LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS
 const tableItemsPerPageOptions = LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS
@@ -673,21 +426,6 @@ const defaultSortDescription = computed(() => {
   if (librarySort === 'rating') return librarySortDirection === 'desc' ? 'Highest rated first' : 'Lowest rated first'
   return librarySortDirection === 'desc' ? 'Newest releases first' : 'Oldest releases first'
 })
-
-const formatBytes = (bytes) => {
-  if (!bytes) return '0 B'
-
-  const units = ['B', 'KB', 'MB', 'GB']
-  let size = bytes
-  let unitIndex = 0
-
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024
-    unitIndex += 1
-  }
-
-  return `${size >= 10 || unitIndex === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[unitIndex]}`
-}
 
 const generateCoverPlaceholder = (title) => {
   const colors = getThemeCssVars([
@@ -716,8 +454,6 @@ const coverFallback = (event, title) => {
 const coverStyle = (index) => ({
   transform: `translateX(${(index - 1) * -26}px) rotate(${(index - 1) * -7}deg)`,
 })
-
-onMounted(refreshStorageSummary)
 </script>
 
 <style scoped>
@@ -1078,6 +814,57 @@ onMounted(refreshStorageSummary)
 
 .switch-control input:checked + span::before {
   transform: translateX(22px);
+}
+
+.theme-mode-toggle {
+  min-height: 38px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 999px;
+  background: var(--color-surface-card);
+  color: var(--color-text-muted);
+  padding: 0 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.theme-mode-toggle:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.theme-toggle {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  display: inline-flex;
+  flex-shrink: 0;
+  transition: background 0.16s ease;
+}
+
+.theme-toggle > span {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  left: 4px;
+  top: 4px;
+  border-radius: 50%;
+  background: var(--color-surface-primary);
+  box-shadow: var(--shadow-control-subtle);
+  transition: transform 0.16s ease;
+}
+
+.theme-toggle[aria-checked="true"] {
+  background: var(--color-brand-primary);
+}
+
+.theme-toggle[aria-checked="true"] > span {
+  transform: translateX(20px);
 }
 
 .storage-status-line {

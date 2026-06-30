@@ -116,12 +116,7 @@ const openSeries = (series) => {
 
 @media (max-width: 768px) {
   .series-header {
-    margin-bottom: 1rem;
-  }
-
-  .series-title {
-    color: var(--color-text-primary);
-    font-size: 1.5rem;
+    display: none;
   }
 
   .series-grid {

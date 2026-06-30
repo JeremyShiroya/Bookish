@@ -299,7 +299,7 @@ const continueReadingBooks = computed(() => (
     : mobileRecentBooks.value
 ));
 
-const mobileSeries = computed(() => seriesList.value.slice(0, 3));
+const mobileSeries = computed(() => seriesList.value.slice(0, 2));
 
 const homeSearchResults = computed(() => {
   const query = homeSearch.value.trim().toLowerCase();

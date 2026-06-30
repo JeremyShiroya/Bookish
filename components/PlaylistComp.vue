@@ -471,4 +471,10 @@ const coverFallback = (event, title) => {
   transform: translateY(-2px);
   box-shadow: var(--shadow-brand-button-hover);
 }
+
+@media (max-width: 768px) {
+  .playlists-header {
+    display: none;
+  }
+}
 </style>

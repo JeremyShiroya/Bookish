@@ -127,6 +127,16 @@ const confirmDelete = async () => {
   }
 }
 
+@media (max-width: 768px) {
+  .favourites-header {
+    display: none;
+  }
+
+  .books-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 720px) {
   .books-grid {
     grid-template-columns: 1fr;
