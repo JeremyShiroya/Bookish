@@ -32,11 +32,18 @@ defineEmits(["open"]);
 
 const bookCount = computed(() => props.series.books?.length || 0);
 
+const highestBookTotal = computed(() => {
+  const totals = (props.series.books || [])
+    .map((book) => Number(book?.seriesTotal || 0))
+    .filter((total) => Number.isFinite(total) && total > 0);
+  return totals.length ? Math.max(...totals) : 0;
+});
+
 const totalCount = computed(() =>
   Number(
     props.series.totalBooks ||
     props.series.seriesTotal ||
-    props.series.books?.[0]?.seriesTotal
+    highestBookTotal.value
   ) || Math.max(bookCount.value, 1)
 );
 

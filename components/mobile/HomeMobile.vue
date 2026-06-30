@@ -1,5 +1,7 @@
 <template>
   <div class="home-container">
+    <MobileTopNav />
+
     <div v-if="loading && !initialized" class="home-loading">
       <HomeSkeleton />
     </div>
@@ -116,6 +118,8 @@
         />
       </section>
     </div>
+
+    <MobileBottomNav />
   </div>
 </template>
 
@@ -129,6 +133,8 @@ import HomeBookRailCard from '../shared/HomeBookRailCard.vue'
 import HomeContinueReadingCard from '../shared/HomeContinueReadingCard.vue'
 import HomeSkeleton from '../shared/HomeSkeleton.vue'
 import SeriesCollageCard from '../shared/SeriesCollageCard.vue'
+import MobileBottomNav from './MobileBottomNav.vue'
+import MobileTopNav from './MobileTopNav.vue'
 
 const {
   books,
@@ -183,6 +189,8 @@ const retryLoadLibrary = () => {
 .home-container {
   width: 100%;
   margin: 0 auto;
+  padding-top: calc(4.85rem + env(safe-area-inset-top));
+  padding-bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
 }
 
 .home-loading {

@@ -1,4 +1,5 @@
 <template>
+  <MobileSettingsNav :title="seriesNavTitle" back-to="/series" aria-label="Series navigation" />
   <BookGroupDetail
     back-to="/series"
     :books="seriesBooks"
@@ -14,6 +15,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
+import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue';
 import BookGroupDetail from '~/components/shared/BookGroupDetail.vue';
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch';
 import { useBooks } from '~/composables/useBooks';
@@ -36,6 +38,8 @@ const series = computed(() => (
     || seriesList.value.find((item) => item.name === seriesName.value)
     || null
 ));
+
+const seriesNavTitle = computed(() => series.value?.name || seriesName.value || 'Series');
 
 const seriesBooks = computed(() => (
   [...(series.value?.books || [])]

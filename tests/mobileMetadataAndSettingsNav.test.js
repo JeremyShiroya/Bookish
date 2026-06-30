@@ -16,26 +16,63 @@ describe('mobile metadata modal and settings pages', () => {
     }
   })
 
-  test('settings detail pages import the mobile-only Najibudget-style settings nav', () => {
-    const nav = read('components/mobile/MobileSettingsNav.vue')
+  test('book form pages import the components needed for edit and reading status', () => {
+    const editPage = read('pages/edit/[id].vue')
+
+    expect(editPage).toContain("import EditBookComp from '~/components/shared/EditBookComp.vue'")
+
+    for (const file of ['components/shared/AddBookComp.vue', 'components/shared/EditBookComp.vue']) {
+      const source = read(file)
+      expect(source, file).toContain("import BookishSelect from './BookishSelect.vue'")
+      expect(source, file).toContain('Reading Status')
+    }
+
+    expect(read('components/shared/EditBookComp.vue')).toContain("import SkeletonLoader from './SkeletonLoader.vue'")
+  })
+
+  test('settings and requested detail pages import the mobile settings nav', () => {
+    const settingsNav = read('components/mobile/MobileSettingsNav.vue')
 
     expect(existsSync(resolve(root, 'components/mobile/MobileSettingsNav.vue'))).toBe(true)
-    expect(nav).toContain('class="nav"')
-    expect(nav).toContain('class="left"')
-    expect(nav).toContain('class="center"')
-    expect(nav).toContain('class="right"')
-    expect(nav).toContain('@media (width <= 768px)')
-    expect(nav).toMatch(/\.nav\s*\{[\s\S]*display:\s*none/)
+    expect(settingsNav).toContain(':aria-label="ariaLabel"')
+    expect(settingsNav).toContain('formatLongTitle')
+    expect(settingsNav).toContain('text-overflow: ellipsis')
+    expect(settingsNav).toContain('router.push(props.backTo)')
 
     for (const file of [
+      'components/mobile/SettingsMobile.vue',
       'pages/settings/audio.vue',
       'pages/settings/storage.vue',
       'pages/settings/about.vue',
       'pages/settings/privacy.vue',
+      'pages/add.vue',
+      'pages/edit/[id].vue',
+      'pages/serie/[id].vue',
+      'pages/playlist/[id].vue',
+      'pages/playlists/[id].vue',
     ]) {
       const source = read(file)
-      expect(source, file).toContain('<MobileSettingsNav')
-      expect(source, file).toContain("from '~/components/mobile/MobileSettingsNav.vue'")
+      expect(source, file).toContain('MobileSettingsNav')
+    }
+
+    expect(read('components/mobile/ProfileMobile.vue')).not.toContain('MobileSettingsNav')
+  })
+
+  test('main mobile library pages own their top and bottom navigation', () => {
+    const layout = read('layouts/default.vue')
+    expect(layout).not.toContain('MobileBottomNav')
+    expect(layout).not.toContain('MobileTopNav')
+
+    for (const file of [
+      'components/mobile/HomeMobile.vue',
+      'components/mobile/BooksMobile.vue',
+      'components/mobile/SeriesMobile.vue',
+      'components/mobile/PlaylistsMobile.vue',
+      'components/mobile/FavouritesMobile.vue',
+    ]) {
+      const source = read(file)
+      expect(source, file).toContain('<MobileTopNav')
+      expect(source, file).toContain('<MobileBottomNav')
     }
   })
 })

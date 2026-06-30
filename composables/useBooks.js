@@ -32,11 +32,18 @@ export const groupBooksBySeries = (sourceBooks = []) => {
         id: encodeURIComponent(displayName),
         name: displayName,
         author: book.author,
+        seriesTotal: null,
         books: [],
       });
     }
 
-    grouped.get(key).books.push({
+    const group = grouped.get(key);
+    const seriesTotal = Number(book?.seriesTotal || 0);
+    if (Number.isFinite(seriesTotal) && seriesTotal > Number(group.seriesTotal || 0)) {
+      group.seriesTotal = seriesTotal;
+    }
+
+    group.books.push({
       ...book,
       series: displayName,
     });

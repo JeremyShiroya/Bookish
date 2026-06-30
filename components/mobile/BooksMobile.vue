@@ -1,5 +1,7 @@
 <template>
   <div class="books-container">
+    <MobileTopNav />
+
     <!-- Header -->
     <div class="books-header">
       <div class="books-title-row">
@@ -405,6 +407,8 @@
       @close="closeDeleteModal"
       @confirm="deleteBook"
     />
+
+    <MobileBottomNav />
   </div>
 </template>
 
@@ -415,6 +419,8 @@ import GoodreadsRatingDisplay from "../shared/GoodreadsRatingDisplay.vue";
 import LibraryBookCard from "../shared/LibraryBookCard.vue";
 import AddToPlaylistModal from "../shared/AddToPlaylistModal.vue";
 import SkeletonLoader from "../shared/SkeletonLoader.vue";
+import MobileBottomNav from "./MobileBottomNav.vue";
+import MobileTopNav from "./MobileTopNav.vue";
 
 import { useBooks } from "~/composables/useBooks";
 import { getGoodreadsRating, parseGoodreadsReview } from "~/composables/useGoodreadsRating";
@@ -770,7 +776,7 @@ onUnmounted(() => {
 
 <style scoped>
 .books-container {
-  padding: 0rem;
+  padding: calc(4.85rem + env(safe-area-inset-top)) 0rem calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
   margin: 0 auto;
 }
 
@@ -1698,7 +1704,7 @@ onUnmounted(() => {
 
 .view-container.is-card {
   background: var(--color-surface-card);
-  border: 1px solid var(--color-border-card);
+  border: 0;
   border-radius: 14px;
   overflow: hidden;
 }
@@ -2448,7 +2454,7 @@ onUnmounted(() => {
 }
 
   .books-container {
-    padding: 0;
+    padding: calc(4.85rem + env(safe-area-inset-top)) 0 calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
   }
 
   .books-header {

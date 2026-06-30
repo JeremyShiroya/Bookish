@@ -1,6 +1,7 @@
 <template>
   <div class="profile">
-    <MobileSettingsNav title="Settings" />
+    <MobileSettingsNav title="Settings" back-to="/" aria-label="Settings navigation" />
+
     <div class="profile-container">
       <section class="section">
         <div
@@ -27,7 +28,7 @@
         </div>
 
         <div class="about-item">
-          <span>Version 1.2.0</span>
+          <span>Version {{ appVersion }}</span>
         </div>
       </section>
     </div>
@@ -35,13 +36,16 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 import { useToast } from '~/composables/useToast'
 
+const runtimeConfig = useRuntimeConfig()
 const { settings, updateSettings } = useBookishSettings()
 const { addToast } = useToast()
 const router = useRouter()
+const appVersion = computed(() => runtimeConfig.public.appVersion || '0.0.0')
 
 const mobileSettingsRows = [
   { label: 'Audio', icon: 'ri-headphone-line', to: '/settings/audio' },

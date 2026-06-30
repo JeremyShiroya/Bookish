@@ -1,6 +1,6 @@
 <template>
   <main class="settings-detail-page">
-    <MobileSettingsNav title="Audio" />
+    <MobileSettingsNav title="Audio" back-to="/settings" aria-label="Settings navigation" />
     <SettingsAudioPanel />
   </main>
 </template>

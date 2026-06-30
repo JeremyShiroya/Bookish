@@ -342,9 +342,11 @@ import { useToast } from '~/composables/useToast'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
 import { propagateSeriesTotal } from '~/composables/useSeriesProgress'
 import { useCoverImageCache } from '~/composables/useCoverImageCache'
+import BookishSelect from './BookishSelect.vue'
 import CoverImageModal from './CoverImageModal.vue'
 import GoodreadsRatingDisplay from './GoodreadsRatingDisplay.vue'
 import MultiStepLoader from './MultiStepLoader.vue'
+import SkeletonLoader from './SkeletonLoader.vue'
 
 const props = defineProps({
   bookId: {

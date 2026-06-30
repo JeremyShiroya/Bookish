@@ -1676,7 +1676,7 @@ onUnmounted(() => {
 
 .view-container.is-card {
   background: var(--color-surface-card);
-  border: 1px solid var(--color-border-card);
+  border: 0;
   border-radius: 14px;
   overflow: hidden;
 }

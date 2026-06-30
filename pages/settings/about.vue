@@ -1,45 +1,45 @@
 <template>
   <main class="about-page">
-    <MobileSettingsNav title="About" />
+    <MobileSettingsNav title="About" back-to="/settings" aria-label="Settings navigation" />
+
     <section class="about-card" aria-labelledby="about-title">
       <img src="/Images/Logo.png" alt="Bookish" class="about-logo" />
+
       <p class="eyebrow">About Bookish</p>
-      <h1 id="about-title">Bookish</h1>
-      <p class="lede">
-        Bookish is a local-first reading library for collecting books, tracking reading progress,
-        building playlists, and listening to read-aloud sessions from the same shelf.
+      <h1 id="about-title">A private shelf for reading and listening.</h1>
+
+      <div class="about-copy">
+        <p>
+          <strong>Bookish</strong> is a local-first library for keeping books, favourites,
+          playlists, reading status, and read-aloud sessions together in one calm workspace.
+        </p>
+        <p>
+          It is built for readers who want their collection to feel personal without needing an
+          account or cloud sync. Your day-to-day library data stays in this browser unless you
+          choose to export it.
+        </p>
+        <p>
+          Use Bookish to add books, group series, track what you are reading, listen from the
+          player, and carry your backup with you through Storage import and export.
+        </p>
+      </div>
+
+      <div class="about-facts" aria-label="App details">
+        <div>
+          <span>Version</span>
+          <strong>{{ appVersion }}</strong>
+        </div>
+        <div>
+          <span>Build</span>
+          <strong>{{ buildNumber }}</strong>
+        </div>
+      </div>
+
+      <h2>Built around control</h2>
+      <p class="closing-copy">
+        Bookish keeps library management, listening defaults, and storage tools visible so you can
+        shape the app around your own reading habits.
       </p>
-
-      <dl class="about-details">
-        <div>
-          <dt>Version</dt>
-          <dd>{{ appVersion }}</dd>
-        </div>
-        <div>
-          <dt>Build</dt>
-          <dd>{{ buildNumber }}</dd>
-        </div>
-        <div>
-          <dt>Storage</dt>
-          <dd>Browser-local library data and reading content</dd>
-        </div>
-      </dl>
-
-      <div class="about-section">
-        <h2>What it does</h2>
-        <p>
-          Bookish keeps your book records, playlists, favourites, metadata, reading status,
-          and player preferences together in one private workspace on this device.
-        </p>
-      </div>
-
-      <div class="about-section">
-        <h2>Data portability</h2>
-        <p>
-          Use Settings > Storage to export, import, or wipe your Bookish library whenever you need
-          to move browsers or reset the app.
-        </p>
-      </div>
     </section>
   </main>
 </template>
@@ -55,139 +55,100 @@ const buildNumber = runtimeConfig.public.buildNumber || 'dev'
 <style scoped>
 .about-page {
   width: 100%;
-  min-width: 0;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 0 10px 22px;
+  color: var(--color-text-primary);
 }
 
 .about-card {
-  padding: 1.5rem;
-  border: 1px solid var(--color-border-card);
-  border-radius: 10px;
-  background: var(--color-surface-card);
-  color: var(--color-text-primary);
+  line-height: 1.55;
 }
 
 .about-logo {
-  width: 42px;
-  height: 42px;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 18px;
+  border-radius: 14px;
   object-fit: cover;
-  margin-bottom: 0.9rem;
 }
 
-.eyebrow {
-  margin: 0 0 0.35rem;
-  color: var(--color-brand-primary-hover);
-  font-size: 0.82rem;
-}
-
+.eyebrow,
 h1,
 h2,
-p,
-dl {
+p {
   margin: 0;
 }
 
+.eyebrow {
+  color: var(--color-brand-primary-hover);
+  font-size: 13px;
+  font-weight: 500;
+}
+
 h1 {
-  font-size: 1.8rem;
+  margin-top: 6px;
   color: var(--color-text-primary);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.18;
 }
 
-.lede {
-  max-width: 720px;
-  margin-top: 0.8rem;
-  color: var(--color-text-muted);
-  line-height: 1.55;
+.about-copy {
+  margin-top: 18px;
+  color: var(--color-text-secondary);
+  font-size: 15px;
 }
 
-.about-details {
+.about-copy p + p {
+  margin-top: 14px;
+}
+
+strong {
+  color: var(--color-brand-primary);
+  font-weight: 500;
+}
+
+.about-facts {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-top: 1.4rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0;
 }
 
-.about-details div,
-.about-section {
+.about-facts div {
   border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
-  padding: 1rem;
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--color-surface-card);
 }
 
-dt {
+.about-facts span,
+.about-facts strong {
+  display: block;
+}
+
+.about-facts span {
   color: var(--color-text-muted);
-  font-size: 0.85rem;
+  font-size: 12px;
 }
 
-dd {
-  margin: 0.2rem 0 0;
+.about-facts strong {
+  margin-top: 3px;
   color: var(--color-text-primary);
+  font-size: 17px;
 }
 
-.about-section {
-  margin-top: 1rem;
+h2 {
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 500;
 }
 
-.about-section h2 {
-  margin-bottom: 0.4rem;
-  font-size: 1rem;
-}
-
-.about-section p {
-  color: var(--color-text-muted);
+.closing-copy {
+  margin-top: 8px;
+  color: var(--color-text-secondary);
+  font-size: 15px;
   line-height: 1.55;
-}
-
-@media (max-width: 760px) {
-  .about-card {
-    padding: 16px;
-    border-radius: var(--mobile-card-radius);
-  }
-
-  .about-logo {
-    width: var(--mobile-list-icon-size);
-    height: var(--mobile-list-icon-size);
-    margin-bottom: 12px;
-  }
-
-  .eyebrow,
-  dt,
-  .about-section p {
-    font-size: var(--mobile-subtext-size);
-  }
-
-  h1 {
-    font-size: var(--mobile-title-size);
-    line-height: 1.2;
-  }
-
-  .lede {
-    margin-top: 8px;
-    font-size: var(--mobile-body-size);
-    line-height: 1.45;
-  }
-
-  .about-details {
-    grid-template-columns: 1fr;
-    gap: 12px;
-    margin-top: 20px;
-  }
-
-  .about-details div,
-  .about-section {
-    border-radius: var(--mobile-control-radius);
-    padding: 16px;
-  }
-
-  .about-section {
-    margin-top: 12px;
-  }
-
-  .about-section h2 {
-    font-size: var(--mobile-section-title-size);
-    line-height: 1.25;
-  }
-
-  dd {
-    font-size: var(--mobile-body-size);
-  }
 }
 </style>

@@ -1,4 +1,5 @@
 <template>
+  <MobileSettingsNav :title="playlistNavTitle" back-to="/playlists" aria-label="Playlist navigation" />
   <BookGroupDetail
     back-to="/playlists"
     :books="playlistBooks"
@@ -21,6 +22,7 @@
 
 <script setup>
 import { computed, ref } from 'vue';
+import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue';
 import BookGroupDetail from '~/components/shared/BookGroupDetail.vue';
 import PlaylistEditModal from '~/components/shared/PlaylistEditModal.vue';
 import { useBooks } from '~/composables/useBooks';
@@ -35,6 +37,8 @@ const savingPlaylist = ref(false);
 const playlist = computed(() => (
   collections.value.find((item) => String(item.id) === String(route.params.id))
 ));
+
+const playlistNavTitle = computed(() => playlist.value?.name || 'Playlist');
 
 const playlistBooks = computed(() => {
   const ids = playlist.value?.bookIds || [];

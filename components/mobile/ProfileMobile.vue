@@ -1,13 +1,5 @@
 <template>
   <main class="profile-page">
-    <header class="profile-header">
-      <button type="button" aria-label="Back" title="Back" @click="goBack">
-        <i class="ri-arrow-left-s-line"></i>
-      </button>
-      <h1>Profile</h1>
-      <span aria-hidden="true"></span>
-    </header>
-
     <section class="profile-hero" aria-label="Profile details">
       <div class="profile-identity">
         <button
@@ -114,7 +106,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useToast } from '~/composables/useToast'
 import { useUserProfile } from '~/composables/useUserProfile'
 
-const router = useRouter()
 const { addToast } = useToast()
 const {
   profile,
@@ -165,11 +156,6 @@ const selectAvatar = async (avatarSrc) => {
   await persistProfile({ avatarValue: avatarSrc }, 'Avatar updated')
 }
 
-const goBack = () => {
-  if (window.history.length > 1) router.back()
-  else router.push('/')
-}
-
 watch(profile, syncProfileDraft, { immediate: true })
 
 onMounted(async () => {
@@ -183,35 +169,6 @@ onMounted(async () => {
   min-height: calc(100vh - 88px - env(safe-area-inset-bottom));
   background: var(--color-background-app);
   color: var(--color-text-primary);
-}
-
-.profile-header {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 42px;
-  align-items: center;
-  min-height: 42px;
-  margin-bottom: 1rem;
-}
-
-.profile-header button {
-  display: inline-flex;
-  width: 34px;
-  height: 34px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  background: transparent;
-  color: var(--color-text-primary);
-  cursor: pointer;
-  font-size: 1.35rem;
-}
-
-.profile-header h1 {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: 1rem;
-  line-height: 1;
-  text-align: center;
 }
 
 .profile-hero,
@@ -233,17 +190,17 @@ onMounted(async () => {
 
 .profile-identity {
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 260px;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 0;
   gap: 1.2rem;
   padding: 0.5rem;
 }
 
 .profile-avatar-button {
   position: relative;
-  width: 132px;
-  height: 132px;
+  width: 112px;
+  height: 112px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -551,23 +508,6 @@ onMounted(async () => {
     font-family: var(--mobile-font-family);
   }
 
-  .profile-header {
-    grid-template-columns: var(--mobile-touch-target) minmax(0, 1fr) var(--mobile-touch-target);
-    min-height: var(--mobile-touch-target);
-    margin-bottom: 16px;
-  }
-
-  .profile-header button {
-    width: var(--mobile-touch-target);
-    height: var(--mobile-touch-target);
-    font-size: var(--mobile-icon-size);
-  }
-
-  .profile-header h1 {
-    color: var(--color-text-primary);
-    font-size: var(--mobile-title-size);
-  }
-
   .profile-hero,
   .appearance-panel {
     grid-template-columns: 1fr;
@@ -580,6 +520,8 @@ onMounted(async () => {
   }
 
   .profile-identity {
+    flex-direction: row;
+    align-items: center;
     min-height: 0;
     gap: 16px;
     padding: 0;

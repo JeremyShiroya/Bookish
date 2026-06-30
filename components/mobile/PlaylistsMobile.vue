@@ -1,5 +1,6 @@
 <template>
   <div class="playlists-container">
+    <MobileTopNav />
 
     <div class="playlists-header">
       <h1 class="playlists-title">Playlists</h1>
@@ -96,6 +97,7 @@
       </template>
     </EmptyState>
 
+    <MobileBottomNav />
   </div>
 </template>
 
@@ -106,6 +108,8 @@ import { useBooks } from "~/composables/useBooks";
 import { useToast } from "~/composables/useToast";
 import EmptyState from "../shared/EmptyState.vue";
 import PlaylistEditModal from "../shared/PlaylistEditModal.vue";
+import MobileBottomNav from "./MobileBottomNav.vue";
+import MobileTopNav from "./MobileTopNav.vue";
 
 const { collections, books, updatePlaylist, deletePlaylist } = useBooks();
 const { addToast } = useToast();
@@ -227,6 +231,8 @@ const coverFallback = (event, title) => {
 <style scoped>
 .playlists-container {
   margin: 0 auto;
+  padding-top: calc(4.85rem + env(safe-area-inset-top));
+  padding-bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
 }
 
 /* ── Header ──────────────────────────────────────────────────── */

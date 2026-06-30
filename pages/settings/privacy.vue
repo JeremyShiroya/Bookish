@@ -1,48 +1,47 @@
 <template>
   <main class="privacy-page">
-    <MobileSettingsNav title="Privacy Policy" />
-    <section class="privacy-card" aria-labelledby="privacy-title">
-      <div class="privacy-heading">
-        <i class="ri-shield-keyhole-line"></i>
-        <div>
-          <p class="eyebrow">Privacy Policy</p>
-          <h1 id="privacy-title">Your library stays on this device.</h1>
-        </div>
-      </div>
+    <MobileSettingsNav title="Privacy Policy" back-to="/settings" aria-label="Settings navigation" />
 
-      <div class="policy-section">
-        <h2>Local data</h2>
-        <p>
-          Bookish stores your library records, playlists, favourites, reading content, progress,
-          audio session state, and settings in this browser's local storage and IndexedDB.
-        </p>
-      </div>
+    <article class="policy-card" aria-labelledby="privacy-title">
+      <p class="eyebrow">Privacy Policy</p>
+      <h1 id="privacy-title">Your library data is yours.</h1>
+      <p class="lede">
+        Bookish is designed as a local-first reading app. The records you create are stored in this
+        browser and stay under your control.
+      </p>
 
-      <div class="policy-section">
-        <h2>Metadata lookups</h2>
+      <section>
+        <h2>What Bookish Stores</h2>
         <p>
-          When you choose metadata or author lookup actions, Bookish may request public book or
-          author information from configured lookup services. Those requests are only used to fill
-          your local library details.
+          Book records, covers, playlists, favourites, reading status, audio session state, and
+          settings are saved locally through browser storage and IndexedDB.
         </p>
-      </div>
+      </section>
 
-      <div class="policy-section">
-        <h2>Backups</h2>
+      <section>
+        <h2>Metadata Lookups</h2>
         <p>
-          Exports are generated in your browser as a JSON backup file. Imports replace the current
-          browser copy after confirmation, and wiping storage removes local Bookish data from this browser.
+          When you choose to fetch metadata, Bookish may request public book details from lookup
+          providers. Those results are used to help fill your local book fields.
         </p>
-      </div>
+      </section>
 
-      <div class="policy-section">
-        <h2>Your control</h2>
+      <section>
+        <h2>Imports And Exports</h2>
         <p>
-          Use Settings > Storage to export a copy of your library, import a backup, refresh local
-          storage status, or wipe Bookish data from this browser.
+          Storage exports are generated in your browser as backup files. Imports restore data into
+          this browser, and wipe removes the local Bookish copy after confirmation.
         </p>
-      </div>
-    </section>
+      </section>
+
+      <section>
+        <h2>Your Control</h2>
+        <p>
+          You can export, import, refresh storage status, or wipe local data from the Storage page.
+          Clearing browser data may also remove your Bookish library from this device.
+        </p>
+      </section>
+    </article>
   </main>
 </template>
 
@@ -53,36 +52,14 @@ import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue'
 <style scoped>
 .privacy-page {
   width: 100%;
-  min-width: 0;
-}
-
-.privacy-card {
-  padding: 1.5rem;
-  border: 1px solid var(--color-border-card);
-  border-radius: 10px;
-  background: var(--color-surface-card);
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 0 22px 22px;
   color: var(--color-text-primary);
 }
 
-.privacy-heading {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
-.privacy-heading > i {
-  width: 46px;
-  height: 46px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-brand-primary-muted);
-  color: var(--color-brand-primary);
-  font-size: 1.25rem;
-  flex-shrink: 0;
+.policy-card {
+  line-height: 1.55;
 }
 
 .eyebrow,
@@ -94,77 +71,43 @@ p {
 
 .eyebrow {
   color: var(--color-brand-primary-hover);
-  font-size: 0.82rem;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 h1 {
-  margin-top: 0.25rem;
+  margin-top: 6px;
   color: var(--color-text-primary);
-  font-size: 1.45rem;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.18;
 }
 
-.policy-section {
-  padding: 1rem 0;
+.lede {
+  margin-top: 12px;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+}
+
+section {
+  padding: 18px 0;
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
-.policy-section:last-child {
-  border-bottom: none;
+section:last-child {
+  border-bottom: 0;
   padding-bottom: 0;
 }
 
-.policy-section h2 {
-  margin-bottom: 0.35rem;
+h2 {
   color: var(--color-text-primary);
-  font-size: 1rem;
+  font-size: 17px;
+  font-weight: 500;
 }
 
-.policy-section p {
-  max-width: 760px;
-  color: var(--color-text-muted);
-  line-height: 1.55;
-}
-
-@media (max-width: 760px) {
-  .privacy-card {
-    padding: 16px;
-    border-radius: var(--mobile-card-radius);
-  }
-
-  .privacy-heading {
-    align-items: flex-start;
-    gap: 12px;
-    padding-bottom: 16px;
-  }
-
-  .privacy-heading > i {
-    width: var(--mobile-list-icon-size);
-    height: var(--mobile-list-icon-size);
-    font-size: var(--mobile-icon-size);
-  }
-
-  .eyebrow,
-  .policy-section p {
-    font-size: var(--mobile-subtext-size);
-  }
-
-  h1 {
-    font-size: var(--mobile-title-size);
-    line-height: 1.2;
-  }
-
-  .policy-section {
-    padding: 16px 0;
-  }
-
-  .policy-section h2 {
-    margin-bottom: 6px;
-    font-size: var(--mobile-section-title-size);
-    line-height: 1.25;
-  }
-
-  .policy-section p {
-    line-height: 1.45;
-  }
+section p {
+  margin-top: 7px;
+  color: var(--color-text-secondary);
+  font-size: 15px;
 }
 </style>

@@ -1,6 +1,6 @@
 <template>
   <main class="settings-detail-page">
-    <MobileSettingsNav title="Storage" />
+    <MobileSettingsNav title="Storage" back-to="/settings" aria-label="Settings navigation" />
     <SettingsStoragePanel />
   </main>
 </template>

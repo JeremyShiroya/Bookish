@@ -46,6 +46,8 @@ describe('mobile Najibudget style transfer', () => {
     expect(settings).toContain('font-size: 18px')
     expect(settings).toContain('font-size: 20px')
     expect(settings).not.toContain('<button')
+    expect(profile).not.toContain('profile-header')
+    expect(profile).toContain('flex-direction: row')
     expect(profile).toContain('var(--mobile-card-radius)')
     expect(profile).toContain('var(--mobile-section-title-size)')
   })

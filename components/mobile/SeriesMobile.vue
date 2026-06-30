@@ -1,5 +1,7 @@
 <template>
   <div class="series-container">
+    <MobileTopNav />
+
     <div v-if="showTitle" class="series-header">
       <h1 class="series-title">{{ title }}</h1>
     </div>
@@ -26,6 +28,8 @@
         </NuxtLink>
       </template>
     </EmptyState>
+
+    <MobileBottomNav />
   </div>
 </template>
 
@@ -35,6 +39,8 @@ import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import EmptyState from "../shared/EmptyState.vue";
 import SeriesCollageCard from "../shared/SeriesCollageCard.vue";
+import MobileBottomNav from "./MobileBottomNav.vue";
+import MobileTopNav from "./MobileTopNav.vue";
 
 const { seriesList } = useBooks();
 const router = useRouter();
@@ -76,6 +82,8 @@ const openSeries = (series) => {
 <style scoped>
 .series-container {
   margin: 0 auto;
+  padding-top: calc(4.85rem + env(safe-area-inset-top));
+  padding-bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
 }
 
 .series-header {

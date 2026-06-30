@@ -20,4 +20,13 @@ describe('library series grouping', () => {
     expect(normalizeLibrarySeriesName('The Wheel-of Time')).toBe('the wheel of time')
     expect(normalizeLibrarySeriesName('  the   wheel of time  ')).toBe('the wheel of time')
   })
+
+  test('promotes the highest known total onto the series group', () => {
+    const groups = groupBooksBySeries([
+      { id: '1', title: 'First', author: 'Author', series: 'Grant County' },
+      { id: '2', title: 'Second', author: 'Author', series: ' grant county ', seriesTotal: 4 },
+    ])
+
+    expect(groups[0].seriesTotal).toBe(4)
+  })
 })

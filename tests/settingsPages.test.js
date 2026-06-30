@@ -43,7 +43,7 @@ describe('settings pages wiring', () => {
     expect(settings).not.toMatch(/label: 'Theme'[\s\S]*?ri-arrow-right-s-line/)
   })
 
-  test('mobile settings mirrors Najibudget list structure without nav or row buttons', () => {
+  test('mobile settings mirrors Najibudget list structure with settings nav and no row buttons', () => {
     const settings = read('components/mobile/SettingsMobile.vue')
 
     expect(settings).toContain('class="profile"')
@@ -56,6 +56,14 @@ describe('settings pages wiring', () => {
     expect(settings).not.toContain('<button')
     expect(settings).not.toContain('mobile-settings-header')
     expect(settings).not.toContain('mobile-settings-list')
+  })
+
+  test('settings version comes from runtime config instead of hardcoded text', () => {
+    const settings = read('components/mobile/SettingsMobile.vue')
+
+    expect(settings).toContain('runtimeConfig.public.appVersion')
+    expect(settings).toContain('Version {{ appVersion }}')
+    expect(settings).not.toContain('Version 1.2.0')
   })
 
   test('mobile page titles are hidden for series, playlists, and favourites', () => {

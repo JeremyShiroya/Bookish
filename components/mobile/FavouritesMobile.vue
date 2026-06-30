@@ -1,5 +1,7 @@
 <template>
   <div class="favourites-container">
+    <MobileTopNav />
+
     <div class="favourites-header">
       <h1 class="favourites-title">
         Favourites <span class="favourites-count">({{ favourites.length }})</span>
@@ -52,6 +54,8 @@
       @close="showDeleteModal = false; selectedDeleteBook = null"
       @confirm="confirmDelete"
     />
+
+    <MobileBottomNav />
   </div>
 </template>
 
@@ -64,6 +68,8 @@ import LibraryBookCard from '../shared/LibraryBookCard.vue';
 import AddToPlaylistModal from '../shared/AddToPlaylistModal.vue';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal.vue';
 import SkeletonLoader from '../shared/SkeletonLoader.vue';
+import MobileBottomNav from './MobileBottomNav.vue';
+import MobileTopNav from './MobileTopNav.vue';
 
 const { favourites, toggleFavourite, deleteBook, loading, initialized } = useBooks();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
@@ -95,7 +101,7 @@ const confirmDelete = async () => {
 
 <style scoped>
 .favourites-container {
-  padding: 0rem;
+  padding: calc(4.85rem + env(safe-area-inset-top)) 0rem calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
   margin: 0 auto;
 }
 
@@ -127,7 +133,7 @@ const confirmDelete = async () => {
   }
 
   .favourites-container {
-    padding: 0 var(--mobile-page-padding-inline);
+    padding: calc(4.85rem + env(safe-area-inset-top)) var(--mobile-page-padding-inline) calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
   }
 
   .books-grid {
