@@ -428,7 +428,7 @@ onUnmounted(() => {
   gap: 10px;
   align-items: center;
   padding: 10px 20px 12px;
-  background: transparent;
+  background: var(--color-background-app);
   transition: bottom 0.24s ease, transform 0.24s ease;
 }
 
