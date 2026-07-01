@@ -27,7 +27,7 @@
         @open-toc="tocOpen = true"
         @page-change="handlePdfPageChange"
         @pdf-loaded="handlePdfLoaded"
-        @read-current-position="requestReadCurrentPosition"
+        @read-current-position="playFromCurrentPosition"
         @previous-chapter="goToAdjacentChapter(-1)"
         @next-chapter="goToAdjacentChapter(1)"
       />
@@ -583,6 +583,41 @@ function requestReadCurrentPosition() {
   if (targetText) prewarmText(targetText)
 }
 
+async function playFromCurrentPosition() {
+  if (!book.value || !allReadableChunks.value.length) return
+
+  if (ttsBook.value?.id === book.value.id && ttsStatus.value === 'paused') {
+    resumeTTS()
+    return
+  }
+
+  if (ttsBook.value?.id === book.value.id && ttsStatus.value === 'playing') {
+    pauseTTS()
+    return
+  }
+
+  const visiblePdfPage = isPdfRenderable.value
+    ? pdfViewerRef.value?.getVisiblePage?.()
+    : null
+  const targetPage = visiblePdfPage || currentPdfPage.value
+  const targetPdfChunk = isPdfBook.value
+    ? firstChunkForPage(pdfManifest.value, targetPage)
+    : null
+  const targetChunkId = isPdfBook.value
+    ? targetPdfChunk?.id
+    : chunkIndexForCurrentPosition()
+  if (targetChunkId === null || targetChunkId === undefined) return
+
+  pendingReadFromHereWasPlaying.value = false
+  pendingReadFromHerePage.value = targetPdfChunk?.page || targetPage
+  pendingReadFromHereChunk.value = targetChunkId
+
+  const targetText = allReadableChunks.value[targetChunkId]
+  if (targetText) prewarmText(targetText)
+
+  await confirmReadFromHere()
+}
+
 function cancelReadFromHere() {
   confirmReadFromHereOpen.value = false
   // Resume if TTS was playing when the user opened the modal
@@ -1094,12 +1129,12 @@ function handlePdfLoaded(payload) {
 async function loadBook(id) {
   readerReady.value = false
   restoredInitialPdfScroll.value = false
-  if (!initialized.value) await fetchAllData()
-  const cached = books.value.find(b => b.id === id)
+  const cached = books.value.find(b => String(b.id) === String(id))
   if (cached) {
     book.value = cached
     loading.value = false
   } else {
+    if (!initialized.value) await fetchAllData()
     const meta = fetchBookById(id)
     if (!meta) {
       loading.value = false
@@ -1107,6 +1142,13 @@ async function loadBook(id) {
     }
     book.value = meta
     loading.value = false
+  }
+
+  if (!initialized.value) {
+    fetchAllData().then(() => {
+      const latest = fetchBookById(id)
+      if (latest) book.value = { ...book.value, ...latest }
+    })
   }
 
   contentLoading.value = true

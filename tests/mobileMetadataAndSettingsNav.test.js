@@ -7,7 +7,10 @@ const read = (path) => readFileSync(resolve(root, path), 'utf8')
 
 describe('mobile metadata modal and settings pages', () => {
   test('add and edit metadata modals expose mobile-safe progress actions', () => {
-    for (const file of ['components/shared/AddBookComp.vue', 'components/shared/EditBookComp.vue']) {
+    for (const file of [
+      'components/mobile/AddBookMobile.vue',
+      'components/mobile/EditBookMobile.vue',
+    ]) {
       const source = read(file)
       expect(source, file).toContain('metadata-modal-body')
       expect(source, file).toContain('metadata-progress-actions')
@@ -16,18 +19,21 @@ describe('mobile metadata modal and settings pages', () => {
     }
   })
 
-  test('book form pages import the components needed for edit and reading status', () => {
-    const editPage = read('pages/edit/[id].vue')
+  test('mobile book form pages own their bodies instead of importing shared form shells', () => {
+    const addMobile = read('components/mobile/AddBookMobile.vue')
+    const editMobile = read('components/mobile/EditBookMobile.vue')
 
-    expect(editPage).toContain("import EditBookComp from '~/components/shared/EditBookComp.vue'")
+    expect(addMobile).not.toContain('AddBookComp')
+    expect(editMobile).not.toContain('EditBookComp')
 
-    for (const file of ['components/shared/AddBookComp.vue', 'components/shared/EditBookComp.vue']) {
+    for (const file of ['components/mobile/AddBookMobile.vue', 'components/mobile/EditBookMobile.vue']) {
       const source = read(file)
-      expect(source, file).toContain("import BookishSelect from './BookishSelect.vue'")
+      expect(source, file).toContain('MobileSettingsNav')
+      expect(source, file).toContain("import BookishSelect from '~/components/shared/BookishSelect.vue'")
       expect(source, file).toContain('Reading Status')
     }
 
-    expect(read('components/shared/EditBookComp.vue')).toContain("import SkeletonLoader from './SkeletonLoader.vue'")
+    expect(editMobile).toContain("import SkeletonLoader from '~/components/shared/SkeletonLoader.vue'")
   })
 
   test('settings and requested detail pages import the mobile settings nav', () => {

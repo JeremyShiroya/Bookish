@@ -2,26 +2,44 @@
   <div
     :ref="setReaderPage"
     class="reader-mobile-page"
-    :class="[readerTheme, { replaceBottomNav }]"
+    :class="[readerTheme, { replaceBottomNav: dockReplacingBottomNav }]"
   >
     <header class="reader-mobile-topbar">
-      <button type="button" class="reader-nav-btn" aria-label="Back" @click="$emit('back')">
+      <button
+        type="button"
+        class="reader-nav-btn"
+        aria-label="Back"
+        @click="$emit('back')"
+      >
         <i class="ri-arrow-left-s-line"></i>
       </button>
 
-      <h1>{{ book?.title || 'Reader' }}</h1>
+      <h1>{{ book?.title || "Reader" }}</h1>
 
       <div class="reader-top-actions">
-        <button type="button" class="reader-nav-btn" aria-label="Audio controls" @click="mediaOpen = true">
+        <button
+          type="button"
+          class="reader-nav-btn"
+          aria-label="Audio controls"
+          @click="mediaOpen = true"
+        >
           <i class="ri-headphone-fill"></i>
         </button>
-        <button type="button" class="reader-nav-btn" aria-label="Reader options" @click="$emit('open-toc')">
+        <button
+          type="button"
+          class="reader-nav-btn"
+          aria-label="Reader options"
+          @click="$emit('open-toc')"
+        >
           <i class="ri-equalizer-2-line"></i>
         </button>
       </div>
     </header>
 
-    <main class="reader-mobile-content" :class="{ 'is-pdf-reader': isPdfRenderable }">
+    <main
+      class="reader-mobile-content"
+      :class="{ 'is-pdf-reader': isPdfRenderable }"
+    >
       <div v-if="loading || contentLoading" class="reader-state">
         <SkeletonLoader variant="reader" />
       </div>
@@ -47,8 +65,13 @@
 
         <div v-else-if="isPdfBook" class="reader-state reader-error">
           <i class="ri-file-pdf-2-line"></i>
-          <p>This PDF was imported before original-page rendering was available.</p>
-          <p class="hint">Re-upload the PDF once so Bookish can display the document exactly as it is.</p>
+          <p>
+            This PDF was imported before original-page rendering was available.
+          </p>
+          <p class="hint">
+            Re-upload the PDF once so Bookish can display the document exactly
+            as it is.
+          </p>
         </div>
 
         <div v-else class="reader-mobile-chapters" :ref="setChaptersContainer">
@@ -64,10 +87,16 @@
             :id="`ch-${index}`"
             class="reader-mobile-section"
           >
-            <article class="reader-mobile-text epub-content" v-html="sanitizeHtml(chapter.html)" />
+            <article
+              class="reader-mobile-text epub-content"
+              v-html="sanitizeHtml(chapter.html)"
+            />
           </section>
 
-          <div v-if="!chapterList.length && !contentLoading" class="reader-state">
+          <div
+            v-if="!chapterList.length && !contentLoading"
+            class="reader-state"
+          >
             <i class="ri-book-open-line"></i>
             <p>No readable content found.</p>
             <p class="hint">Re-upload the book to enable in-app reading.</p>
@@ -78,20 +107,40 @@
 
     <div class="reader-chapter-dock">
       <div class="chapter-pill">
-        <button type="button" class="chapter-pill-step" aria-label="Previous chapter" @click="$emit('previous-chapter')">
+        <button
+          type="button"
+          class="chapter-pill-step"
+          aria-label="Previous chapter"
+          @click="$emit('previous-chapter')"
+        >
           <i class="ri-arrow-left-s-line"></i>
         </button>
-        <button type="button" class="chapter-pill-title" @click="$emit('open-toc')">
+        <button
+          type="button"
+          class="chapter-pill-title"
+          @click="$emit('open-toc')"
+        >
           {{ chapterLabel }}
         </button>
-        <button type="button" class="chapter-pill-step" aria-label="Next chapter" @click="$emit('next-chapter')">
+        <button
+          type="button"
+          class="chapter-pill-step"
+          aria-label="Next chapter"
+          @click="$emit('next-chapter')"
+        >
           <i class="ri-arrow-right-s-line"></i>
         </button>
       </div>
-      <button type="button" class="chapter-play" aria-label="Play chapter" @click="playFromHere">
-        <i :class="isPlaying ? 'ri-pause-fill' : 'ri-play-fill'"></i>
-      </button>
     </div>
+
+    <button
+      type="button"
+      class="chapter-play"
+      aria-label="Play chapter"
+      @click="playFromHere"
+    >
+      <i :class="isPlaying ? 'ri-pause-fill' : 'ri-play-fill'"></i>
+    </button>
 
     <div class="mobile-bottom-nav-wrap" aria-hidden="true">
       <MobileBottomNav />
@@ -99,8 +148,18 @@
 
     <Teleport to="body">
       <div v-if="mediaOpen" class="reader-media-layer">
-        <button class="reader-media-backdrop" type="button" aria-label="Close audio controls" @click="mediaOpen = false"></button>
-        <section class="reader-media-sheet" role="dialog" aria-modal="true" aria-label="Audio controls">
+        <button
+          class="reader-media-backdrop"
+          type="button"
+          aria-label="Close audio controls"
+          @click="mediaOpen = false"
+        ></button>
+        <section
+          class="reader-media-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Audio controls"
+        >
           <div class="sheet-grabber"></div>
           <h2>{{ chapterLabel }}</h2>
 
@@ -113,7 +172,12 @@
             <button type="button" aria-label="Previous" @click="skipChunks(-1)">
               <i class="ri-skip-back-fill"></i>
             </button>
-            <button type="button" class="media-play" aria-label="Play or pause" @click="toggleMediaPlay">
+            <button
+              type="button"
+              class="media-play"
+              aria-label="Play or pause"
+              @click="toggleMediaPlay"
+            >
               <i :class="isPlaying ? 'ri-pause-fill' : 'ri-play-fill'"></i>
             </button>
             <button type="button" aria-label="Next" @click="skipChunks(1)">
@@ -122,7 +186,7 @@
           </div>
 
           <div class="media-progress-row">
-            <span>{{ elapsedTime || '00:00' }}</span>
+            <span>{{ elapsedTime || "00:00" }}</span>
             <input
               type="range"
               min="0"
@@ -131,7 +195,7 @@
               aria-label="Audio progress"
               @input="seekToProgress(Number($event.target.value))"
             />
-            <span>{{ totalTime || '00:00' }}</span>
+            <span>{{ totalTime || "00:00" }}</span>
           </div>
 
           <span class="speed-label">{{ ttsSpeed }}x</span>
@@ -142,15 +206,15 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import PdfViewer from '~/components/shared/PdfViewer.vue'
-import SkeletonLoader from '~/components/shared/SkeletonLoader.vue'
-import { useTTS } from '~/composables/useTTS'
-import MobileBottomNav from './MobileBottomNav.vue'
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import PdfViewer from "~/components/shared/PdfViewer.vue";
+import SkeletonLoader from "~/components/shared/SkeletonLoader.vue";
+import { useTTS } from "~/composables/useTTS";
+import MobileBottomNav from "./MobileBottomNav.vue";
 
 const props = defineProps({
   readerRefs: { type: Object, required: true },
-  readerTheme: { type: String, default: 'light' },
+  readerTheme: { type: String, default: "light" },
   book: { type: Object, default: null },
   loading: { type: Boolean, default: false },
   contentLoading: { type: Boolean, default: false },
@@ -167,19 +231,19 @@ const props = defineProps({
   currentPdfPage: { type: Number, default: 1 },
   totalPages: { type: Number, default: 0 },
   tocPosition: { type: Object, default: null },
-  currentChapterTitle: { type: String, default: '' },
+  currentChapterTitle: { type: String, default: "" },
   sanitizeHtml: { type: Function, required: true },
-})
+});
 
 const emit = defineEmits([
-  'back',
-  'open-toc',
-  'page-change',
-  'pdf-loaded',
-  'read-current-position',
-  'previous-chapter',
-  'next-chapter',
-])
+  "back",
+  "open-toc",
+  "page-change",
+  "pdf-loaded",
+  "read-current-position",
+  "previous-chapter",
+  "next-chapter",
+]);
 
 const {
   ttsBook,
@@ -191,73 +255,75 @@ const {
   togglePlay,
   skipChunks,
   seekToProgress,
-} = useTTS()
+} = useTTS();
 
-const mediaOpen = ref(false)
-const replaceBottomNav = ref(false)
-let lastScrollY = 0
+const mediaOpen = ref(false);
+const replaceBottomNav = ref(false);
+let lastScrollY = 0;
 
-const isPlaying = computed(() => (
-  ttsBook.value?.id === props.book?.id && ttsStatus.value === 'playing'
-))
+const dockReplacingBottomNav = computed(() => replaceBottomNav.value);
 
-const mobilePdfZoom = computed(() => 1)
+const isPlaying = computed(
+  () => ttsBook.value?.id === props.book?.id && ttsStatus.value === "playing",
+);
+
+const mobilePdfZoom = computed(() => 1);
 
 const chapterLabel = computed(() => {
   if (props.isPdfRenderable) {
-    const total = props.totalPages || props.book?.pages || 1
-    return `Page ${props.currentPdfPage} / ${total}`
+    const total = props.totalPages || props.book?.pages || 1;
+    return `Page ${props.currentPdfPage} / ${total}`;
   }
-  if (props.tocPosition?.title) return props.tocPosition.title
-  if (props.currentChapterTitle) return props.currentChapterTitle
-  return `Chapter ${props.currentChapterIdx + 1}`
-})
+  if (props.tocPosition?.title) return props.tocPosition.title;
+  if (props.currentChapterTitle) return props.currentChapterTitle;
+  return `Chapter ${props.currentChapterIdx + 1}`;
+});
 
 const setReaderPage = (el) => {
-  props.readerRefs.readerPageRef.value = el
-}
+  props.readerRefs.readerPageRef.value = el;
+};
 
 const setChaptersContainer = (el) => {
-  props.readerRefs.chaptersContainerRef.value = el
-}
+  props.readerRefs.chaptersContainerRef.value = el;
+};
 
 const setPdfViewer = (el) => {
-  props.readerRefs.pdfViewerRef.value = el
-}
+  props.readerRefs.pdfViewerRef.value = el;
+};
 
 const playFromHere = () => {
   if (isPlaying.value) {
-    togglePlay()
-    return
+    togglePlay();
+    return;
   }
-  emit('read-current-position')
-}
+  emit("read-current-position");
+};
 
 const toggleMediaPlay = () => {
-  if (ttsBook.value?.id === props.book?.id && ttsStatus.value !== 'idle') {
-    togglePlay()
-    return
+  if (ttsBook.value?.id === props.book?.id && ttsStatus.value !== "idle") {
+    togglePlay();
+    return;
   }
-  emit('read-current-position')
-}
+  emit("read-current-position");
+};
 
 const onScroll = () => {
-  const nextY = window.scrollY || 0
-  const goingDown = nextY > lastScrollY + 3
-  const goingUp = nextY < lastScrollY - 3
-  if (goingDown && nextY > 96) replaceBottomNav.value = true
-  if (goingUp || nextY < 48) replaceBottomNav.value = false
-  lastScrollY = Math.max(0, nextY)
-}
+  const nextY = window.scrollY || 0;
+  const goingDown = nextY > lastScrollY + 3;
+  const goingUp = nextY < lastScrollY - 3;
+  if (goingDown && nextY > 96) replaceBottomNav.value = true;
+  if (goingUp || nextY < 48) replaceBottomNav.value = false;
+  lastScrollY = Math.max(0, nextY);
+};
 
 onMounted(() => {
-  lastScrollY = window.scrollY || 0
-  window.addEventListener('scroll', onScroll, { passive: true })
-})
+  lastScrollY = window.scrollY || 0;
+  window.addEventListener("scroll", onScroll, { passive: true });
+});
 
 onUnmounted(() => {
-  window.removeEventListener('scroll', onScroll)
-})
+  window.removeEventListener("scroll", onScroll);
+});
 </script>
 
 <style scoped>
@@ -420,24 +486,36 @@ onUnmounted(() => {
 .reader-chapter-dock {
   position: fixed;
   right: 0;
-  bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
+  bottom: calc(
+    var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom)
+  );
   left: 0;
   z-index: 1160;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 48px;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  padding: 10px 20px 12px;
-  background: var(--color-background-app);
-  transition: bottom 0.24s ease, transform 0.24s ease;
+  padding: 10px 82px 12px 20px;
+  background: var(--mobile-reader-bg);
+  box-shadow: 0 -8px 18px rgba(15, 23, 42, 0.04);
+  transition:
+    bottom 0.24s ease,
+    padding 0.24s ease,
+    box-shadow 0.24s ease;
 }
 
 .reader-mobile-page.replaceBottomNav .reader-chapter-dock {
-  bottom: env(safe-area-inset-bottom);
-  padding-bottom: 18px;
+  bottom: 0;
+  padding: 14px 82px calc(18px + env(safe-area-inset-bottom)) 20px;
+  box-shadow: 0 -12px 24px rgba(15, 23, 42, 0.06);
 }
 
 .chapter-play {
+  position: fixed;
+  right: 20px;
+  bottom: calc(
+    var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom) + 10px
+  );
+  z-index: 1170;
   border: 0;
   background: #fff;
   color: var(--mobile-reader-text);
@@ -501,8 +579,18 @@ onUnmounted(() => {
   font-size: 20px;
 }
 
+.reader-mobile-page.replaceBottomNav .chapter-play {
+  bottom: calc(
+    var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom) + 10px
+  );
+}
+
 .mobile-bottom-nav-wrap {
-  transition: transform 0.24s ease, opacity 0.2s ease;
+  position: relative;
+  z-index: 1140;
+  transition:
+    transform 0.24s ease,
+    opacity 0.18s ease;
 }
 
 .reader-mobile-page.replaceBottomNav .mobile-bottom-nav-wrap {
@@ -530,7 +618,7 @@ onUnmounted(() => {
 .reader-media-sheet {
   position: relative;
   width: 100%;
-  min-height: 188px;
+  min-height: 288px;
   padding: 10px 16px calc(22px + env(safe-area-inset-bottom));
   border-radius: 16px 16px 0 0;
   background: #f5f5fb;
@@ -540,7 +628,7 @@ onUnmounted(() => {
 }
 
 .sheet-grabber {
-  width: 42px;
+  width: 32px;
   height: 4px;
   margin: 0 auto 16px;
   border-radius: 999px;
@@ -548,9 +636,9 @@ onUnmounted(() => {
 }
 
 .reader-media-sheet h2 {
-  margin: 0 0 8px;
-  font-size: 14px;
-  font-weight: 650;
+  margin: 0 0 28px;
+  font-size: 18px;
+  font-weight: 500 !important;
 }
 
 .narrator-btn {
@@ -572,33 +660,33 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 30px;
-  margin-bottom: 12px;
+  margin-bottom: 24px;
 }
 
 .media-buttons button {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   place-items: center;
   border: 0;
   border-radius: 50%;
   background: transparent;
   color: #02030a;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 24px;
 }
 
 .media-buttons .media-play {
-  font-size: 21px;
+  font-size: 36px;
 }
 
 .media-progress-row {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) 42px;
-  gap: 6px;
+  gap: 12px;
   align-items: center;
   color: #1f2230;
-  font-size: 9px;
+  font-size: 13px;
 }
 
 .media-progress-row input {
@@ -610,7 +698,8 @@ onUnmounted(() => {
   display: block;
   margin-top: 8px;
   color: #1f2230;
-  font-size: 10px;
+  font-size: 15px;
+  font-weight: 500 !important;
   text-align: left;
 }
 </style>

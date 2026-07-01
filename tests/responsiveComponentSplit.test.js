@@ -97,6 +97,35 @@ describe('responsive mobile component split', () => {
     expect(readerMobile).not.toContain('class="chapter-step"')
   })
 
+  test('mobile reader dock transitions without moving the play button into the nav replacement', () => {
+    const readerMobile = read('components/mobile/ReaderMobile.vue')
+    const readerPage = read('pages/reader/[id].vue')
+
+    expect(readerMobile).toContain('class="reader-chapter-dock"')
+    expect(readerMobile).toContain('class="chapter-play"')
+    expect(readerMobile).toContain('dockReplacingBottomNav')
+    expect(readerMobile).toMatch(/\.reader-chapter-dock\s*\{[\s\S]*background:\s*var\(--mobile-reader-bg\)/)
+    expect(readerMobile).toMatch(/\.chapter-play\s*\{[\s\S]*position:\s*fixed/)
+    expect(readerMobile).toMatch(/\.reader-mobile-page\.replaceBottomNav\s+\.chapter-play\s*\{[\s\S]*bottom:/)
+    const replacePlayRule = readerMobile.match(/\.reader-mobile-page\.replaceBottomNav\s+\.chapter-play\s*\{[^}]*\}/)?.[0] || ''
+    expect(replacePlayRule).not.toContain('transform')
+
+    expect(readerPage).toContain('@read-current-position="playFromCurrentPosition"')
+    expect(readerPage).toContain('async function playFromCurrentPosition()')
+    expect(readerPage).not.toContain('@read-current-position="requestReadCurrentPosition"')
+  })
+
+  test('reader route uses cached book metadata before waiting on a full library fetch', () => {
+    const readerPage = read('pages/reader/[id].vue')
+    const loadBookStart = readerPage.indexOf('async function loadBook')
+    const loadBookEnd = readerPage.indexOf('watch(rawContent', loadBookStart)
+    const loadBook = readerPage.slice(loadBookStart, loadBookEnd)
+
+    expect(loadBook.indexOf('const cached = books.value.find')).toBeGreaterThan(-1)
+    expect(loadBook.indexOf('const cached = books.value.find')).toBeLessThan(loadBook.indexOf('await fetchAllData()'))
+    expect(loadBook).toContain('fetchAllData().then')
+  })
+
   test('mobile reader keeps PDF pages readable and top navigation pinned', () => {
     const readerMobile = read('components/mobile/ReaderMobile.vue')
 
