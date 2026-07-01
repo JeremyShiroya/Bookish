@@ -69,4 +69,55 @@ describe('responsive mobile component split', () => {
     expect(bookPage).not.toMatch(/mobile-book-|mobile-detail-|mobile-synopsis/)
     expect(groupDetail).not.toMatch(/@media \(max-width:\s*760px\)|detail-books-grid[\s\S]*grid-template-columns:\s*1fr/)
   })
+
+  test('book form and reader routes have dedicated mobile page components', () => {
+    const mobileSurfaces = [
+      ['Add book', 'pages/add.vue', 'components/mobile/AddBookMobile.vue'],
+      ['Edit book', 'pages/edit/[id].vue', 'components/mobile/EditBookMobile.vue'],
+      ['Reader', 'pages/reader/[id].vue', 'components/mobile/ReaderMobile.vue'],
+    ]
+
+    for (const [name, pagePath, mobilePath] of mobileSurfaces) {
+      expect(exists(mobilePath), `${name} mobile component`).toBe(true)
+
+      const page = read(pagePath)
+      expect(page, `${name} page uses responsive switch`).toContain('<ResponsiveViewSwitch')
+      expect(page, `${name} page mounts mobile component`).toMatch(/<component[\s\S]*:is="mobile/)
+      expect(page, `${name} page does not import mobile nav directly`).not.toContain('MobileSettingsNav')
+    }
+
+    const readerMobile = read('components/mobile/ReaderMobile.vue')
+    expect(readerMobile).toContain('reader-mobile-topbar')
+    expect(readerMobile).toContain('ri-headphone-fill')
+    expect(readerMobile).toContain('reader-chapter-dock')
+    expect(readerMobile).toContain('chapter-pill')
+    expect(readerMobile).toContain('replaceBottomNav')
+    expect(readerMobile).toContain('reader-media-sheet')
+    expect(readerMobile).toContain('Switch narrator')
+    expect(readerMobile).not.toContain('class="chapter-step"')
+  })
+
+  test('mobile reader keeps PDF pages readable and top navigation pinned', () => {
+    const readerMobile = read('components/mobile/ReaderMobile.vue')
+
+    expect(readerMobile).toContain('mobilePdfZoom')
+    expect(readerMobile).toContain(':zoom="mobilePdfZoom"')
+    expect(readerMobile).toContain('reader-mobile-pdf')
+    expect(readerMobile).toMatch(/\.reader-mobile-topbar\s*\{[\s\S]*position:\s*fixed/)
+    expect(readerMobile).toMatch(/\.reader-mobile-content\.is-pdf-reader\s*\{[\s\S]*padding-top:/)
+    expect(readerMobile).toMatch(/\.reader-mobile-pdf\s*:deep\(\.pdf-viewer\)\s*\{[\s\S]*overflow-x:\s*hidden/)
+  })
+
+  test('reader layout keeps desktop chrome out of the mobile reader', () => {
+    const layout = read('layouts/reader.vue')
+
+    expect(layout).toContain('<ResponsiveViewSwitch')
+    expect(layout).toContain('<template #mobile>')
+    expect(layout).toContain('class="reader-mobile-layout"')
+    expect(layout).toMatch(/<template #desktop>[\s\S]*<Sidebar/)
+    expect(layout).toMatch(/<template #desktop>[\s\S]*<PlayingBar/)
+    expect(layout).toMatch(/@media \(max-width:\s*768px\)[\s\S]*:deep\(\.sidebar\)/)
+    expect(layout).toMatch(/@media \(max-width:\s*768px\)[\s\S]*:deep\(\.playing-bar\)/)
+    expect(layout).toMatch(/@media \(max-width:\s*768px\)[\s\S]*margin-left:\s*0/)
+  })
 })

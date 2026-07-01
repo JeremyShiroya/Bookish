@@ -1,5 +1,40 @@
 <template>
-  <div ref="readerPageRef" class="reader-page" :class="readerTheme">
+  <ResponsiveViewSwitch>
+    <template #mobile>
+      <component
+        :is="mobileReaderComponent"
+        :reader-refs="mobileReaderRefs"
+        :reader-theme="readerTheme"
+        :book="book"
+        :loading="loading"
+        :content-loading="contentLoading"
+        :is-pdf-renderable="isPdfRenderable"
+        :is-pdf-book="isPdfBook"
+        :pdf-source="pdfSource"
+        :zoom-level="zoomLevel"
+        :pdf-manifest="pdfManifest"
+        :active-tts-chunk-index="activeTtsChunkIndex"
+        :active-word-range="activeWordRange"
+        :has-cover="hasCover"
+        :chapter-list="chapterList"
+        :current-chapter-idx="currentChapterIdx"
+        :current-pdf-page="currentPdfPage"
+        :total-pages="totalPages"
+        :toc-position="tocPosition"
+        :current-chapter-title="currentChapterTitle"
+        :sanitize-html="sanitizeHtml"
+        @back="router.back()"
+        @open-toc="tocOpen = true"
+        @page-change="handlePdfPageChange"
+        @pdf-loaded="handlePdfLoaded"
+        @read-current-position="requestReadCurrentPosition"
+        @previous-chapter="goToAdjacentChapter(-1)"
+        @next-chapter="goToAdjacentChapter(1)"
+      />
+    </template>
+
+    <template #desktop>
+      <div ref="readerPageRef" class="reader-page" :class="readerTheme">
     <header class="reader-topbar">
       <div class="tb-section tb-left">
         <button class="tb-btn" @click="router.back()" title="Back to Library">
@@ -189,7 +224,9 @@
         </div>
       </section>
     </div>
-  </div>
+      </div>
+    </template>
+  </ResponsiveViewSwitch>
 </template>
 
 <script setup>
@@ -209,9 +246,12 @@ import {
 } from '~/composables/usePdfExtractor'
 import { PDF_MANIFEST_VERSION, firstChunkForPage, pageForChunk } from '~/composables/usePdfManifest'
 import { pdfProgressForPage } from '~/composables/useReaderPosition'
+import ReaderMobile from '~/components/mobile/ReaderMobile.vue'
 import PdfViewer from '~/components/shared/PdfViewer.vue'
+import ResponsiveViewSwitch from '~/components/shared/ResponsiveViewSwitch.vue'
 import SkeletonLoader from '~/components/shared/SkeletonLoader.vue'
 
+const mobileReaderComponent = ReaderMobile
 const route = useRoute()
 const router = useRouter()
 const { books, initialized, fetchAllData, fetchBookById, updateBook } = useBooks()
@@ -237,6 +277,11 @@ const readerPageRef = ref(null)
 const chaptersContainerRef = ref(null)
 const pdfViewerRef = ref(null)
 const tocNavRef = ref(null)
+const mobileReaderRefs = {
+  readerPageRef,
+  chaptersContainerRef,
+  pdfViewerRef,
+}
 
 const book = ref(null)
 const loading = ref(true)
@@ -441,6 +486,19 @@ function goToTocItem(item) {
     scrollToChapter(item.index)
   }
   tocOpen.value = false
+}
+
+function goToAdjacentChapter(delta) {
+  if (isPdfRenderable.value) {
+    const targetPage = Math.max(1, Math.min(totalPages.value || book.value?.pages || 1, currentPdfPage.value + delta))
+    pdfViewerRef.value?.scrollToPage?.(targetPage)
+    currentPdfPage.value = targetPage
+    return
+  }
+
+  if (!chapterList.value.length) return
+  const target = Math.max(0, Math.min(chapterList.value.length - 1, currentChapterIdx.value + delta))
+  scrollToChapter(target)
 }
 
 function scrollToChapter(index) {

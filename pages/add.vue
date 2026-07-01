@@ -1,9 +1,19 @@
 <template>
-  <MobileSettingsNav title="Add Book" back-to="/books" aria-label="Book form navigation" />
-  <AddBookComp />
+  <ResponsiveViewSwitch>
+    <template #mobile>
+      <component :is="mobilePageComponent" />
+    </template>
+
+    <template #desktop>
+      <AddBookComp />
+    </template>
+  </ResponsiveViewSwitch>
 </template>
 
 <script setup>
-import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue'
+import AddBookMobile from '~/components/mobile/AddBookMobile.vue'
 import AddBookComp from '~/components/shared/AddBookComp.vue'
+import ResponsiveViewSwitch from '~/components/shared/ResponsiveViewSwitch.vue'
+
+const mobilePageComponent = AddBookMobile
 </script>
