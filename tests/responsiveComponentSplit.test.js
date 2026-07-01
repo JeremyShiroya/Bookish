@@ -45,4 +45,28 @@ describe('responsive mobile component split', () => {
       .filter((entry) => entry.endsWith('.vue'))
     expect(rootVueFiles).toEqual([])
   })
+
+  test('detail routes have dedicated mobile components instead of embedded mobile branches', () => {
+    const detailSurfaces = [
+      ['Book detail', 'pages/book/[id].vue', 'components/mobile/BookDetailMobile.vue'],
+      ['Series detail', 'pages/serie/[id].vue', 'components/mobile/SeriesDetailMobile.vue'],
+      ['Playlist detail', 'pages/playlist/[id].vue', 'components/mobile/PlaylistDetailMobile.vue'],
+      ['Playlist detail alias', 'pages/playlists/[id].vue', 'components/mobile/PlaylistDetailMobile.vue'],
+    ]
+
+    for (const [name, pagePath, mobilePath] of detailSurfaces) {
+      expect(exists(mobilePath), `${name} mobile component`).toBe(true)
+
+      const page = read(pagePath)
+      expect(page, `${name} page uses responsive switch`).toContain('<ResponsiveViewSwitch')
+      expect(page, `${name} page mounts mobile detail`).toContain('<component :is="mobileDetailComponent"')
+      expect(page, `${name} page does not import mobile nav directly`).not.toContain('MobileSettingsNav')
+    }
+
+    const bookPage = read('pages/book/[id].vue')
+    const groupDetail = read('components/shared/BookGroupDetail.vue')
+
+    expect(bookPage).not.toMatch(/mobile-book-|mobile-detail-|mobile-synopsis/)
+    expect(groupDetail).not.toMatch(/@media \(max-width:\s*760px\)|detail-books-grid[\s\S]*grid-template-columns:\s*1fr/)
+  })
 })

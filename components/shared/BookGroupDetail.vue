@@ -850,60 +850,6 @@ const getDetailStackStyle = (index, total = 3) => {
   color: var(--color-text-subtle);
 }
 
-@media (max-width: 760px) {
-  .detail-hero {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    min-height: 0;
-    margin-bottom: 1rem;
-  }
-
-  .detail-cover-stack {
-    width: 245px;
-    height: 178px;
-    margin: 0 auto;
-    transform: scale(0.86);
-    transform-origin: center;
-  }
-
-  .detail-copy {
-    text-align: center;
-  }
-
-  .detail-title-row {
-    justify-content: center;
-  }
-
-  .detail-copy h1 {
-    font-size: 2rem;
-  }
-
-  .data-header {
-    display: none;
-  }
-
-  .data-row {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-  }
-
-  .col-status,
-  .col-progress,
-  .col-personal,
-  .col-goodreads,
-  .col-actions {
-    justify-content: flex-start;
-  }
-
-  .col-actions {
-    opacity: 1;
-  }
-
-  .detail-books-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (min-width: 761px) and (max-width: 1180px) {
   .detail-books-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

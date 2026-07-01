@@ -1,10 +1,9 @@
 <template>
+  <MobileSettingsNav title="Privacy Policy" back-to="/settings" aria-label="Settings navigation" />
   <main class="privacy-page">
-    <MobileSettingsNav title="Privacy Policy" back-to="/settings" aria-label="Settings navigation" />
 
     <article class="policy-card" aria-labelledby="privacy-title">
-      <p class="eyebrow">Privacy Policy</p>
-      <h1 id="privacy-title">Your library data is yours.</h1>
+      <h2>Your library data is yours.</h2>
       <p class="lede">
         Bookish is designed as a local-first reading app. The records you create are stored in this
         browser and stay under your control.
@@ -62,17 +61,10 @@ import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue'
   line-height: 1.55;
 }
 
-.eyebrow,
 h1,
 h2,
 p {
   margin: 0;
-}
-
-.eyebrow {
-  color: var(--color-brand-primary-hover);
-  font-size: 13px;
-  font-weight: 500;
 }
 
 h1 {

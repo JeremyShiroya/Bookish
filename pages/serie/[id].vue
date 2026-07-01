@@ -1,26 +1,35 @@
 <template>
-  <MobileSettingsNav :title="seriesNavTitle" back-to="/series" aria-label="Series navigation" />
-  <BookGroupDetail
-    back-to="/series"
-    :books="seriesBooks"
-    :title="series?.name || seriesName"
-    kicker="Your series"
-    empty-title="Series not found"
-    empty-description="Books with matching series metadata will appear here."
-    empty-icon="ri-book-shelf-line"
-    :show-installment="true"
-    :count-label="seriesCountLabel"
-  />
+  <ResponsiveViewSwitch>
+    <template #mobile>
+      <component :is="mobileDetailComponent" />
+    </template>
+
+    <template #desktop>
+      <BookGroupDetail
+        back-to="/series"
+        :books="seriesBooks"
+        :title="series?.name || seriesName"
+        kicker="Your series"
+        empty-title="Series not found"
+        empty-description="Books with matching series metadata will appear here."
+        empty-icon="ri-book-shelf-line"
+        :show-installment="true"
+        :count-label="seriesCountLabel"
+      />
+    </template>
+  </ResponsiveViewSwitch>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue';
-import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue';
+import SeriesDetailMobile from '~/components/mobile/SeriesDetailMobile.vue';
 import BookGroupDetail from '~/components/shared/BookGroupDetail.vue';
+import ResponsiveViewSwitch from '~/components/shared/ResponsiveViewSwitch.vue';
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch';
 import { useBooks } from '~/composables/useBooks';
 import { ensureSeriesTotal, formatSeriesCollectionProgress } from '~/composables/useSeriesProgress';
 
+const mobileDetailComponent = SeriesDetailMobile;
 const route = useRoute();
 const { seriesList, updateBook } = useBooks();
 const seriesTotalRefreshKey = ref('');
@@ -39,8 +48,6 @@ const series = computed(() => (
     || null
 ));
 
-const seriesNavTitle = computed(() => series.value?.name || seriesName.value || 'Series');
-
 const seriesBooks = computed(() => (
   [...(series.value?.books || [])]
     .sort((a, b) => {
@@ -51,7 +58,6 @@ const seriesBooks = computed(() => (
     })
 ));
 
-// Highest seriesTotal any book in the series has set
 const derivedSeriesTotal = computed(() => {
   const totals = seriesBooks.value
     .map(b => Number(b.seriesTotal || 0))

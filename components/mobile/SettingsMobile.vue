@@ -53,8 +53,8 @@ const mobileSettingsRows = [
   { label: 'Preferences', icon: 'ri-edit-box-line', comingSoon: true },
   { label: 'Storage', icon: 'ri-database-2-line', to: '/settings/storage' },
   { label: 'About', icon: 'ri-information-line', to: '/settings/about' },
-  { label: 'Privacy Policy', icon: 'ri-shield-keyhole-line', to: '/settings/privacy' },
-  { label: 'Buy me a coffee', icon: 'ri-cup-line', comingSoon: true },
+  { label: 'Privacy Policy', icon: 'ri-lock-line', to: '/settings/privacy' },
+  { label: 'Support the Project', icon: 'ri-hand-heart-line', comingSoon: true },
 ]
 
 const navigate = (path) => {

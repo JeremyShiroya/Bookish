@@ -47,15 +47,15 @@ describe('mobile metadata modal and settings pages', () => {
       'pages/settings/privacy.vue',
       'pages/add.vue',
       'pages/edit/[id].vue',
-      'pages/serie/[id].vue',
-      'pages/playlist/[id].vue',
-      'pages/playlists/[id].vue',
+      'components/mobile/ProfileMobile.vue',
+      'components/mobile/BookDetailMobile.vue',
+      'components/mobile/SeriesDetailMobile.vue',
+      'components/mobile/PlaylistDetailMobile.vue',
     ]) {
       const source = read(file)
       expect(source, file).toContain('MobileSettingsNav')
     }
 
-    expect(read('components/mobile/ProfileMobile.vue')).not.toContain('MobileSettingsNav')
   })
 
   test('main mobile library pages own their top and bottom navigation', () => {
