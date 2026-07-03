@@ -128,16 +128,28 @@ const findOpenLibraryAuthorImages = async (name) => {
 };
 
 export const fetchAuthorImageResults = async (name) => {
-  const { apiUrl } = useApiEndpoint();
+  const { apiUrl, apiBaseUrl } = useApiEndpoint();
   const images = [];
   const seen = new Set();
 
-  try {
-    const response = await fetch(apiUrl(`/api/authors/search-images?name=${encodeURIComponent(name)}`));
-    const data = await response.json();
-    const normalizedResults = normalizeAuthorImageResults(data.images || []);
-    if (normalizedResults.length) return normalizedResults;
-  } catch {}
+  // Native builds have no bundled server: run the full author-photo pipeline
+  // on-device (CapacitorHttp bypasses CORS for Goodreads/Bing/DuckDuckGo).
+  const { isNativeCapacitorPlatform } = await import('~/composables/useNativePlatform');
+  if (isNativeCapacitorPlatform() && !apiBaseUrl) {
+    try {
+      const { searchAuthorImagesWeb } = await import('~/server/utils/authorImagesWeb');
+      const data = await searchAuthorImagesWeb(name);
+      const normalizedResults = normalizeAuthorImageResults(data.images || []);
+      if (normalizedResults.length) return normalizedResults;
+    } catch {}
+  } else {
+    try {
+      const response = await fetch(apiUrl(`/api/authors/search-images?name=${encodeURIComponent(name)}`));
+      const data = await response.json();
+      const normalizedResults = normalizeAuthorImageResults(data.images || []);
+      if (normalizedResults.length) return normalizedResults;
+    } catch {}
+  }
 
   const [wikipedia, wikidata, openLibrary] = await Promise.all([
     findWikipediaSummaryImages(name),

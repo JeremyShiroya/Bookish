@@ -85,6 +85,37 @@ describe('mobile native app configuration', () => {
     expect(deviceSearch).toContain("from '~/server/utils/koboScraper'")
     expect(deviceSearch).toContain("from '~/server/utils/googleBooksApi'")
     expect(deviceSearch).toContain('buildMetadataResults')
+
+    // Publisher-site stage runs on the device too (steps 2-4 of the loader).
+    expect(deviceSearch).toContain("from '~/server/utils/publisherMetadata'")
+    expect(deviceSearch).toContain('searchPublisherMetadata')
+    expect(deviceSearch).toContain('searchKnownPublisherSites')
+    expect(deviceSearch).toContain('uniquePublishers')
+  })
+
+  test('cover and author image search run on-device in native builds', () => {
+    const coverSearch = read('composables/useCoverSearch.js')
+    const authorSearch = read('composables/useAuthorImageSearch.js')
+    const coverUtil = read('server/utils/coverSearch.ts')
+    const authorUtil = read('server/utils/authorImagesWeb.ts')
+
+    expect(coverSearch).toContain('isNativeCapacitorPlatform')
+    expect(coverSearch).toContain("import('~/server/utils/coverSearch')")
+    expect(authorSearch).toContain("import('~/server/utils/authorImagesWeb')")
+    expect(coverUtil).toContain('export async function searchBookCovers')
+    expect(authorUtil).toContain('export async function searchAuthorImagesWeb')
+
+    // The four book forms all go through the shared composable.
+    for (const path of [
+      'components/shared/AddBookComp.vue',
+      'components/shared/EditBookComp.vue',
+      'components/mobile/AddBookMobile.vue',
+      'components/mobile/EditBookMobile.vue',
+    ]) {
+      const component = read(path)
+      expect(component).toContain('fetchCoverImageResults')
+      expect(component).not.toContain('/api/books/search-covers')
+    }
   })
 
   test('native builds do not inject web-only analytics scripts', () => {

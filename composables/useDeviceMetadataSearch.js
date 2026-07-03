@@ -17,6 +17,7 @@ import { searchInternetArchive } from '~/server/utils/internetArchiveApi'
 import { searchOpenLibrary } from '~/server/utils/openLibraryApi'
 import { searchKobo, scrapeKoboBook } from '~/server/utils/koboScraper'
 import { buildMetadataResults } from '~/server/utils/metadataAggregator'
+import { searchKnownPublisherSites, searchPublisherMetadata } from '~/server/utils/publisherMetadata'
 
 async function withTimeout(task, fallback, timeoutMs) {
   let timeoutId
@@ -92,6 +93,93 @@ async function getKoboSources(title, author) {
     .map((entry) => asSource('kobo')(entry.value))
 }
 
+const fromPublisher = (result) => ({
+  id: result.id,
+  source: 'publisher',
+  title: result.title ?? null,
+  author: result.author ?? null,
+  cover: result.cover ?? null,
+  blurb: result.blurb ?? null,
+  series: null,
+  seriesInstallment: null,
+  seriesTotal: null,
+  genre: null,
+  publishYear: null,
+  publisher: result.publisher ?? null,
+  searchedPublisher: result.searchedPublisher,
+  publisherSite: result.publisherSite,
+})
+
+function uniquePublishers(sources) {
+  const seen = new Set()
+  const publishers = []
+
+  for (const source of sources) {
+    const publisher = source.publisher?.trim()
+    if (!publisher) continue
+    const key = publisher.toLowerCase().replace(/[^a-z0-9]+/g, '')
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    publishers.push(publisher)
+  }
+
+  return publishers.slice(0, 4)
+}
+
+// Mirrors the publisher stage of server/api/books/metadata.get.ts: try the
+// publisher names found in provider records first, then research the major
+// publisher sites directly.
+async function getPublisherSources(title, author, publisherCandidates, onProgress) {
+  const relayProgress = (event) => {
+    onProgress?.({ type: 'step', id: event.stage, status: event.status, detail: event.message })
+  }
+
+  let publisherSources = []
+  if (publisherCandidates.length) {
+    onProgress?.({ type: 'step', id: 'publisherSearch', status: 'active', detail: 'Finding official publisher book pages' })
+    publisherSources = await withTimeout(
+      searchPublisherMetadata(title, author, publisherCandidates, { onProgress: relayProgress }),
+      [],
+      14000,
+    ).then((results) => results.map(fromPublisher))
+  }
+
+  if (!publisherSources.length) {
+    onProgress?.({
+      type: 'step',
+      id: 'publisherSearch',
+      status: 'active',
+      detail: publisherCandidates.length
+        ? 'Publisher-name lookup found no book page; researching major publisher sites by title and author'
+        : 'Searching major publisher websites directly',
+    })
+    publisherSources = await withTimeout(
+      searchKnownPublisherSites(title, author, { onProgress: relayProgress }),
+      [],
+      18000,
+    ).then((results) => results.map(fromPublisher))
+  }
+
+  onProgress?.({
+    type: 'step',
+    id: 'publisherSearch',
+    status: publisherSources.length ? 'success' : 'error',
+    detail: publisherSources.length
+      ? 'Found publisher-site metadata'
+      : 'No matching publisher book page was found',
+  })
+  onProgress?.({
+    type: 'step',
+    id: 'publisherScrape',
+    status: publisherSources.length ? 'success' : 'error',
+    detail: publisherSources.length
+      ? `Scraped ${publisherSources.length} publisher result${publisherSources.length === 1 ? '' : 's'}`
+      : 'Publisher pages could not be scraped or did not match this book',
+  })
+
+  return publisherSources
+}
+
 export async function fetchBookMetadataOnDevice(title, author, publisher, options = {}) {
   const onProgress = options.onProgress
   onProgress?.({
@@ -127,23 +215,34 @@ export async function fetchBookMetadataOnDevice(title, author, publisher, option
       : 'No metadata providers returned results',
   })
 
-  for (const id of ['publisherName', 'publisherSearch', 'publisherScrape']) {
-    onProgress?.({
-      type: 'step',
-      id,
-      status: 'skipped',
-      detail: 'Publisher-site research runs on the Bookish server (set a server URL in Settings to enable it)',
-    })
-  }
+  onProgress?.({ type: 'step', id: 'publisherName', status: 'active', detail: 'Reading publisher fields from returned metadata' })
+  const publisherCandidates = uniquePublishers([
+    ...(publisher ? [{ publisher }] : []),
+    ...googleBooksSources,
+    ...openLibrarySources,
+    ...internetArchiveSources,
+    ...koboSources,
+    ...goodreadsSources,
+  ])
+  onProgress?.({
+    type: 'step',
+    id: 'publisherName',
+    status: publisherCandidates.length ? 'success' : 'skipped',
+    detail: publisherCandidates.length
+      ? `Trying ${publisherCandidates.join(', ')}`
+      : 'No publisher field was found; researching major publisher sites by title and author',
+  })
 
-  onProgress?.({ type: 'step', id: 'merge', status: 'active', detail: 'Combining provider metadata' })
+  const publisherSources = await getPublisherSources(title, author, publisherCandidates, onProgress)
+
+  onProgress?.({ type: 'step', id: 'merge', status: 'active', detail: 'Combining provider and publisher metadata' })
   const results = buildMetadataResults(title, author, {
     goodreadsSources,
     googleBooksSources,
     internetArchiveSources,
     openLibrarySources,
     koboSources,
-    publisherSources: [],
+    publisherSources,
   })
   onProgress?.({
     type: 'step',

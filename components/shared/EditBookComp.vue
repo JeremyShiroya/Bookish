@@ -340,6 +340,7 @@ import { useRouter } from 'vue-router'
 import { useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
+import { fetchCoverImageResults } from '~/composables/useCoverSearch'
 import { propagateSeriesTotal } from '~/composables/useSeriesProgress'
 import { useCoverImageCache } from '~/composables/useCoverImageCache'
 import { useApiEndpoint } from '~/composables/useApiEndpoint'
@@ -509,14 +510,11 @@ const searchBookCovers = async () => {
   coverOptions.value = []
 
   try {
-    const query = new URLSearchParams()
-    query.append('title', editBook.value.title)
-    if (editBook.value.author) query.append('author', editBook.value.author)
-    if (editBook.value.publisher) query.append('publisher', editBook.value.publisher)
-
-    const response = await fetch(apiUrl(`/api/books/search-covers?${query.toString()}`))
-    const data = await response.json()
-    coverOptions.value = data.images || []
+    coverOptions.value = await fetchCoverImageResults(
+      editBook.value.title,
+      editBook.value.author,
+      editBook.value.publisher,
+    )
     if (!coverOptions.value.length) {
       addToast('No cover images found on the web.', 'error')
     }

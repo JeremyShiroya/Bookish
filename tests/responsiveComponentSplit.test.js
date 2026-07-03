@@ -174,6 +174,25 @@ describe('responsive mobile component split', () => {
     expect(readerMobile).toContain('translateY(calc(var(--bottom-nav-space) - env(safe-area-inset-bottom)))')
   })
 
+  test('reader chrome follows the reader theme instead of hardcoded light colors', () => {
+    const readerMobile = read('components/mobile/ReaderMobile.vue')
+
+    expect(readerMobile).toContain('--mobile-reader-surface')
+    expect(readerMobile).toMatch(/\.chapter-pill\s*\{[^}]*background:\s*var\(--mobile-reader-surface\)/)
+    expect(readerMobile).toMatch(/\.chapter-play\s*\{[^}]*background:\s*var\(--mobile-reader-surface\)/)
+    expect(readerMobile).toContain(':class="readerTheme"')
+    expect(readerMobile).toContain('.reader-media-sheet.dark')
+    expect(readerMobile).not.toMatch(/\.chapter-pill\s*\{[^}]*background:\s*#fff/)
+  })
+
+  test('docked chapter pill centres its title at full width with a larger font', () => {
+    const readerMobile = read('components/mobile/ReaderMobile.vue')
+
+    expect(readerMobile).toMatch(/\.reader-mobile-page\.replaceBottomNav\s+\.chapter-pill\s*\{[^}]*grid-template-columns:\s*0px minmax\(0, 1fr\) 0px/)
+    expect(readerMobile).toMatch(/\.reader-mobile-page\.replaceBottomNav\s+\.reader-chapter-dock\s*\{[^}]*padding-right:\s*20px/)
+    expect(readerMobile).toMatch(/\.reader-mobile-page\.replaceBottomNav\s+\.chapter-pill-title\s*\{[^}]*font-size:\s*16px/)
+  })
+
   test('reader layout keeps desktop chrome out of the mobile reader', () => {
     const layout = read('layouts/reader.vue')
 

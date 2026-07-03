@@ -354,6 +354,7 @@ import { useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
 import { useBookStorage } from '~/composables/useBookStorage'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
+import { fetchCoverImageResults } from '~/composables/useCoverSearch'
 import { propagateSeriesTotal } from '~/composables/useSeriesProgress'
 import { useCoverImageCache } from '~/composables/useCoverImageCache'
 import { useApiEndpoint } from '~/composables/useApiEndpoint'
@@ -495,14 +496,11 @@ const searchBookCovers = async () => {
   coverOptions.value = []
 
   try {
-    const query = new URLSearchParams()
-    query.append('title', newBook.value.title)
-    if (newBook.value.author) query.append('author', newBook.value.author)
-    if (newBook.value.publisher) query.append('publisher', newBook.value.publisher)
-
-    const response = await fetch(apiUrl(`/api/books/search-covers?${query.toString()}`))
-    const data = await response.json()
-    coverOptions.value = data.images || []
+    coverOptions.value = await fetchCoverImageResults(
+      newBook.value.title,
+      newBook.value.author,
+      newBook.value.publisher,
+    )
     if (!coverOptions.value.length) {
       addToast('No cover images found on the web.', 'error')
     }

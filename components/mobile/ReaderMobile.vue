@@ -187,6 +187,7 @@
         ></button>
         <section
           class="reader-media-sheet"
+          :class="readerTheme"
           role="dialog"
           aria-modal="true"
           aria-label="Audio controls"
@@ -559,6 +560,8 @@ onUnmounted(() => {
   --mobile-reader-bg: #e8e8f2;
   --mobile-reader-text: #222431;
   --mobile-reader-muted: #6f7282;
+  /* Raised surfaces (pill, play button) follow the reader theme. */
+  --mobile-reader-surface: #ffffff;
   --dock-swap-duration: 0.32s;
   --dock-swap-ease: cubic-bezier(0.33, 1, 0.68, 1);
   --bottom-nav-space: calc(
@@ -574,6 +577,7 @@ onUnmounted(() => {
   --mobile-reader-bg: var(--color-reader-dark-background);
   --mobile-reader-text: var(--color-reader-dark-text);
   --mobile-reader-muted: var(--color-reader-dark-muted);
+  --mobile-reader-surface: var(--color-reader-dark-page);
 }
 
 .reader-mobile-topbar {
@@ -781,8 +785,16 @@ onUnmounted(() => {
   padding: 10px 82px 12px 20px;
   background: var(--mobile-reader-bg);
   box-shadow: 0 -8px 18px rgba(15, 23, 42, 0.04);
-  transition: transform var(--dock-swap-duration) var(--dock-swap-ease);
+  transition:
+    transform var(--dock-swap-duration) var(--dock-swap-ease),
+    padding var(--dock-swap-duration) var(--dock-swap-ease);
   will-change: transform;
+}
+
+/* Docked: the pill row takes the full width so its title sits at the true
+   screen centre (the play button floats above this row and keeps its spot). */
+.reader-mobile-page.replaceBottomNav .reader-chapter-dock {
+  padding-right: 20px;
 }
 
 /* Drop by the nav's full visible height (keeping the safe-area inset) so the
@@ -797,11 +809,12 @@ onUnmounted(() => {
   height: 42px;
   border-radius: 10px;
   overflow: hidden;
-  background: #fff;
+  background: var(--mobile-reader-surface);
   box-shadow: 0 1px 5px rgba(15, 23, 42, 0.08);
   transition:
     background-color var(--dock-swap-duration) var(--dock-swap-ease),
-    box-shadow var(--dock-swap-duration) var(--dock-swap-ease);
+    box-shadow var(--dock-swap-duration) var(--dock-swap-ease),
+    grid-template-columns var(--dock-swap-duration) var(--dock-swap-ease);
 }
 
 .chapter-pill-step,
@@ -815,6 +828,8 @@ onUnmounted(() => {
 
 .chapter-pill-step {
   display: grid;
+  overflow: hidden;
+  padding: 0;
   place-items: center;
   font-size: 22px;
   opacity: 1;
@@ -835,6 +850,8 @@ onUnmounted(() => {
 .reader-mobile-page.replaceBottomNav .chapter-pill {
   background: transparent;
   box-shadow: none;
+  /* Collapse the arrow columns so the title glides to the true centre. */
+  grid-template-columns: 0px minmax(0, 1fr) 0px;
 }
 
 .reader-mobile-page.replaceBottomNav .chapter-pill-step {
@@ -843,7 +860,7 @@ onUnmounted(() => {
 }
 
 .reader-mobile-page.replaceBottomNav .chapter-pill-title {
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .chapter-play {
@@ -857,7 +874,7 @@ onUnmounted(() => {
   place-items: center;
   border: 0;
   border-radius: 50%;
-  background: #fff;
+  background: var(--mobile-reader-surface);
   color: var(--mobile-reader-text);
   cursor: pointer;
   font-size: 20px;
@@ -899,16 +916,40 @@ onUnmounted(() => {
   background: rgba(15, 23, 42, 0.12);
 }
 
+/* The sheet is teleported to <body>, so it can't inherit the reader page's
+   theme variables — it carries the theme class and defines its own. */
 .reader-media-sheet {
+  --sheet-bg: #f5f5fb;
+  --sheet-text: #1f2230;
+  --sheet-strong: #02030a;
+  --sheet-control: #e1e2ef;
+  --sheet-control-active: #d3d5e8;
+  --sheet-control-text: #4b4f63;
+  --sheet-list-bg: #ececf5;
+  --sheet-option-active-bg: #ffffff;
+  --sheet-grabber: #0d0d13;
   position: relative;
   width: 100%;
   min-height: 288px;
   padding: 10px 16px calc(22px + env(safe-area-inset-bottom));
   border-radius: 16px 16px 0 0;
-  background: #f5f5fb;
-  color: var(--mobile-reader-text);
+  background: var(--sheet-bg);
+  color: var(--sheet-text);
   box-shadow: 0 -12px 34px rgba(15, 23, 42, 0.16);
   text-align: center;
+}
+
+.reader-media-sheet.dark {
+  --sheet-bg: var(--color-reader-dark-toolbar);
+  --sheet-text: var(--color-reader-dark-text);
+  --sheet-strong: var(--color-reader-dark-text);
+  --sheet-control: var(--color-reader-dark-button-hover);
+  --sheet-control-active: var(--color-reader-dark-border);
+  --sheet-control-text: var(--color-reader-dark-muted);
+  --sheet-list-bg: var(--color-reader-dark-background);
+  --sheet-option-active-bg: var(--color-reader-dark-page);
+  --sheet-grabber: var(--color-reader-dark-muted);
+  box-shadow: 0 -12px 34px rgba(0, 0, 0, 0.45);
 }
 
 .sheet-grabber {
@@ -916,7 +957,7 @@ onUnmounted(() => {
   height: 4px;
   margin: 0 auto 16px;
   border-radius: 999px;
-  background: #0d0d13;
+  background: var(--sheet-grabber);
 }
 
 .reader-media-sheet h2 {
@@ -934,15 +975,15 @@ onUnmounted(() => {
   padding: 0 12px;
   border: 0;
   border-radius: 7px;
-  background: #e1e2ef;
-  color: #4b4f63;
+  background: var(--sheet-control);
+  color: var(--sheet-control-text);
   cursor: pointer;
   font-size: 13px;
   transition: background-color 0.15s ease;
 }
 
 .narrator-btn.open {
-  background: #d3d5e8;
+  background: var(--sheet-control-active);
 }
 
 .voice-list {
@@ -954,7 +995,7 @@ onUnmounted(() => {
   overflow-y: auto;
   width: min(100%, 320px);
   border-radius: 10px;
-  background: #ececf5;
+  background: var(--sheet-list-bg);
 }
 
 .voice-option {
@@ -966,13 +1007,13 @@ onUnmounted(() => {
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #1f2230;
+  color: var(--sheet-text);
   cursor: pointer;
   font-size: 14px;
 }
 
 .voice-option.active {
-  background: #fff;
+  background: var(--sheet-option-active-bg);
   color: var(--color-brand-primary);
   font-weight: 600;
 }
@@ -997,7 +1038,7 @@ onUnmounted(() => {
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: #02030a;
+  color: var(--sheet-strong);
   cursor: pointer;
   font-size: 24px;
 }
@@ -1011,7 +1052,7 @@ onUnmounted(() => {
   grid-template-columns: 34px minmax(0, 1fr) 42px;
   gap: 12px;
   align-items: center;
-  color: #1f2230;
+  color: var(--sheet-text);
   font-size: 13px;
 }
 
@@ -1029,13 +1070,13 @@ onUnmounted(() => {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: #1f2230;
+  color: var(--sheet-text);
   cursor: pointer;
   font-size: 15px;
   font-weight: 500 !important;
 }
 
 .speed-btn:active {
-  background: #e1e2ef;
+  background: var(--sheet-control);
 }
 </style>
