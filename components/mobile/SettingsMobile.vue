@@ -48,7 +48,6 @@ const router = useRouter()
 const appVersion = computed(() => runtimeConfig.public.appVersion || '0.0.0')
 
 const mobileSettingsRows = [
-  { label: 'Audio', icon: 'ri-headphone-line', to: '/settings/audio' },
   { label: 'Theme', icon: 'ri-moon-line', type: 'theme' },
   { label: 'Preferences', icon: 'ri-edit-box-line', comingSoon: true },
   { label: 'Storage', icon: 'ri-database-2-line', to: '/settings/storage' },

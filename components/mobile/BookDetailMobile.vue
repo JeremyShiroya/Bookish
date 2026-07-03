@@ -57,14 +57,17 @@
             >
               <i :class="book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line'"></i>
             </button>
-            <button type="button" class="icon-action" title="Series" @click="book.series && router.push(`/serie/${encodeURIComponent(book.series)}`)">
-              <i class="ri-stack-line"></i>
+            <button type="button" class="icon-action" title="Add to playlist" @click="showPlaylistModal = true">
+              <i class="ri-play-list-2-line"></i>
             </button>
             <button type="button" class="icon-action" title="Edit" @click="router.push(`/edit/${book.id}`)">
               <i class="ri-edit-line"></i>
             </button>
-            <button type="button" class="icon-action" title="Library" @click="router.push('/books')">
-              <i class="ri-book-shelf-line"></i>
+            <button type="button" class="icon-action" title="Hide" @click="handleHide">
+              <i class="ri-eye-off-line"></i>
+            </button>
+            <button type="button" class="icon-action danger" title="Delete" @click="showDeleteModal = true">
+              <i class="ri-delete-bin-line"></i>
             </button>
           </div>
         </div>
@@ -86,22 +89,59 @@
         <p>{{ book.blurb || "No description available for this book." }}</p>
       </section>
     </section>
+
+    <AddToPlaylistModal
+      v-if="showPlaylistModal && book"
+      :book="book"
+      @close="showPlaylistModal = false"
+    />
+
+    <DeleteConfirmModal
+      v-if="showDeleteModal && book"
+      :book="book"
+      @close="showDeleteModal = false"
+      @confirm="handleDelete"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
+import { useToast } from "~/composables/useToast";
 import { prewarmReaderContent } from "~/composables/useReaderPrewarm";
 import { useTTS } from "~/composables/useTTS";
+import AddToPlaylistModal from "~/components/shared/AddToPlaylistModal.vue";
+import DeleteConfirmModal from "~/components/shared/DeleteConfirmModal.vue";
 import GoodreadsRatingDisplay from "~/components/shared/GoodreadsRatingDisplay.vue";
 import MobileSettingsNav from "./MobileSettingsNav.vue";
 
 const route = useRoute();
 const router = useRouter();
-const { books, loading, toggleFavourite } = useBooks();
+const { books, loading, toggleFavourite, hideBook, deleteBook } = useBooks();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
+const { addToast } = useToast();
+
+const showPlaylistModal = ref(false);
+const showDeleteModal = ref(false);
+
+const handleHide = async () => {
+  if (!book.value) return;
+  const title = book.value.title;
+  await hideBook(book.value.id);
+  addToast(`"${title}" is now hidden from your library.`, 'info');
+  router.push('/books');
+};
+
+const handleDelete = async () => {
+  if (!book.value) return;
+  const title = book.value.title;
+  showDeleteModal.value = false;
+  await deleteBook(book.value.id);
+  addToast(`"${title}" was deleted.`, 'success');
+  router.push('/books');
+};
 
 const book = computed(() => books.value.find((b) => String(b.id) === String(route.params.id)));
 const progress = computed(() => Math.max(0, Math.min(100, Math.round(Number(book.value?.progress) || 0))));
@@ -309,6 +349,14 @@ watch(
 .icon-action.active {
   border-color: #ef4444;
   color: #ef4444;
+}
+
+.icon-action.danger {
+  color: var(--color-status-danger, #ef4444);
+}
+
+.icon-action.danger:hover {
+  border-color: var(--color-status-danger, #ef4444);
 }
 
 .book-actions {

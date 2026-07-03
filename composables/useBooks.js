@@ -130,7 +130,11 @@ export const useBooks = () => {
         store.getBooks(),
         store.getCollections(),
       ]);
-      books.value = booksData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      // Hidden books stay in IndexedDB but never enter the in-memory library,
+      // so they disappear from every page. Restore lives in Settings → Storage.
+      books.value = booksData
+        .filter((book) => !book.isHidden)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       collections.value = collectionsData;
       cacheRemoteLibraryCovers();
     } catch (fetchError) {
@@ -170,6 +174,32 @@ export const useBooks = () => {
   const toggleFavourite = async (bookId) => {
     const book = books.value.find(b => b.id === bookId);
     if (book) await updateBook({ ...book, isFavourite: !book.isFavourite });
+  };
+
+  // Hide a book from the whole app without deleting it or its content.
+  const hideBook = async (bookId) => {
+    const book = books.value.find(b => b.id === bookId);
+    if (!book) return;
+    await updateBook({ ...book, isHidden: true });
+    books.value = books.value.filter(b => b.id !== bookId);
+  };
+
+  // Clear the hidden flag on every hidden book and reload the library.
+  const restoreHiddenBooks = async () => {
+    const store = useLibraryStore();
+    const allBooks = await store.getBooks();
+    const hidden = allBooks.filter(b => b.isHidden);
+    for (const book of hidden) {
+      await store.updateBook({ ...book, isHidden: false });
+    }
+    if (hidden.length) await fetchAllData(true);
+    return hidden.length;
+  };
+
+  const countHiddenBooks = async () => {
+    const store = useLibraryStore();
+    const allBooks = await store.getBooks();
+    return allBooks.filter(b => b.isHidden).length;
   };
 
   const fetchAndStoreAuthorDetails = async (authorName, { force = false } = {}) => {
@@ -358,6 +388,9 @@ export const useBooks = () => {
     genresList: genres,
     allAuthors: authors,
     toggleFavourite,
+    hideBook,
+    restoreHiddenBooks,
+    countHiddenBooks,
     addBook,
     updateBook,
     deleteBook,

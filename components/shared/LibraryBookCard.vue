@@ -73,6 +73,9 @@
         <button type="button" class="action-button" title="Edit book" @click.stop="emit('edit', book)">
           <i class="ri-edit-line"></i>
         </button>
+        <button type="button" class="action-button" title="Hide book" @click.stop="emit('hide', book)">
+          <i class="ri-eye-off-line"></i>
+        </button>
         <button type="button" class="action-button delete" title="Delete book" @click.stop="emit('delete', book)">
           <i class="ri-delete-bin-line"></i>
         </button>
@@ -98,7 +101,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['open', 'play', 'favourite', 'playlist', 'edit', 'delete'])
+const emit = defineEmits(['open', 'play', 'favourite', 'playlist', 'edit', 'hide', 'delete'])
 const progress = computed(() => Math.max(0, Math.min(100, Number(props.book.progress) || 0)))
 
 const generateCoverPlaceholder = (title) => {

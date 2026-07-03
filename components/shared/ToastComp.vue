@@ -1,22 +1,20 @@
 <template>
   <div class="toast-container">
     <TransitionGroup name="toast">
-      <div 
-        v-for="toast in toasts" 
-        :key="toast.id" 
+      <div
+        v-for="toast in toasts"
+        :key="toast.id"
         class="toast"
         :class="toast.type"
       >
         <div class="toast-icon">
-          <i v-if="toast.type === 'success'" class="ri-checkbox-circle-fill"></i>
-          <i v-if="toast.type === 'error'" class="ri-error-warning-fill"></i>
-          <i v-if="toast.type === 'info'" class="ri-information-fill"></i>
+          <i v-if="toast.type === 'success'" class="ri-checkbox-circle-line"></i>
+          <i v-else-if="toast.type === 'error'" class="ri-alert-line"></i>
+          <i v-else class="ri-information-line"></i>
         </div>
-        <div class="toast-content">
-          <p class="toast-message">{{ toast.message }}</p>
-        </div>
-        <button class="toast-close" @click="removeToast(toast.id)">
-          <i class="ri-close-line"></i>
+        <p class="toast-message">{{ toast.message }}</p>
+        <button class="toast-close" aria-label="Dismiss" @click="removeToast(toast.id)">
+          <i class="ri-close-circle-line"></i>
         </button>
       </div>
     </TransitionGroup>
@@ -32,131 +30,113 @@ const { toasts, removeToast } = useToast();
 <style scoped>
 .toast-container {
   position: fixed;
-  top: 2rem;
-  right: 2rem;
+  top: calc(env(safe-area-inset-top) + 16px);
+  right: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.7rem;
   z-index: 9999;
   pointer-events: none;
 }
 
+/* Soft alert-bar style: pale tinted pill with matching border, text, and icons. */
 .toast {
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  background: var(--color-surface-glass);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  box-shadow: var(--shadow-toast);
+  gap: 0.7rem;
   min-width: 300px;
   max-width: 450px;
-}
-
-.toast.success {
-  border-left: 4px solid var(--color-status-success-strong);
-}
-
-.toast.error {
-  border-left: 4px solid var(--color-status-danger-bright);
-}
-
-.toast.info {
-  border-left: 4px solid var(--color-brand-secondary);
-}
-
-.toast-icon {
-  font-size: 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.toast.success .toast-icon {
-  color: var(--color-status-success-strong);
-}
-
-.toast.error .toast-icon {
-  color: var(--color-status-danger-bright);
-}
-
-.toast.info .toast-icon {
-  color: var(--color-brand-secondary);
-}
-
-.toast-content {
-  flex: 1;
-}
-
-.toast-message {
-  margin: 0;
-  font-size: 0.95rem;
-  color: var(--color-text-primary);
+  padding: 0.8rem 0.9rem;
+  border: 1px solid;
+  border-radius: 10px;
   font-weight: 500;
 }
 
-.toast-close {
-  background: transparent;
-  border: none;
-  color: var(--color-text-subtle);
-  font-size: 1.25rem;
-  cursor: pointer;
-  padding: 0.25rem;
+.toast.error {
+  background: #fdecec;
+  border-color: #f3c1c5;
+  color: #c04552;
+}
+
+.toast.success {
+  background: #e9f7ee;
+  border-color: #b5e0c4;
+  color: #2f9e5f;
+}
+
+.toast.info {
+  background: #fff8e6;
+  border-color: #f4dfa2;
+  color: #c19a2e;
+}
+
+.toast-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.toast-message {
+  flex: 1;
+  margin: 0;
+  color: inherit;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.toast-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0.15rem;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1.15rem;
+  opacity: 0.75;
+  transition: opacity 0.2s;
 }
 
 .toast-close:hover {
-  background: var(--color-surface-tertiary);
-  color: var(--color-text-secondary);
+  opacity: 1;
 }
 
-/* Transitions */
+/* Transitions — slide in from the top. */
 .toast-enter-active,
 .toast-leave-active {
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.toast-enter-from {
-  opacity: 0;
-  transform: translateX(100%) scale(0.9);
-}
-
+.toast-enter-from,
 .toast-leave-to {
   opacity: 0;
-  transform: translateX(100%) scale(0.9);
+  transform: translateY(-18px) scale(0.96);
 }
 
 @media (max-width: 768px) {
   .toast-container {
-    top: auto;
+    top: calc(env(safe-area-inset-top) + 12px);
     right: 1rem;
-    bottom: calc(82px + env(safe-area-inset-bottom));
     left: 1rem;
-    gap: 0.65rem;
     align-items: stretch;
+    gap: 0.55rem;
   }
 
   .toast {
     width: 100%;
     min-width: 0;
     max-width: none;
-    padding: 0.85rem 0.95rem;
-    border-radius: 10px;
+    padding: 0.75rem 0.8rem;
   }
 
   .toast-message {
-    font-size: 0.88rem;
-  }
-
-  .toast-enter-from,
-  .toast-leave-to {
-    transform: translateY(24px) scale(0.96);
+    font-size: 0.86rem;
   }
 }
 </style>

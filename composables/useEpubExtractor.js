@@ -151,6 +151,17 @@ export async function extractEpub(file) {
     const opfXml = await zip.file(opfPath).async('string')
     const opfDoc = parseXml(opfXml)
 
+    // Dublin Core book metadata — lets auto-import name books properly
+    // instead of falling back to the file name.
+    const DC_NS = 'http://purl.org/dc/elements/1.1/'
+    const dcValue = (tag) => {
+      const byNs = opfDoc.getElementsByTagNameNS?.(DC_NS, tag)?.[0]?.textContent
+      const byPrefix = opfDoc.getElementsByTagName(`dc:${tag}`)?.[0]?.textContent
+      return (byNs || byPrefix || '').replace(/\s+/g, ' ').trim() || null
+    }
+    const bookTitle = dcValue('title')
+    const bookAuthor = dcValue('creator')
+
     const manifest = {}
     opfDoc.querySelectorAll('manifest item').forEach(el => {
       manifest[el.getAttribute('id')] = {
@@ -350,7 +361,14 @@ export async function extractEpub(file) {
     const textOnly = bodyHtml.replace(/<[^>]+>/g, '')
     const pages = Math.max(1, Math.round(textOnly.length / 1500))
 
-    return { content, pages, cover, tocTitles: sections.map(section => section.title) }
+    return {
+      content,
+      pages,
+      cover,
+      tocTitles: sections.map(section => section.title),
+      title: bookTitle,
+      author: bookAuthor,
+    }
   } catch (err) {
     throw new Error(`Failed to parse EPUB: ${err.message}`)
   }

@@ -2,9 +2,6 @@
   <MobileSettingsNav title="Privacy Policy" back-to="/settings" aria-label="Settings navigation" />
   <main class="privacy-page">
     <article class="policy-card" aria-labelledby="privacy-title">
-      <h1 id="privacy-title">Bookish Privacy Policy</h1>
-      <p class="policy-meta">Effective date: 3 July 2026 · Applies to the Bookish web app and the Bookish mobile app.</p>
-
       <p class="lede">
         Bookish is a local-first reading application. Your library lives on your own device, there
         are no user accounts, and Bookish does not sell, rent, or trade any information about you.
@@ -149,6 +146,7 @@
           repository at
           <a href="https://github.com/JeremyShiroya/Bookish" target="_blank" rel="noopener">github.com/JeremyShiroya/Bookish</a>.
         </p>
+        <p class="policy-meta">Effective date: 3 July 2026 · Applies to the Bookish web app and the Bookish mobile app.</p>
       </section>
     </article>
   </main>
@@ -171,19 +169,10 @@ import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue'
   line-height: 1.6;
 }
 
-h1,
 h2,
 p,
 ul {
   margin: 0;
-}
-
-h1 {
-  margin-top: 6px;
-  color: var(--color-text-primary);
-  font-size: 24px;
-  font-weight: 500;
-  line-height: 1.18;
 }
 
 .policy-meta {
@@ -194,7 +183,7 @@ h1 {
 }
 
 .lede {
-  margin-top: 14px;
+  /* margin-top: 14px; */
   color: var(--color-text-secondary);
   font-size: 15px;
 }

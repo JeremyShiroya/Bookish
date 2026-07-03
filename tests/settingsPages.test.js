@@ -6,32 +6,21 @@ const root = resolve(process.cwd())
 const read = (path) => readFileSync(resolve(root, path), 'utf8')
 
 describe('settings pages wiring', () => {
-  test('settings links route to audio, storage, about, and privacy pages', () => {
+  test('settings links route to storage, about, and privacy pages (audio removed)', () => {
     const settings = read('components/mobile/SettingsMobile.vue')
 
     expect(existsSync(resolve(root, 'pages/settings/index.vue'))).toBe(true)
     expect(existsSync(resolve(root, 'pages/settings.vue'))).toBe(false)
-    expect(existsSync(resolve(root, 'pages/settings/audio.vue'))).toBe(true)
+    expect(existsSync(resolve(root, 'pages/settings/audio.vue'))).toBe(false)
     expect(existsSync(resolve(root, 'pages/settings/storage.vue'))).toBe(true)
     expect(existsSync(resolve(root, 'pages/settings/about.vue'))).toBe(true)
     expect(existsSync(resolve(root, 'pages/settings/privacy.vue'))).toBe(true)
 
-    expect(settings).toContain("to: '/settings/audio'")
+    expect(settings).not.toContain("to: '/settings/audio'")
     expect(settings).toContain("to: '/settings/storage'")
     expect(settings).toContain("to: '/settings/about'")
     expect(settings).toContain("to: '/settings/privacy'")
     expect(settings).toContain('navigate(row.to)')
-  })
-
-  test('audio settings page excludes track splitting controls', () => {
-    const audioPage = read('pages/settings/audio.vue')
-    const audioPanel = read('components/shared/SettingsAudioPanel.vue')
-
-    expect(audioPage).toContain('<SettingsAudioPanel')
-    expect(audioPanel).toContain('Narrator voice')
-    expect(audioPanel).toContain('Playback speed')
-    expect(audioPanel).toContain('Volume')
-    expect(audioPanel).not.toMatch(/Track splitting|trackSplitting|setTrackSplitting/)
   })
 
   test('theme row uses a light and dark toggle without a trailing arrow', () => {

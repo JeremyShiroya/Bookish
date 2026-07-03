@@ -6,10 +6,6 @@
     <div class="books-header">
       <div class="books-title-row">
         <h1 class="books-title">Books</h1>
-        <button class="add-book-btn" @click="router.push('/add')">
-          <i class="ri-add-line"></i>
-          Add Book
-        </button>
       </div>
 
       <!-- Metric Cards -->
@@ -106,8 +102,41 @@
                   @mouseenter="chipHoverIndex = idx + 1"
                 >{{ status }}</button>
               </div>
+
+              <!-- View Toggle — sits right of the status chips on one row -->
+              <div
+                class="view-chips"
+                ref="viewChipsRef"
+                @mouseleave="viewHoverIndex = -1"
+              >
+                <div
+                  class="chip-highlight"
+                  :style="viewHighlightStyle"
+                  :class="{ 'is-active': isViewHighlightActive }"
+                ></div>
+                <button
+                  class="status-chip view-chip-icon"
+                  :class="{ active: viewMode === 'grid' }"
+                  @click="setViewMode('grid')"
+                  @mouseenter="viewHoverIndex = 0"
+                  aria-label="Grid view"
+                  title="Grid view"
+                >
+                  <i class="ri-apps-2-line"></i>
+                </button>
+                <button
+                  class="status-chip view-chip-icon"
+                  :class="{ active: viewMode === 'table' }"
+                  @click="setViewMode('table')"
+                  @mouseenter="viewHoverIndex = 1"
+                  aria-label="List view"
+                  title="List view"
+                >
+                  <i class="ri-list-unordered"></i>
+                </button>
+              </div>
             </div>
-            
+
             <div class="controls-right">
               <!-- Unified Sort & Filter Panel -->
               <div class="filter-dropdown" ref="sortFilterRef">
@@ -201,43 +230,6 @@
                 </div>
               </div>
 
-              <!-- View Toggle -->
-              <div
-                class="view-chips"
-                ref="viewChipsRef"
-                @mouseleave="viewHoverIndex = -1"
-              >
-                <div
-                  class="chip-highlight"
-                  :style="viewHighlightStyle"
-                  :class="{ 'is-active': isViewHighlightActive }"
-                ></div>
-                <button
-                  class="status-chip view-chip-icon"
-                  :class="{ active: viewMode === 'grid' }"
-                  @click="setViewMode('grid')"
-                  @mouseenter="viewHoverIndex = 0"
-                  aria-label="Grid view"
-                  title="Grid view"
-                >
-                  <i class="ri-apps-2-line"></i>
-                </button>
-                <button
-                  class="status-chip view-chip-icon"
-                  :class="{ active: viewMode === 'table' }"
-                  @click="setViewMode('table')"
-                  @mouseenter="viewHoverIndex = 1"
-                  aria-label="Table view"
-                  title="Table view"
-                >
-                  <i class="ri-list-unordered"></i>
-                </button>
-              </div>
-
-              <button class="add-book-btn mobile-add-book-btn" @click="router.push('/add')">
-                <i class="ri-add-line"></i>
-                Add Book
-              </button>
             </div>
           </div>
 
@@ -253,6 +245,7 @@
             @favourite="toggleFavourite(book.id)"
             @playlist="selectedPlaylistBook = book"
             @edit="router.push(`/edit/${book.id}`)"
+            @hide="handleHideBook"
             @delete="openDeleteModal(book)"
           />
         </div>
@@ -270,6 +263,7 @@
               @favourite="toggleFavourite(book.id)"
               @playlist="selectedPlaylistBook = book"
               @edit="router.push(`/edit/${book.id}`)"
+              @hide="handleHideBook"
               @delete="openDeleteModal(book)"
             />
           </div>
@@ -352,6 +346,9 @@
                 <button class="row-action-btn" title="Edit" @click="router.push(`/edit/${book.id}`)">
                   <i class="ri-edit-line"></i>
                 </button>
+                <button class="row-action-btn" title="Hide" @click="handleHideBook(book)">
+                  <i class="ri-eye-off-line"></i>
+                </button>
                 <button class="row-action-btn delete" title="Delete" @click="openDeleteModal(book)">
                   <i class="ri-delete-bin-line"></i>
                 </button>
@@ -408,6 +405,16 @@
       @confirm="deleteBook"
     />
 
+    <!-- Floating add button — stays put while the list scrolls -->
+    <button
+      type="button"
+      class="add-book-fab"
+      aria-label="Add book"
+      @click="router.push('/add')"
+    >
+      <i class="ri-add-line"></i>
+    </button>
+
     <MobileBottomNav />
   </div>
 </template>
@@ -438,6 +445,7 @@ const {
   updateBook,
   deleteBook: removeBookFromStore,
   toggleFavourite,
+  hideBook,
   fetchAllData,
 } = useBooks();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS()
@@ -446,6 +454,11 @@ const { addToast } = useToast();
 
 const isBookActive = (book) =>
   ttsBook.value?.id === book.id && ttsStatus.value !== 'idle'
+
+const handleHideBook = async (book) => {
+  await hideBook(book.id)
+  addToast(`"${book.title}" is now hidden from your library.`, 'info')
+}
 
 const handlePlay = (book) => {
   if (ttsBook.value?.id === book.id && ttsStatus.value !== 'idle') {
@@ -881,6 +894,29 @@ onUnmounted(() => {
   transform: rotate(180deg);
 }
 
+
+/* Floating add button — fixed above the bottom nav, unaffected by scroll. */
+.add-book-fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom) + 18px);
+  z-index: 1120;
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-brand-primary);
+  color: #fff;
+  cursor: pointer;
+  font-size: 28px;
+  box-shadow: 0 8px 22px rgba(138, 43, 226, 0.38);
+}
+
+.add-book-fab:active {
+  transform: scale(0.94);
+}
 
 .add-book-btn {
   display: flex;

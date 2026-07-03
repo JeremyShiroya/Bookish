@@ -47,7 +47,6 @@ describe('mobile metadata modal and settings pages', () => {
 
     for (const file of [
       'components/mobile/SettingsMobile.vue',
-      'pages/settings/audio.vue',
       'pages/settings/storage.vue',
       'pages/settings/about.vue',
       'pages/settings/privacy.vue',

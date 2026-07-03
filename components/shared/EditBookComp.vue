@@ -45,6 +45,10 @@
               <p>No results found for "{{ editBook.title }}" by "{{ editBook.author || 'any' }}".</p>
             </div>
             <div v-else class="metadata-results">
+            <label v-if="coverPreview || editBook.cover" class="keep-cover-option">
+              <input v-model="keepCurrentCover" type="checkbox" />
+              <span>Keep my current book cover</span>
+            </label>
             <div 
               v-for="result in metadataResults" 
               :key="result.googleId" 
@@ -385,6 +389,8 @@ const editBook = ref({
 const isLoading = ref(true)
 const isUpdating = ref(false)
 const coverPreview = ref(null)
+// When checked, applying a metadata result leaves the existing cover alone.
+const keepCurrentCover = ref(false)
 const coverInput = ref(null)
 
 const showMetadataModal = ref(false)
@@ -648,7 +654,7 @@ const selectMetadata = (result) => {
   showMetadataModal.value = false;
   addToast('Metadata applied successfully', 'success');
 
-  if (result.cover) {
+  if (result.cover && !(keepCurrentCover.value && (coverPreview.value || editBook.value.cover))) {
     editBook.value.cover = result.cover;
     coverPreview.value = result.cover;
     cacheCoverImage(result.cover)
@@ -1448,5 +1454,21 @@ const handleUpdateBook = async () => {
     width: 100%;
     justify-content: center;
   }
+}
+.keep-cover-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.keep-cover-option input {
+  accent-color: var(--color-brand-primary);
 }
 </style>

@@ -34,6 +34,10 @@
             <p>No results found for "{{ newBook.title }}" by "{{ newBook.author || 'any' }}".</p>
           </div>
           <div v-else class="metadata-results">
+          <label v-if="coverPreview" class="keep-cover-option">
+            <input v-model="keepCurrentCover" type="checkbox" />
+            <span>Keep my current book cover</span>
+          </label>
           <div 
             v-for="result in metadataResults" 
             :key="result.googleId" 
@@ -390,6 +394,8 @@ const newBook = ref({
 })
 
 const coverPreview = ref(null)
+// When checked, applying a metadata result leaves the existing cover alone.
+const keepCurrentCover = ref(false)
 const documentFile = ref(null)
 const coverInput = ref(null)
 const documentInput = ref(null)
@@ -723,7 +729,7 @@ const selectMetadata = (result) => {
   addToast('Metadata applied successfully', 'success');
 
   // Cache the cover in the background; the form preview updates whenever it lands.
-  if (result.cover) {
+  if (result.cover && !(keepCurrentCover.value && coverPreview.value)) {
     coverPreview.value = result.cover;
     cacheCoverImage(result.cover)
       .then((cached) => {
@@ -1657,5 +1663,21 @@ const saveBook = async () => {
 .page-header {
   flex-direction: column;
   gap: 1rem;
+}
+.keep-cover-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.keep-cover-option input {
+  accent-color: var(--color-brand-primary);
 }
 </style>
