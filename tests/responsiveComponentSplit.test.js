@@ -126,6 +126,25 @@ describe('responsive mobile component split', () => {
     expect(loadBook).toContain('fetchAllData().then')
   })
 
+  test('mobile read actions prewarm reader content before navigation', () => {
+    const prewarm = read('composables/useReaderPrewarm.js')
+    const mobileDetail = read('components/mobile/BookDetailMobile.vue')
+    const readerPage = read('pages/reader/[id].vue')
+    const loadBookStart = readerPage.indexOf('async function loadBook')
+    const loadBookEnd = readerPage.indexOf('watch(rawContent', loadBookStart)
+    const loadBook = readerPage.slice(loadBookStart, loadBookEnd)
+
+    expect(prewarm).toContain('const readerContentCache = new Map()')
+    expect(prewarm).toContain('prewarmReaderContent')
+    expect(prewarm).toContain('getPrewarmedReaderContent')
+    expect(mobileDetail).toContain('prewarmReaderContent(book.value.id)')
+    expect(mobileDetail).toContain('router.push(`/reader/${book.value.id}`)')
+    expect(readerPage).toContain('getPrewarmedReaderContent')
+    expect(readerPage).toContain('applyStoredReaderContent')
+    expect(loadBook.indexOf('getPrewarmedReaderContent(id)')).toBeGreaterThan(-1)
+    expect(loadBook.indexOf('getPrewarmedReaderContent(id)')).toBeLessThan(loadBook.indexOf('await getBookContent(id)'))
+  })
+
   test('mobile reader keeps PDF pages readable and top navigation pinned', () => {
     const readerMobile = read('components/mobile/ReaderMobile.vue')
 
@@ -135,6 +154,24 @@ describe('responsive mobile component split', () => {
     expect(readerMobile).toMatch(/\.reader-mobile-topbar\s*\{[\s\S]*position:\s*fixed/)
     expect(readerMobile).toMatch(/\.reader-mobile-content\.is-pdf-reader\s*\{[\s\S]*padding-top:/)
     expect(readerMobile).toMatch(/\.reader-mobile-pdf\s*:deep\(\.pdf-viewer\)\s*\{[\s\S]*overflow-x:\s*hidden/)
+  })
+
+  test('mobile reader mounts chapters progressively around the reading position', () => {
+    const readerMobile = read('components/mobile/ReaderMobile.vue')
+    const readerPage = read('pages/reader/[id].vue')
+
+    expect(readerPage).toContain('const mobileChapterList = computed')
+    expect(readerPage).toContain(':chapter-list="mobileChapterList"')
+    expect(readerPage).toContain('@mount-section="mountSection"')
+    expect(readerPage).toContain('initializeSectionMounting()')
+    expect(readerMobile).toContain('data-section-placeholder')
+    expect(readerMobile).toContain('mount-section')
+    expect(readerMobile).not.toContain('content-visibility')
+  })
+
+  test('docked chapter pill sits flush with the screen bottom', () => {
+    const readerMobile = read('components/mobile/ReaderMobile.vue')
+    expect(readerMobile).toContain('translateY(calc(var(--bottom-nav-space) - env(safe-area-inset-bottom)))')
   })
 
   test('reader layout keeps desktop chrome out of the mobile reader', () => {

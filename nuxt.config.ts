@@ -17,12 +17,16 @@ const resolveBuildNumber = () => {
   }
 }
 
+const isVitest = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test'
+const pwaModules = isVitest ? [] : ['@vite-pwa/nuxt']
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: false },
   ssr: false,
   modules: [
+    ...pwaModules,
     '@nuxt/test-utils/module'
   ],
   css: ['@/assets/css/main.css'],
@@ -40,6 +44,83 @@ export default defineNuxtConfig({
     public: {
       appVersion: packageJson.version,
       buildNumber: resolveBuildNumber(),
+      apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || process.env.BOOKISH_API_BASE_URL || '',
+    },
+  },
+  nitro: {
+    routeRules: {
+      '/api/**': { cors: true },
+    },
+  },
+  pwa: {
+    registerType: 'autoUpdate',
+    manifest: {
+      name: 'Bookish',
+      short_name: 'Bookish',
+      description: 'A local-first mobile reading and listening library.',
+      theme_color: '#8A2BE2',
+      background_color: '#e8e8f2',
+      display: 'standalone',
+      orientation: 'portrait',
+      scope: '/',
+      start_url: '/',
+      icons: [
+        {
+          src: '/Images/Logo.png',
+          sizes: '192x192',
+          type: 'image/png',
+          purpose: 'any maskable',
+        },
+        {
+          src: '/Images/Logo.png',
+          sizes: '512x512',
+          type: 'image/png',
+          purpose: 'any maskable',
+        },
+      ],
+    },
+    workbox: {
+      navigateFallback: '/',
+      globPatterns: ['**/*.{js,css,html,png,woff2}'],
+      runtimeCaching: [
+        {
+          urlPattern: ({ request }) => request.mode === 'navigate',
+          handler: 'NetworkFirst',
+          options: {
+            cacheName: 'bookish-pages',
+            networkTimeoutSeconds: 2,
+            expiration: {
+              maxEntries: 32,
+              maxAgeSeconds: 60 * 60 * 24 * 7,
+            },
+          },
+        },
+        {
+          urlPattern: ({ request }) => ['style', 'script', 'worker'].includes(request.destination),
+          handler: 'StaleWhileRevalidate',
+          options: {
+            cacheName: 'bookish-app-assets',
+            expiration: {
+              maxEntries: 80,
+              maxAgeSeconds: 60 * 60 * 24 * 30,
+            },
+          },
+        },
+        {
+          urlPattern: ({ request }) => request.destination === 'image',
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'bookish-images',
+            expiration: {
+              maxEntries: 120,
+              maxAgeSeconds: 60 * 60 * 24 * 30,
+            },
+          },
+        },
+      ],
+    },
+    devOptions: {
+      enabled: false,
     },
   },
 })

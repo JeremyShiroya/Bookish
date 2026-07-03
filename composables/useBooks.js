@@ -4,6 +4,7 @@ import { useBookStorage } from '~/composables/useBookStorage';
 import { isRemoteCoverUrl, useCoverImageCache } from '~/composables/useCoverImageCache';
 import { getGoodreadsRating } from '~/composables/useGoodreadsRating';
 import { useLibraryStore } from '~/composables/useLibraryStore';
+import { useApiEndpoint } from '~/composables/useApiEndpoint';
 
 const coverCacheInFlight = new Set();
 
@@ -53,6 +54,7 @@ export const groupBooksBySeries = (sourceBooks = []) => {
 };
 
 export const useBooks = () => {
+  const { apiUrl } = useApiEndpoint()
   const books = useState('library:books', () => []);
   const collections = useState('library:collections', () => []);
   const loading = useState('library:loading', () => false);
@@ -190,7 +192,7 @@ export const useBooks = () => {
         name: authorName,
         books: JSON.stringify(knownBooks),
       })
-      const details = await $fetch(`/api/authors/bio?${params.toString()}`)
+      const details = await $fetch(apiUrl(`/api/authors/bio?${params.toString()}`))
       const hasAnything = details && (
         details.bio || details.birthDate || details.nationality ||
         details.validatedBooksCount !== null || details.validatedSeriesCount !== null ||

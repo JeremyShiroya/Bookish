@@ -39,6 +39,13 @@ const queueAnalytics = (...args) => {
   window.va(...args)
 }
 
+const isNativeCapacitor = () => {
+  const capacitor = window.Capacitor
+  if (!capacitor) return false
+  if (typeof capacitor.isNativePlatform === 'function') return capacitor.isNativePlatform()
+  return typeof capacitor.getPlatform === 'function' && capacitor.getPlatform() !== 'web'
+}
+
 const injectAnalytics = () => {
   const config = getClientConfig()
   const basePath = getBasePath()
@@ -72,6 +79,8 @@ const injectAnalytics = () => {
 }
 
 export default defineNuxtPlugin((nuxtApp) => {
+  if (isNativeCapacitor()) return
+
   const router = useRouter()
 
   const trackPage = (route) => {

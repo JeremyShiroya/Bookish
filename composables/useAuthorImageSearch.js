@@ -1,3 +1,5 @@
+import { useApiEndpoint } from '~/composables/useApiEndpoint';
+
 const imageExtensions = /\.(jpe?g|png|webp)(?:[?#].*)?$/i;
 
 const normalizeImageUrl = (url) => {
@@ -126,11 +128,12 @@ const findOpenLibraryAuthorImages = async (name) => {
 };
 
 export const fetchAuthorImageResults = async (name) => {
+  const { apiUrl } = useApiEndpoint();
   const images = [];
   const seen = new Set();
 
   try {
-    const response = await fetch(`/api/authors/search-images?name=${encodeURIComponent(name)}`);
+    const response = await fetch(apiUrl(`/api/authors/search-images?name=${encodeURIComponent(name)}`));
     const data = await response.json();
     const normalizedResults = normalizeAuthorImageResults(data.images || []);
     if (normalizedResults.length) return normalizedResults;

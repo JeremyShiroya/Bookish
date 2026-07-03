@@ -342,6 +342,7 @@ import { useToast } from '~/composables/useToast'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
 import { propagateSeriesTotal } from '~/composables/useSeriesProgress'
 import { useCoverImageCache } from '~/composables/useCoverImageCache'
+import { useApiEndpoint } from '~/composables/useApiEndpoint'
 import BookishSelect from './BookishSelect.vue'
 import CoverImageModal from './CoverImageModal.vue'
 import GoodreadsRatingDisplay from './GoodreadsRatingDisplay.vue'
@@ -359,6 +360,7 @@ const router = useRouter()
 const { fetchBookById, updateBook, books } = useBooks()
 const { addToast } = useToast()
 const { cacheCoverImage } = useCoverImageCache()
+const { apiUrl } = useApiEndpoint()
 
 const editBook = ref({
   title: '',
@@ -512,7 +514,7 @@ const searchBookCovers = async () => {
     if (editBook.value.author) query.append('author', editBook.value.author)
     if (editBook.value.publisher) query.append('publisher', editBook.value.publisher)
 
-    const response = await fetch(`/api/books/search-covers?${query.toString()}`)
+    const response = await fetch(apiUrl(`/api/books/search-covers?${query.toString()}`))
     const data = await response.json()
     coverOptions.value = data.images || []
     if (!coverOptions.value.length) {

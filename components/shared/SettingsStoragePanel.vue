@@ -58,11 +58,45 @@
         />
       </div>
     </div>
+
+    <div class="server-connection">
+      <div class="setting-copy">
+        <h3>Server connection</h3>
+        <p>
+          Web metadata search (Goodreads, Google Books, publisher sites) runs on a
+          Bookish server. The installed app needs its address; the web app can
+          leave this empty.
+        </p>
+      </div>
+      <form class="server-row" @submit.prevent="saveServerUrl">
+        <input
+          v-model="serverUrlInput"
+          class="server-input"
+          type="url"
+          inputmode="url"
+          placeholder="https://your-bookish-server.example"
+          aria-label="Bookish server URL"
+        />
+        <button class="data-action primary" type="submit">
+          <i class="ri-save-3-line"></i>
+          <span>Save</span>
+        </button>
+      </form>
+      <p class="server-hint">
+        {{ serverHint }}
+      </p>
+    </div>
   </article>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import {
+  normalizeApiBaseUrl,
+  readStoredApiBaseUrl,
+  useApiEndpoint,
+  writeStoredApiBaseUrl,
+} from '~/composables/useApiEndpoint'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 import { useBooks } from '~/composables/useBooks'
 import { useBookStorage } from '~/composables/useBookStorage'
@@ -76,6 +110,28 @@ const { getStorageSummary } = useBookStorage()
 const { createDownload, importBookishData, wipeBookishData } = useLibraryBackup()
 const { stop: stopTTS } = useTTS()
 const { addToast } = useToast()
+
+const { apiBaseUrl: effectiveApiBaseUrl } = useApiEndpoint()
+const serverUrlInput = ref(readStoredApiBaseUrl())
+const savedServerUrl = ref(serverUrlInput.value)
+
+const serverHint = computed(() => {
+  if (savedServerUrl.value) return `Using ${savedServerUrl.value} for web features.`
+  if (effectiveApiBaseUrl) return `Using the built-in server address ${effectiveApiBaseUrl}.`
+  return 'No server set — web metadata falls back to Open Library and Internet Archive.'
+})
+
+const saveServerUrl = () => {
+  const normalized = normalizeApiBaseUrl(serverUrlInput.value)
+  if (normalized && !/^https?:\/\//i.test(normalized)) {
+    addToast('Server URL must start with http:// or https://', 'error')
+    return
+  }
+  writeStoredApiBaseUrl(normalized)
+  savedServerUrl.value = normalized
+  serverUrlInput.value = normalized
+  addToast(normalized ? 'Server URL saved' : 'Server URL cleared', 'success')
+}
 
 const storageLoading = ref(false)
 const backupLoading = ref(false)
@@ -360,6 +416,43 @@ onMounted(refreshStorageSummary)
 .data-action:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.server-connection {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border-subtle);
+  display: grid;
+  gap: 0.75rem;
+}
+
+.server-row {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.server-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 45px;
+  padding: 0 0.9rem;
+  border: 1px solid var(--color-border-card);
+  border-radius: 8px;
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  font-size: 0.95rem;
+}
+
+.server-input:focus {
+  border-color: var(--color-brand-primary);
+  outline: none;
+}
+
+.server-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
 }
 
 .sr-only {

@@ -16,20 +16,24 @@
         :active-tts-chunk-index="activeTtsChunkIndex"
         :active-word-range="activeWordRange"
         :has-cover="hasCover"
-        :chapter-list="chapterList"
+        :chapter-list="mobileChapterList"
         :current-chapter-idx="currentChapterIdx"
         :current-pdf-page="currentPdfPage"
         :total-pages="totalPages"
         :toc-position="tocPosition"
         :current-chapter-title="currentChapterTitle"
         :sanitize-html="sanitizeHtml"
+        :resolve-chunk-at-point="resolveChunkAtPoint"
+        :prewarm-chunk="prewarmChunkAudio"
         @back="router.back()"
         @open-toc="tocOpen = true"
         @page-change="handlePdfPageChange"
         @pdf-loaded="handlePdfLoaded"
         @read-current-position="playFromCurrentPosition"
+        @read-from-chunk="playFromChunk"
         @previous-chapter="goToAdjacentChapter(-1)"
         @next-chapter="goToAdjacentChapter(1)"
+        @mount-section="mountSection"
       />
     </template>
 
@@ -238,6 +242,7 @@ import { isRenderableSection, buildReadableChunks, useTTS } from '~/composables/
 import { useBookStorage } from '~/composables/useBookStorage'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 import { sanitizeBookHtml } from '~/composables/useHtmlSanitizer'
+import { getPrewarmedReaderContent } from '~/composables/useReaderPrewarm'
 import {
   extractPdfContentFromSource,
   extractPdfTocFromSource,
@@ -396,6 +401,115 @@ const chapterList = computed(() => {
   }))
 })
 
+// ── Progressive section mounting (mobile) ──────────────────────────────────
+//
+// Parsing a whole book's HTML into the DOM at once froze mobile WebViews for
+// many seconds. The mobile reader instead receives a windowed view: only the
+// sections around the reading position carry HTML; the rest are placeholders
+// with an estimated height. The remainder mounts during idle time (or as soon
+// as a placeholder approaches the viewport). Desktop keeps the full render.
+
+const mountedSections = ref([])
+let _mountIdleId = null
+let _mountTimerId = null
+
+function estimateSectionHeight(html) {
+  // ~0.35px of rendered column height per raw HTML character at the mobile
+  // font size — a coarse guess; real height replaces it on mount.
+  return Math.max(320, Math.min(24000, Math.round((html || '').length * 0.35)))
+}
+
+const mobileChapterList = computed(() => chapterList.value.map((chapter, index) => (
+  mountedSections.value[index]
+    ? chapter
+    : { ...chapter, html: null, estHeight: estimateSectionHeight(chapter.html) }
+)))
+
+function initialSectionIndex() {
+  const total = chapterList.value.length
+  const progress = Number(book.value?.progress) || 0
+  if (total <= 1 || progress <= 0) return 0
+  return Math.max(0, Math.min(total - 1, Math.round((progress / 100) * (total - 1))))
+}
+
+function _cancelIdleSectionMounting() {
+  if (_mountIdleId !== null && typeof cancelIdleCallback === 'function') {
+    cancelIdleCallback(_mountIdleId)
+  }
+  if (_mountTimerId !== null) clearTimeout(_mountTimerId)
+  _mountIdleId = null
+  _mountTimerId = null
+}
+
+async function _onAllSectionsMounted() {
+  await nextTick()
+  observeChapters()
+  _scheduleChunkMapBuild()
+}
+
+function _startIdleSectionMounting(startIdx) {
+  _cancelIdleSectionMounting()
+
+  const step = () => {
+    _mountIdleId = null
+    _mountTimerId = null
+    const flags = mountedSections.value
+
+    // Mount outward from the reading position: forward first, then backward.
+    for (let mounted = 0; mounted < 2; mounted += 1) {
+      let next = -1
+      for (let i = startIdx; i < flags.length; i += 1) {
+        if (!flags[i]) { next = i; break }
+      }
+      if (next === -1) {
+        for (let i = startIdx - 1; i >= 0; i -= 1) {
+          if (!flags[i]) { next = i; break }
+        }
+      }
+      if (next === -1) break
+      flags[next] = true
+    }
+
+    if (flags.some((flag) => !flag)) schedule()
+    else _onAllSectionsMounted()
+  }
+
+  const schedule = () => {
+    if (typeof requestIdleCallback === 'function') {
+      _mountIdleId = requestIdleCallback(step, { timeout: 800 })
+    } else {
+      _mountTimerId = setTimeout(step, 120)
+    }
+  }
+
+  schedule()
+}
+
+function initializeSectionMounting() {
+  const total = chapterList.value.length
+  if (!total) {
+    mountedSections.value = []
+    _cancelIdleSectionMounting()
+    return
+  }
+
+  const startIdx = initialSectionIndex()
+  const flags = new Array(total).fill(false)
+  for (let i = startIdx - 1; i <= startIdx + 2; i += 1) {
+    if (i >= 0 && i < total) flags[i] = true
+  }
+  flags[0] = true
+  mountedSections.value = flags
+  _startIdleSectionMounting(startIdx)
+}
+
+function mountSection(index) {
+  const flags = mountedSections.value
+  const target = Number(index)
+  if (Number.isNaN(target) || target < 0 || target >= flags.length) return
+  flags[target] = true
+}
+
 const pdfTocItems = computed(() => {
   if (!isPdfBook.value) return []
   return tocItems.value || []
@@ -539,6 +653,7 @@ function chunkIndexForCurrentPosition() {
   // sentence on screen, so "read from here" begins at the visible page — not a
   // proportional estimate that drifts toward where narration last was.
   const anchorY = 80
+  if (import.meta.client && !_chunkEls.length) _buildChunkMap()
   if (import.meta.client && _chunkEls.length) {
     let best = -1
     let firstConnected = -1
@@ -653,6 +768,54 @@ async function confirmReadFromHere() {
     pdfViewerRef.value?.scrollToPage(targetPage, 'instant', 'start')
   }
   await saveReadingProgress(isPdfBook.value ? { pdfPage: targetPage } : undefined)
+}
+
+// Locate the sentence under a touch point for the mobile long-press menu.
+// Builds the chunk map on demand (it's deferred to idle after load).
+function resolveChunkAtPoint(x, y) {
+  if (!import.meta.client || isPdfBook.value || !allReadableChunks.value.length) return -1
+  if (!_chunkEls.length) _buildChunkMap()
+
+  const spanAtPoint = () => {
+    const range = document.caretRangeFromPoint?.(x, y)
+    let node = range?.startContainer ?? document.elementFromPoint(x, y)
+    if (node?.nodeType === Node.TEXT_NODE) node = node.parentElement
+    return { node, span: node?.closest?.('[data-tts-chunk]') }
+  }
+
+  let { node, span } = spanAtPoint()
+  if (!span && node?.closest?.('[id^="ch-"]')) {
+    // The touched section mounted after the last map build — rebuild and retry.
+    _buildChunkMap()
+    ;({ node, span } = spanAtPoint())
+  }
+  if (span) {
+    const chunkIdx = Number(span.dataset.ttsChunk)
+    if (!Number.isNaN(chunkIdx)) return chunkIdx
+  }
+
+  const section = node?.closest?.('[id^="ch-"]')
+  const sectionIdx = Number(section?.id?.slice(3))
+  if (!Number.isNaN(sectionIdx)) {
+    return Math.min(allReadableChunks.value.length - 1, sectionStartChunk(sectionIdx))
+  }
+  return -1
+}
+
+function prewarmChunkAudio(chunkIdx) {
+  const text = allReadableChunks.value[chunkIdx]
+  if (text) prewarmText(text)
+}
+
+// Start narration at an exact chunk (mobile long-press "Read from here").
+async function playFromChunk(chunkIdx) {
+  if (!book.value || !allReadableChunks.value.length) return
+  const target = Math.max(0, Math.min(allReadableChunks.value.length - 1, Number(chunkIdx) || 0))
+
+  pendingReadFromHereWasPlaying.value = false
+  pendingReadFromHerePage.value = currentPdfPage.value
+  pendingReadFromHereChunk.value = target
+  await confirmReadFromHere()
 }
 
 function jumpToNarration() {
@@ -874,7 +1037,39 @@ function _mapSectionChunks(sectionEl, chunks, baseIdx) {
   }
 }
 
+let _chunkMapIdleId = null
+let _chunkMapTimerId = null
+
+function _cancelScheduledChunkMapBuild() {
+  if (_chunkMapIdleId !== null && typeof cancelIdleCallback === 'function') {
+    cancelIdleCallback(_chunkMapIdleId)
+  }
+  if (_chunkMapTimerId !== null) clearTimeout(_chunkMapTimerId)
+  _chunkMapIdleId = null
+  _chunkMapTimerId = null
+}
+
+// Wrapping every sentence of the whole book in highlight spans walks the
+// entire DOM — doing it synchronously blocked first paint on mobile. Defer it
+// to idle time; anything that needs the map earlier builds it on demand.
+function _scheduleChunkMapBuild() {
+  if (!import.meta.client) return
+  _cancelScheduledChunkMapBuild()
+  if (typeof requestIdleCallback === 'function') {
+    _chunkMapIdleId = requestIdleCallback(() => {
+      _chunkMapIdleId = null
+      _buildChunkMap()
+    }, { timeout: 2000 })
+  } else {
+    _chunkMapTimerId = setTimeout(() => {
+      _chunkMapTimerId = null
+      _buildChunkMap()
+    }, 300)
+  }
+}
+
 function _buildChunkMap() {
+  _cancelScheduledChunkMapBuild()
   const container = chaptersContainerRef.value
   if (!container || !rawContent.value || isPdfBook.value) return
 
@@ -1126,6 +1321,23 @@ function handlePdfLoaded(payload) {
   readerReady.value = true
 }
 
+function applyStoredReaderContent(stored) {
+  if (!stored) return false
+
+  rawContent.value = stored.content ?? ''
+  tocTitles.value = stored.tocTitles ?? []
+  tocItems.value = stored.tocItems ?? []
+  pdfTocChecked.value = !!stored.pdfTocChecked
+  pdfSource.value = stored.source ?? null
+  pdfManifest.value = stored.pdfManifest ?? null
+  totalPages.value = stored.pages || book.value?.pages || 0
+  book.value = { ...book.value, content: stored.content ?? '', tocTitles: stored.tocTitles ?? [] }
+  // Seed the mobile mounting window before the DOM renders so the first paint
+  // only parses the sections around the reading position.
+  initializeSectionMounting()
+  return true
+}
+
 async function loadBook(id) {
   readerReady.value = false
   restoredInitialPdfScroll.value = false
@@ -1151,18 +1363,20 @@ async function loadBook(id) {
     })
   }
 
-  contentLoading.value = true
+  const prewarmed = getPrewarmedReaderContent(id)
+  const prewarmedContent = prewarmed?.content ?? null
+  const appliedPrewarmedContent = applyStoredReaderContent(prewarmedContent)
+
+  contentLoading.value = !appliedPrewarmedContent
   try {
-    const stored = await getBookContent(id)
+    // Reuse the prewarm result (or its in-flight promise) instead of issuing
+    // a second IndexedDB read — on mobile that duplicate read is what made
+    // opening a book feel slow.
+    let stored = appliedPrewarmedContent ? prewarmedContent : null
+    if (!stored && prewarmed?.promise) stored = await prewarmed.promise
+    if (!stored && !appliedPrewarmedContent) stored = await getBookContent(id)
     if (stored) {
-      rawContent.value = stored.content ?? ''
-      tocTitles.value = stored.tocTitles ?? []
-      tocItems.value = stored.tocItems ?? []
-      pdfTocChecked.value = !!stored.pdfTocChecked
-      pdfSource.value = stored.source ?? null
-      pdfManifest.value = stored.pdfManifest ?? null
-      totalPages.value = stored.pages || book.value?.pages || 0
-      book.value = { ...book.value, content: stored.content ?? '', tocTitles: stored.tocTitles ?? [] }
+      if (!appliedPrewarmedContent) applyStoredReaderContent(stored)
 
       if (
         bookFormat.value === 'pdf'
@@ -1200,14 +1414,14 @@ async function loadBook(id) {
 
   await nextTick()
   await nextTick()
-  _buildChunkMap()
+  _scheduleChunkMapBuild()
   observeChapters()
   updateBookEdge()
-  await ensurePdfToc(id)
+  ensurePdfToc(id)
 
   if (!isPdfBook.value && book.value?.progress > 0 && chapterList.value.length > 0) {
-    const targetIdx = Math.round((book.value.progress / 100) * (chapterList.value.length - 1))
-    const safeIndex = Math.max(0, Math.min(targetIdx, chapterList.value.length - 1))
+    // Same formula as the mounting window seed, so the target is mounted.
+    const safeIndex = initialSectionIndex()
     currentChapterIdx.value = safeIndex
     const el = document.getElementById(`ch-${safeIndex}`)
     if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' })
@@ -1222,7 +1436,7 @@ async function loadBook(id) {
 watch(rawContent, async () => {
   await nextTick()
   await nextTick()
-  _buildChunkMap()
+  _scheduleChunkMapBuild()
   observeChapters()
   updateBookEdge()
 })
@@ -1269,6 +1483,8 @@ onUnmounted(async () => {
   if (_scrollRaf !== null) cancelAnimationFrame(_scrollRaf)
   if (_progressSaveTimer) clearTimeout(_progressSaveTimer)
   if (_observer) _observer.disconnect()
+  _cancelScheduledChunkMapBuild()
+  _cancelIdleSectionMounting()
 
   if (import.meta.client && CSS?.highlights) CSS.highlights.delete('tts-word')
   _ttsWordHighlight = null

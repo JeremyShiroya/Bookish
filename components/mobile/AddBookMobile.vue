@@ -350,6 +350,7 @@ import { useBookStorage } from '~/composables/useBookStorage'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
 import { propagateSeriesTotal } from '~/composables/useSeriesProgress'
 import { useCoverImageCache } from '~/composables/useCoverImageCache'
+import { useApiEndpoint } from '~/composables/useApiEndpoint'
 import BookishSelect from '~/components/shared/BookishSelect.vue'
 import CoverImageModal from '~/components/shared/CoverImageModal.vue'
 import GoodreadsRatingDisplay from '~/components/shared/GoodreadsRatingDisplay.vue'
@@ -361,6 +362,7 @@ const { addBook, books, updateBook } = useBooks()
 const { addToast } = useToast()
 const { saveBookContent } = useBookStorage()
 const { cacheCoverImage } = useCoverImageCache()
+const { apiUrl } = useApiEndpoint()
 const extractedContent = ref(null)
 const extractedTocTitles = ref([])
 const extractedSource = ref(null)
@@ -493,7 +495,7 @@ const searchBookCovers = async () => {
     if (newBook.value.author) query.append('author', newBook.value.author)
     if (newBook.value.publisher) query.append('publisher', newBook.value.publisher)
 
-    const response = await fetch(`/api/books/search-covers?${query.toString()}`)
+    const response = await fetch(apiUrl(`/api/books/search-covers?${query.toString()}`))
     const data = await response.json()
     coverOptions.value = data.images || []
     if (!coverOptions.value.length) {

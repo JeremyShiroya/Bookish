@@ -1,5 +1,8 @@
 import { computed } from 'vue'
 import { useState } from '#app'
+import { useApiEndpoint } from '~/composables/useApiEndpoint'
+import { synthesizeEdgeSpeechInBrowser } from '~/composables/useEdgeSpeechClient'
+import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
 import { firstChunkForPage } from '~/composables/usePdfManifest'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 
@@ -501,8 +504,29 @@ export function findContentStart(chunks) {
 
 // ── Composable ─────────────────────────────────────────────────────────────
 
+// Synthesize one sentence of speech. Native builds talk to the Edge Read
+// Aloud endpoint straight from the WebView (no Nuxt server on device); the
+// web app keeps using the server endpoint. If on-device synthesis fails and
+// a backend is configured, the server is tried as a fallback.
+async function synthesizeSpeech({ text, voice, speed, apiUrl, apiBaseUrl }) {
+  const fetchFromServer = () => $fetch(apiUrl('/api/tts'), {
+    method: 'POST',
+    body: { text, voice, speed },
+  })
+
+  if (!isNativeCapacitorPlatform()) return fetchFromServer()
+
+  try {
+    return await synthesizeEdgeSpeechInBrowser({ text, voice, speed })
+  } catch (error) {
+    if (!apiBaseUrl) throw error
+    return fetchFromServer()
+  }
+}
+
 export const useTTS = () => {
   const { settings, updateSettings } = useBookishSettings()
+  const { apiUrl, apiBaseUrl } = useApiEndpoint()
 
   const ttsBook         = useState('tts:book',         () => null)
   const ttsStatus       = useState('tts:status',       () => 'idle')
@@ -653,9 +677,12 @@ export const useTTS = () => {
     }
 
     try {
-      const data = await $fetch('/api/tts', {
-        method: 'POST',
-        body: { text: chunk, voice, speed: ttsSpeed.value },
+      const data = await synthesizeSpeech({
+        text: chunk,
+        voice,
+        speed: ttsSpeed.value,
+        apiUrl,
+        apiBaseUrl,
       })
       const result = {
         chunkIdx,
@@ -1007,9 +1034,12 @@ export const useTTS = () => {
     const key = ttsPrewarmKey(value, voice, ttsSpeed.value)
     if (_prewarmCache.has(key)) return
     try {
-      const data = await $fetch('/api/tts', {
-        method: 'POST',
-        body: { text: value, voice, speed: ttsSpeed.value },
+      const data = await synthesizeSpeech({
+        text: value,
+        voice,
+        speed: ttsSpeed.value,
+        apiUrl,
+        apiBaseUrl,
       })
       if (!data?.audio) return
       _prewarmCache.set(key, { audio: data.audio, boundaries: data.boundaries ?? [] })

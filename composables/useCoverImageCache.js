@@ -1,13 +1,17 @@
+import { useApiEndpoint } from '~/composables/useApiEndpoint'
+
 export function isRemoteCoverUrl(value) {
   return typeof value === 'string' && /^https?:\/\//i.test(value)
 }
 
 export const useCoverImageCache = () => {
+  const { apiUrl } = useApiEndpoint()
+
   const cacheCoverImage = async (coverUrl) => {
     if (!isRemoteCoverUrl(coverUrl)) return coverUrl
 
     try {
-      const result = await $fetch('/api/books/cache-cover', {
+      const result = await $fetch(apiUrl('/api/books/cache-cover'), {
         method: 'POST',
         body: { url: coverUrl },
       })

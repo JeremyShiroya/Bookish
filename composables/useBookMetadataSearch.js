@@ -1,3 +1,11 @@
+import { useApiEndpoint } from '~/composables/useApiEndpoint'
+import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
+
+// The native app has no bundled Nuxt server; unless the user configured a
+// server URL in Settings, run the provider pipeline on the device instead
+// (dynamically imported so the web bundle doesn't carry the scrapers).
+const loadDeviceSearch = () => import('~/composables/useDeviceMetadataSearch')
+
 const compact = (value) => String(value || '').replace(/\s+/g, ' ').trim();
 
 const normalizeKey = (value) => compact(value).toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -240,23 +248,49 @@ const readStreamingMetadataResponse = async (response, onProgress) => {
   return results;
 };
 
+const readJsonResponse = async (response, label) => {
+  const contentType = response.headers?.get?.('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const body = await response.clone().text().catch(() => '');
+    if (body.trim().startsWith('<')) {
+      throw new Error(`${label} returned the app shell instead of JSON. Set NUXT_PUBLIC_API_BASE_URL for native builds.`);
+    }
+  }
+  return response.json();
+};
+
 export const fetchBookMetadataResults = async (title, author, publisher, options = {}) => {
+  const { apiUrl, apiBaseUrl } = useApiEndpoint();
+  const native = isNativeCapacitorPlatform();
+
+  // Native without a configured server: the bundled app has no /api routes,
+  // so go straight to the on-device provider pipeline (Goodreads included).
+  if (native && !apiBaseUrl) {
+    const { fetchBookMetadataOnDevice } = await loadDeviceSearch();
+    return fetchBookMetadataOnDevice(title, author, publisher, options);
+  }
+
   const params = new URLSearchParams({ title });
   if (author) params.set('author', author);
   if (publisher) params.set('publisher', publisher);
   if (options.onProgress) params.set('stream', '1');
 
   try {
-    const response = await fetch(`/api/books/metadata?${params.toString()}`);
+    const response = await fetch(apiUrl(`/api/books/metadata?${params.toString()}`));
     if (!response.ok) throw new Error(`Metadata request failed with ${response.status}`);
     if (options.onProgress) {
       const streamedResults = await readStreamingMetadataResponse(response, options.onProgress);
       return streamedResults;
     } else {
-      const data = await response.json();
+      const data = await readJsonResponse(response, 'Metadata endpoint');
       if (data.results?.length) return data.results;
     }
   } catch (error) {
+    if (native) {
+      // Configured server unreachable — fall back to the on-device pipeline.
+      const { fetchBookMetadataOnDevice } = await loadDeviceSearch();
+      return fetchBookMetadataOnDevice(title, author, publisher, options);
+    }
     options.onProgress?.({ type: 'step', id: 'core', status: 'error', detail: error?.message || 'Metadata endpoint failed' });
     options.onProgress?.({ type: 'step', id: 'publisherSearch', status: 'skipped', detail: 'Skipped because the metadata endpoint failed' });
     options.onProgress?.({ type: 'step', id: 'publisherScrape', status: 'skipped', detail: 'Skipped because the metadata endpoint failed' });
@@ -270,11 +304,25 @@ export const fetchBookMetadataResults = async (title, author, publisher, options
 };
 
 export const fetchSeriesTotalResults = async (title, author) => {
-  const params = new URLSearchParams({ title });
-  if (author) params.set('author', author);
+  const { apiUrl, apiBaseUrl } = useApiEndpoint();
+  const native = isNativeCapacitorPlatform();
 
-  const response = await fetch(`/api/books/series-total?${params.toString()}`);
-  if (!response.ok) throw new Error(`Series metadata request failed with ${response.status}`);
-  const data = await response.json();
-  return data.results || [];
+  if (native && !apiBaseUrl) {
+    const { fetchSeriesTotalOnDevice } = await loadDeviceSearch();
+    return fetchSeriesTotalOnDevice(title, author);
+  }
+
+  try {
+    const params = new URLSearchParams({ title });
+    if (author) params.set('author', author);
+
+    const response = await fetch(apiUrl(`/api/books/series-total?${params.toString()}`));
+    if (!response.ok) throw new Error(`Series metadata request failed with ${response.status}`);
+    const data = await readJsonResponse(response, 'Series metadata endpoint');
+    return data.results || [];
+  } catch (error) {
+    if (!native) throw error;
+    const { fetchSeriesTotalOnDevice } = await loadDeviceSearch();
+    return fetchSeriesTotalOnDevice(title, author);
+  }
 };

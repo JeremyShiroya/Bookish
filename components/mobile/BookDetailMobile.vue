@@ -71,7 +71,7 @@
       </div>
 
       <div class="book-actions">
-        <button type="button" class="read-btn" @click="router.push(`/reader/${book.id}`)">
+        <button type="button" class="read-btn" @click="openReader">
           <i class="ri-book-open-line"></i>
           Read
         </button>
@@ -90,9 +90,10 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
+import { prewarmReaderContent } from "~/composables/useReaderPrewarm";
 import { useTTS } from "~/composables/useTTS";
 import GoodreadsRatingDisplay from "~/components/shared/GoodreadsRatingDisplay.vue";
 import MobileSettingsNav from "./MobileSettingsNav.vue";
@@ -122,6 +123,12 @@ const handleCoverError = (event) => {
   event.target.src = generateCoverPlaceholder(book.value?.title ?? "");
 };
 
+const openReader = () => {
+  if (!book.value) return;
+  prewarmReaderContent(book.value.id);
+  router.push(`/reader/${book.value.id}`);
+};
+
 const handleListen = () => {
   if (!book.value) return;
   if (ttsBook.value?.id === book.value.id && ttsStatus.value !== "idle") {
@@ -130,6 +137,14 @@ const handleListen = () => {
   }
   playTTS(book.value);
 };
+
+watch(
+  () => book.value?.id,
+  (bookId) => {
+    if (bookId) prewarmReaderContent(bookId);
+  },
+  { immediate: true },
+);
 </script>
 
 <style scoped>
