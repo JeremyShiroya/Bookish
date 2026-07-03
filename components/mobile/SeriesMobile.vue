@@ -2,9 +2,6 @@
   <div class="series-container">
     <MobileTopNav />
 
-    <div v-if="showTitle" class="series-header">
-      <h1 class="series-title">{{ title }}</h1>
-    </div>
 
     <div v-if="sortedSeriesList.length > 0" class="series-grid">
       <SeriesCollageCard
@@ -86,16 +83,9 @@ const openSeries = (series) => {
   padding-bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
 }
 
-.series-header {
-  margin-bottom: 1.5rem;
-}
 
-.series-title {
-  margin: 0;
-  color: var(--color-brand-primary);
-  font-size: 1.5rem;
-  font-weight: 400;
-}
+
+
 
 .series-grid {
   display: grid;
@@ -122,9 +112,7 @@ const openSeries = (series) => {
   box-shadow: var(--shadow-brand-button-hover);
 }
 
-  .series-header {
-    display: none;
-  }
+
 
   .series-grid {
     grid-template-columns: 1fr;

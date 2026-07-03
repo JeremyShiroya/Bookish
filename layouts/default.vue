@@ -6,12 +6,14 @@
         <slot />
       </div>
       <PlayingBar />
+      <MobilePlayingBar />
     </main>
   </div>
 </template>
 
 <script setup>
 import Sidebar from '~/components/desktop/Sidebar.vue'
+import MobilePlayingBar from '~/components/mobile/MobilePlayingBar.vue'
 import PlayingBar from '~/components/shared/PlayingBar.vue'
 </script>
 
@@ -32,6 +34,11 @@ import PlayingBar from '~/components/shared/PlayingBar.vue'
   padding-bottom: 120px; /* Account for PlayingBar (90px) + 30px breathing room */
 }
 
+/* The mobile mini player only exists on phone-sized viewports. */
+:deep(.mobile-playing-bar) {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .main-content {
     margin-left: 0;
@@ -44,6 +51,10 @@ import PlayingBar from '~/components/shared/PlayingBar.vue'
   :deep(.sidebar),
   :deep(.playing-bar) {
     display: none;
+  }
+
+  :deep(.mobile-playing-bar) {
+    display: grid;
   }
 }
 </style>

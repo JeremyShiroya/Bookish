@@ -2,11 +2,6 @@
   <div class="favourites-container">
     <MobileTopNav />
 
-    <div class="favourites-header">
-      <h1 class="favourites-title">
-        Favourites <span class="favourites-count">({{ favourites.length }})</span>
-      </h1>
-    </div>
 
     <div v-if="loading && !initialized" class="favourites-loading">
         <SkeletonLoader variant="favourites-grid" :count="6" />
@@ -105,21 +100,11 @@ const confirmDelete = async () => {
   margin: 0 auto;
 }
 
-.favourites-header {
-  margin-bottom: 2rem;
-}
 
-.favourites-title {
-  font-size: 1.5rem;
-  font-weight: 400;
-  color: var(--color-brand-primary);
-  margin: 0;
-}
 
-.favourites-count {
-  color: var(--color-text-subtle);
-  font-weight: normal;
-}
+
+
+
 
 .books-grid {
   display: grid;
@@ -128,9 +113,7 @@ const confirmDelete = async () => {
   justify-content: start;
 }
 
-  .favourites-header {
-    display: none;
-  }
+
 
   .favourites-container {
     padding: calc(4.85rem + env(safe-area-inset-top)) var(--mobile-page-padding-inline) calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));

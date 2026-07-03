@@ -3,11 +3,16 @@ import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import {
   BOOKISH_DEVICE_IMPORTS_KEY,
+  BOOKISH_SCAN_FOLDERS_KEY,
   cleanTitleFromFileName,
+  fileInScanFolders,
   mergeMetadataIntoBook,
+  normalizeScanFolder,
   readImportRegistry,
+  readScanFolders,
   selectNewDeviceFiles,
   writeImportRegistry,
+  writeScanFolders,
 } from '../composables/useDeviceLibrarySync.js'
 
 const root = resolve(process.cwd())
@@ -92,6 +97,26 @@ describe('device library sync', () => {
 
     // Nothing to fill → no update.
     expect(mergeMetadataIntoBook({ ...updated, series: 'S', seriesInstallment: 1, seriesTotal: 3, publisher: 'P' }, meta)).toBeNull()
+  })
+
+  test('scan folders normalize, persist, and gate which files import', () => {
+    expect(normalizeScanFolder('Download')).toBe('/storage/emulated/0/Download')
+    expect(normalizeScanFolder('/storage/emulated/0/Books/')).toBe('/storage/emulated/0/Books')
+    expect(normalizeScanFolder('  ')).toBe('')
+
+    const storage = fakeStorage()
+    expect(writeScanFolders(['Download', 'Download', '/storage/emulated/0/Books'], storage))
+      .toEqual(['/storage/emulated/0/Download', '/storage/emulated/0/Books'])
+    expect(readScanFolders(storage)).toEqual(['/storage/emulated/0/Download', '/storage/emulated/0/Books'])
+
+    // Default (never configured) scans everything; explicitly empty = scan off.
+    expect(readScanFolders(fakeStorage())).toEqual(['/storage/emulated/0'])
+    expect(readScanFolders(fakeStorage({ [BOOKISH_SCAN_FOLDERS_KEY]: '[]' }))).toEqual([])
+
+    const folders = ['/storage/emulated/0/Download']
+    expect(fileInScanFolders('/storage/emulated/0/Download/book.epub', folders)).toBe(true)
+    expect(fileInScanFolders('/storage/emulated/0/Download/sub/book.pdf', folders)).toBe(true)
+    expect(fileInScanFolders('/storage/emulated/0/Downloads-old/book.pdf', folders)).toBe(false)
   })
 
   test('native shell wires up the DeviceBooks plugin and permissions', () => {

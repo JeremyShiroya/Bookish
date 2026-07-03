@@ -55,9 +55,12 @@ describe('settings pages wiring', () => {
     expect(settings).not.toContain('Version 1.2.0')
   })
 
-  test('mobile page titles are hidden for series, playlists, and favourites', () => {
-    expect(read('components/mobile/SeriesMobile.vue')).toMatch(/\.series-header\s*\{[\s\S]*display:\s*none/)
-    expect(read('components/mobile/PlaylistsMobile.vue')).toMatch(/\.playlists-header\s*\{[\s\S]*display:\s*none/)
-    expect(read('components/mobile/FavouritesMobile.vue')).toMatch(/\.favourites-header\s*\{[\s\S]*display:\s*none/)
+  test('mobile pages no longer carry hidden desktop page headers', () => {
+    expect(read('components/mobile/SeriesMobile.vue')).not.toContain('series-header')
+    expect(read('components/mobile/PlaylistsMobile.vue')).not.toContain('playlists-header')
+    expect(read('components/mobile/FavouritesMobile.vue')).not.toContain('favourites-header')
+    expect(read('components/mobile/BooksMobile.vue')).not.toContain('data-table')
+    expect(read('components/mobile/BooksMobile.vue')).not.toContain('pagination')
+    expect(read('components/mobile/BooksMobile.vue')).not.toContain('filter-dropdown')
   })
 })

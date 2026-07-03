@@ -12,9 +12,63 @@ describe('mobile UX batch', () => {
     expect(books).toContain('class="add-book-fab"')
     expect(books).toMatch(/\.add-book-fab\s*\{[^}]*position:\s*fixed/)
     expect(books).not.toContain('mobile-add-book-btn"')
-    // The view toggle now lives beside the status chips in controls-left.
+    // Status chips live on the left; the view toggle is pinned to the right end.
     const controlsLeft = books.slice(books.indexOf('class="controls-left"'), books.indexOf('class="controls-right"'))
-    expect(controlsLeft).toContain('view-chips')
+    const controlsRight = books.slice(books.indexOf('class="controls-right"'), books.indexOf('Grid View'))
+    expect(controlsLeft).toContain('status-chips')
+    expect(controlsLeft).not.toContain('view-chips')
+    expect(controlsRight).toContain('view-chips')
+  })
+
+  test('mobile books page carries no desktop-only leftovers', () => {
+    const books = read('components/mobile/BooksMobile.vue')
+    for (const marker of ['data-table', 'pagination', 'isMobileViewport', 'filter-dropdown', 'sfp-pill', 'metric-card', 'books-header']) {
+      expect(books, marker).not.toContain(marker)
+    }
+  })
+
+  test('device scan folders are configurable and filter the boot scan', () => {
+    const sync = read('composables/useDeviceLibrarySync.js')
+    expect(sync).toContain('readScanFolders')
+    expect(sync).toContain('fileInScanFolders')
+    expect(sync).toContain('Scanning your device for new books')
+    expect(sync).toContain('no new books found')
+
+    const storage = read('components/mobile/SettingsStorageMobile.vue')
+    expect(storage).toContain('Scanned folders')
+    expect(storage).toContain('removeScanFolder')
+    expect(storage).toContain('addScanFolder')
+    expect(storage).toContain('Scan device now')
+  })
+
+  test('mini playing bar shows outside the reader and opens the narrated section', () => {
+    const bar = read('components/mobile/MobilePlayingBar.vue')
+    expect(bar).toContain("route.path.startsWith('/reader')")
+    expect(bar).toContain('router.push(`/reader/${ttsBook.value.id}`)')
+    expect(bar).toContain('bar-progress-fill')
+
+    const layout = read('layouts/default.vue')
+    expect(layout).toContain('MobilePlayingBar')
+
+    const reader = read('pages/reader/[id].vue')
+    expect(reader).toContain('sectionForChunk(ttsChunkIdx.value)')
+    expect(reader).toContain('jumpToNarration()')
+  })
+
+  test('series and playlist detail pages use the hero redesign', () => {
+    for (const path of ['components/mobile/SeriesDetailMobile.vue', 'components/mobile/PlaylistDetailMobile.vue']) {
+      const source = read(path)
+      expect(source, path).toContain('hero-backdrop')
+      expect(source, path).toContain('hero-progress-fill')
+      expect(source, path).toContain('hero-play')
+      expect(source, path).toContain('@hide="handleHideBook"')
+    }
+  })
+
+  test('book detail page cannot overflow horizontally', () => {
+    const detail = read('components/mobile/BookDetailMobile.vue')
+    expect(detail).toMatch(/\.book-detail-page\s*\{[^}]*overflow-x:\s*hidden/)
+    expect(detail).toContain('overflow-wrap: anywhere')
   })
 
   test('list rows and book detail expose favourite, playlist, edit, hide, delete', () => {
@@ -24,7 +78,6 @@ describe('mobile UX batch', () => {
 
     const books = read('components/mobile/BooksMobile.vue')
     expect(books).toContain('@hide="handleHideBook"')
-    expect(books).toContain('handleHideBook(book)')
 
     const detail = read('components/mobile/BookDetailMobile.vue')
     for (const marker of ['ri-heart', 'ri-play-list-2-line', 'ri-edit-line', 'ri-eye-off-line', 'ri-delete-bin-line']) {

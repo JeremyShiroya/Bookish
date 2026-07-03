@@ -4,6 +4,10 @@
 
     <section v-if="seriesBooks.length" class="detail-shell">
       <header class="detail-hero">
+        <div class="hero-backdrop" aria-hidden="true">
+          <img :src="resolveBookCover(seriesBooks[0])" alt="" />
+        </div>
+
         <div class="cover-stack" aria-hidden="true">
           <div
             v-for="(book, index) in previewBooks"
@@ -16,9 +20,20 @@
         </div>
 
         <div class="detail-copy">
-          <p>Your series</p>
+          <p class="hero-eyebrow">Series</p>
           <h1>{{ series?.name || seriesName }}</h1>
-          <span>{{ seriesCountLabel }}</span>
+          <span class="hero-meta">{{ seriesCountLabel }} · {{ readCount }} read</span>
+
+          <div class="hero-progress" role="img" :aria-label="`${readPercent}% read`">
+            <div class="hero-progress-fill" :style="{ width: `${readPercent}%` }"></div>
+          </div>
+
+          <div class="hero-actions">
+            <button type="button" class="hero-play" @click="playSeries">
+              <i :class="anyBookActive ? 'ri-pause-fill' : 'ri-play-fill'"></i>
+              {{ anyBookActive ? 'Pause' : heroPlayLabel }}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -46,6 +61,7 @@
           @favourite="toggleFavourite(book.id)"
           @playlist="selectedPlaylistBook = book"
           @edit="router.push(`/edit/${book.id}`)"
+          @hide="handleHideBook"
           @delete="handleDeleteBook(book)"
         />
       </div>
@@ -95,7 +111,7 @@ import MobileSettingsNav from './MobileSettingsNav.vue';
 
 const route = useRoute();
 const router = useRouter();
-const { seriesList, updateBook, deleteBook, toggleFavourite } = useBooks();
+const { seriesList, updateBook, deleteBook, toggleFavourite, hideBook } = useBooks();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const selectedStatus = ref('all');
 const selectedPlaylistBook = ref(null);
@@ -166,12 +182,50 @@ const isBookActive = (book) => (
   ttsBook.value?.id === book.id && ttsStatus.value !== 'idle'
 );
 
+const readCount = computed(() => seriesBooks.value.filter((book) => normalizedStatus(book) === 'Read').length);
+const readPercent = computed(() => (
+  seriesBooks.value.length
+    ? Math.round((readCount.value / seriesBooks.value.length) * 100)
+    : 0
+));
+
+// Continue with the in-progress book; otherwise start the first unread one.
+const nextUpBook = computed(() => (
+  seriesBooks.value.find((book) => normalizedStatus(book) === 'Reading')
+  || seriesBooks.value.find((book) => normalizedStatus(book) === 'Unread')
+  || seriesBooks.value[0]
+));
+
+const anyBookActive = computed(() => (
+  ttsStatus.value === 'playing' && seriesBooks.value.some((book) => book.id === ttsBook.value?.id)
+));
+
+const heroPlayLabel = computed(() => (
+  nextUpBook.value && normalizedStatus(nextUpBook.value) === 'Reading' ? 'Continue' : 'Play'
+));
+
+const playSeries = () => {
+  if (anyBookActive.value) {
+    toggleTTS();
+    return;
+  }
+  if (ttsBook.value && seriesBooks.value.some((book) => book.id === ttsBook.value?.id) && ttsStatus.value === 'paused') {
+    toggleTTS();
+    return;
+  }
+  if (nextUpBook.value) playTTS(nextUpBook.value);
+};
+
 const handlePlay = (book) => {
   if (isBookActive(book)) {
     toggleTTS();
     return;
   }
   playTTS(book);
+};
+
+const handleHideBook = async (book) => {
+  await hideBook(book.id);
 };
 
 const handleDeleteBook = (book) => {
@@ -251,16 +305,49 @@ watch(seriesBooks, async (books) => {
 }
 
 .detail-hero {
+  position: relative;
   display: grid;
-  gap: 0.85rem;
-  margin-bottom: 1rem;
+  gap: 0.9rem;
+  overflow: hidden;
+  margin: 0 calc(-1 * var(--mobile-page-padding-inline)) 1.1rem;
+  padding: 1.4rem var(--mobile-page-padding-inline) 1.3rem;
+  border-radius: 0 0 24px 24px;
   text-align: center;
+}
+
+/* Blurred first-cover backdrop with a readability gradient over it. */
+.hero-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.hero-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(28px) saturate(1.25);
+  transform: scale(1.35);
+  opacity: 0.55;
+}
+
+.hero-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 0%,
+    color-mix(in srgb, var(--color-background-app) 55%, transparent) 62%,
+    var(--color-background-app) 100%
+  );
 }
 
 .cover-stack {
   position: relative;
+  z-index: 1;
   width: 230px;
-  height: 150px;
+  height: 152px;
   margin: 0 auto;
 }
 
@@ -268,12 +355,13 @@ watch(seriesBooks, async (books) => {
   position: absolute;
   top: 0;
   left: 0;
-  width: 86px;
-  height: 129px;
+  width: 88px;
+  height: 132px;
   overflow: hidden;
-  border-radius: 6px;
+  border: 2px solid rgba(255, 255, 255, 0.65);
+  border-radius: 8px;
   background: var(--color-surface-muted);
-  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.32);
   transform-origin: center bottom;
 }
 
@@ -285,28 +373,80 @@ watch(seriesBooks, async (books) => {
 }
 
 .detail-copy {
+  position: relative;
+  z-index: 1;
   min-width: 0;
 }
 
-.detail-copy p {
-  margin: 0 0 0.2rem;
-  color: var(--color-text-secondary);
-  font-size: var(--mobile-caption-size);
+.hero-eyebrow {
+  margin: 0 0 0.3rem;
+  color: var(--color-brand-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .detail-copy h1 {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: clamp(1.65rem, 8vw, 2rem);
-  font-weight: 500;
-  line-height: 1.1;
+  font-size: clamp(1.55rem, 7.5vw, 1.9rem);
+  font-weight: 600;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
 }
 
-.detail-copy span {
+.hero-meta {
   display: block;
-  margin-top: 0.35rem;
-  color: var(--color-text-muted);
+  margin-top: 0.4rem;
+  color: var(--color-text-secondary);
   font-size: var(--mobile-subtext-size);
+}
+
+.hero-progress {
+  width: min(230px, 70%);
+  height: 6px;
+  margin: 0.75rem auto 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-brand-primary) 16%, transparent);
+}
+
+.hero-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-brand-primary);
+  transition: width 0.4s ease;
+}
+
+.hero-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.9rem;
+}
+
+.hero-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 26px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-brand-primary);
+  color: #fff;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 10px 24px rgba(138, 43, 226, 0.35);
+}
+
+.hero-play i {
+  font-size: 20px;
+}
+
+.hero-play:active {
+  transform: scale(0.96);
 }
 
 .status-chips {

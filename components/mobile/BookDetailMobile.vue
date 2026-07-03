@@ -190,6 +190,13 @@ watch(
 <style scoped>
 .book-detail-page {
   width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.detail-shell {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .state-panel {
@@ -255,12 +262,14 @@ watch(
   font-size: clamp(1.4rem, 5.5vw, 1.7rem);
   font-weight: 500;
   line-height: 1.12;
+  overflow-wrap: anywhere;
 }
 
 .book-author,
 .book-series {
   margin: 0;
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .book-author {
@@ -409,5 +418,7 @@ watch(
   color: var(--color-text-secondary);
   font-size: 0.95rem;
   line-height: 1.65;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 </style>

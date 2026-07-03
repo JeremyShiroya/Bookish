@@ -427,6 +427,11 @@ const mobileChapterList = computed(() => chapterList.value.map((chapter, index) 
 
 function initialSectionIndex() {
   const total = chapterList.value.length
+  // Opened while this book is narrating (e.g. from the mini playing bar):
+  // start at the section being read aloud, not the saved progress.
+  if (total > 1 && ttsBook.value?.id === book.value?.id && ttsStatus.value !== 'idle') {
+    return Math.max(0, Math.min(total - 1, sectionForChunk(ttsChunkIdx.value)))
+  }
   const progress = Number(book.value?.progress) || 0
   if (total <= 1 || progress <= 0) return 0
   return Math.max(0, Math.min(total - 1, Math.round((progress / 100) * (total - 1))))
@@ -1419,12 +1424,20 @@ async function loadBook(id) {
   updateBookEdge()
   ensurePdfToc(id)
 
-  if (!isPdfBook.value && book.value?.progress > 0 && chapterList.value.length > 0) {
+  if (!isPdfBook.value && chapterList.value.length > 0
+    && (book.value?.progress > 0 || isCurrentBookNarrating.value)) {
     // Same formula as the mounting window seed, so the target is mounted.
     const safeIndex = initialSectionIndex()
     currentChapterIdx.value = safeIndex
     const el = document.getElementById(`ch-${safeIndex}`)
     if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' })
+
+    // Refine to the exact sentence once the highlight spans exist.
+    if (isCurrentBookNarrating.value) {
+      setTimeout(() => {
+        if (isCurrentBookNarrating.value) jumpToNarration()
+      }, 400)
+    }
   }
 
   if (!isPdfRenderable.value) {

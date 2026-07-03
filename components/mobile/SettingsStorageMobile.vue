@@ -68,6 +68,56 @@
       </template>
     </section>
 
+    <!-- Scanned folders -->
+    <section class="card">
+      <div class="card-head">
+        <i class="ri-folder-open-line"></i>
+        <div>
+          <h2>Scanned folders</h2>
+          <p>Folders Bookish checks for new PDF and EPUB books on every app open.</p>
+        </div>
+      </div>
+
+      <ul v-if="scanFolders.length" class="folder-list">
+        <li v-for="folder in scanFolders" :key="folder">
+          <i class="ri-folder-3-line"></i>
+          <span>{{ folderLabel(folder) }}</span>
+          <button type="button" :aria-label="`Stop scanning ${folder}`" @click="removeScanFolder(folder)">
+            <i class="ri-close-line"></i>
+          </button>
+        </li>
+      </ul>
+      <p v-else class="folder-empty">No folders selected — the device scan is off.</p>
+
+      <div class="folder-chips">
+        <button
+          v-for="suggestion in folderSuggestions"
+          :key="suggestion"
+          type="button"
+          class="folder-chip"
+          @click="addScanFolder(suggestion)"
+        >
+          + {{ suggestion }}
+        </button>
+      </div>
+
+      <form class="server-row" @submit.prevent="addScanFolder(newFolderInput)">
+        <input
+          v-model="newFolderInput"
+          class="server-input"
+          type="text"
+          placeholder="Folder name or full path"
+          aria-label="Folder to scan"
+        />
+        <button class="primary-btn compact" type="submit">Add</button>
+      </form>
+
+      <button class="secondary-btn scan-now" type="button" @click="scanNow">
+        <i class="ri-refresh-line"></i>
+        Scan device now
+      </button>
+    </section>
+
     <!-- Hidden books -->
     <section class="card">
       <div class="card-head">
@@ -169,6 +219,14 @@ import {
   writeStoredApiBaseUrl,
 } from '~/composables/useApiEndpoint'
 import { backfillLibraryMetadata } from '~/composables/useMetadataBackfill'
+import {
+  DEFAULT_SCAN_FOLDERS,
+  normalizeScanFolder,
+  readScanFolders,
+  syncDeviceLibrary,
+  writeScanFolders,
+} from '~/composables/useDeviceLibrarySync'
+import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 import { useBooks } from '~/composables/useBooks'
 import { useBookStorage } from '~/composables/useBookStorage'
@@ -264,6 +322,43 @@ const startBackfill = async () => {
 
 const stopBackfill = () => {
   _stopRequested = true
+}
+
+// ── Scanned folders ─────────────────────────────────────────────────────────
+
+const scanFolders = ref(readScanFolders())
+const newFolderInput = ref('')
+
+const folderSuggestions = computed(() => (
+  ['Download', 'Documents', 'Books']
+    .filter((name) => !scanFolders.value.includes(normalizeScanFolder(name)))
+))
+
+const folderLabel = (folder) => (
+  folder === DEFAULT_SCAN_FOLDERS[0] ? 'All storage' : folder.replace('/storage/emulated/0/', '')
+)
+
+const addScanFolder = (value) => {
+  const normalized = normalizeScanFolder(value)
+  if (!normalized) return
+  if (scanFolders.value.includes(normalized)) {
+    addToast('That folder is already being scanned.', 'info')
+    return
+  }
+  scanFolders.value = writeScanFolders([...scanFolders.value, normalized])
+  newFolderInput.value = ''
+}
+
+const removeScanFolder = (folder) => {
+  scanFolders.value = writeScanFolders(scanFolders.value.filter((item) => item !== folder))
+}
+
+const scanNow = () => {
+  if (!isNativeCapacitorPlatform()) {
+    addToast('Device scanning runs in the installed mobile app.', 'info')
+    return
+  }
+  syncDeviceLibrary()
 }
 
 // ── Hidden books ────────────────────────────────────────────────────────────
@@ -637,6 +732,77 @@ onMounted(() => {
   margin: 8px 0 0;
   color: var(--color-text-muted);
   font-size: 12px;
+}
+
+.folder-list {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.folder-list li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 30px;
+  align-items: center;
+  column-gap: 8px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--color-surface-secondary);
+  color: var(--color-text-primary);
+  font-size: 13.5px;
+}
+
+.folder-list li i {
+  color: var(--color-brand-primary);
+}
+
+.folder-list li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-list li button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.folder-empty {
+  margin: 0 0 10px;
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+}
+
+.folder-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.folder-chip {
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px dashed var(--color-border-card);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12.5px;
+}
+
+.scan-now {
+  margin-top: 10px;
 }
 
 .failures-overlay {

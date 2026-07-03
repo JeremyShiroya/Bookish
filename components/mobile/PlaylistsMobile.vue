@@ -2,9 +2,6 @@
   <div class="playlists-container">
     <MobileTopNav />
 
-    <div class="playlists-header">
-      <h1 class="playlists-title">Playlists</h1>
-    </div>
 
     <div v-if="playlistsWithBooks.length > 0" class="playlists-grid">
       <div
@@ -235,18 +232,9 @@ const coverFallback = (event, title) => {
   padding-bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
 }
 
-/* ── Header ──────────────────────────────────────────────────── */
 
-.playlists-header {
-  margin-bottom: 1.75rem;
-}
 
-.playlists-title {
-  font-size: 1.5rem;
-  font-weight: 400;
-  color: var(--color-brand-primary);
-  margin: 0;
-}
+
 
 /* ── Grid ────────────────────────────────────────────────────── */
 
@@ -478,9 +466,7 @@ const coverFallback = (event, title) => {
   box-shadow: var(--shadow-brand-button-hover);
 }
 
-  .playlists-header {
-    display: none;
-  }
+
 
   .playlists-grid {
     grid-template-columns: 1fr;

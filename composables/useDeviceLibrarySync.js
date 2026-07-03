@@ -16,6 +16,11 @@ import { useToast } from '~/composables/useToast'
 
 export const BOOKISH_DEVICE_IMPORTS_KEY = 'bookish:device-imports'
 export const BOOKISH_DEVICE_SYNC_ASKED_KEY = 'bookish:device-sync-asked'
+export const BOOKISH_SCAN_FOLDERS_KEY = 'bookish:scan-folders'
+
+// Default: the whole shared storage. Users can narrow this from
+// Settings → Storage → Scanned folders.
+export const DEFAULT_SCAN_FOLDERS = Object.freeze(['/storage/emulated/0'])
 
 const DeviceBooks = registerPlugin('DeviceBooks')
 
@@ -40,6 +45,41 @@ export function writeImportRegistry(registry, storage = resolveStorage()) {
   } catch {
     // Quota errors just mean the same files get re-checked next open.
   }
+}
+
+export function normalizeScanFolder(value) {
+  const cleaned = String(value || '').trim().replace(/\/+$/, '')
+  if (!cleaned) return ''
+  if (cleaned.startsWith('/')) return cleaned
+  // Accept bare folder names like "Download" relative to shared storage.
+  return `/storage/emulated/0/${cleaned.replace(/^\/+/, '')}`
+}
+
+export function readScanFolders(storage = resolveStorage()) {
+  if (!storage) return [...DEFAULT_SCAN_FOLDERS]
+  try {
+    const parsed = JSON.parse(storage.getItem(BOOKISH_SCAN_FOLDERS_KEY) || 'null')
+    if (!Array.isArray(parsed)) return [...DEFAULT_SCAN_FOLDERS]
+    const folders = parsed.map(normalizeScanFolder).filter(Boolean)
+    return folders.length ? folders : []
+  } catch {
+    return [...DEFAULT_SCAN_FOLDERS]
+  }
+}
+
+export function writeScanFolders(folders, storage = resolveStorage()) {
+  const normalized = [...new Set((folders || []).map(normalizeScanFolder).filter(Boolean))]
+  try {
+    storage?.setItem(BOOKISH_SCAN_FOLDERS_KEY, JSON.stringify(normalized))
+  } catch {}
+  return normalized
+}
+
+export function fileInScanFolders(path, folders) {
+  const target = String(path || '')
+  return (folders || []).some((folder) => (
+    target === folder || target.startsWith(`${folder}/`)
+  ))
 }
 
 // Reading a file into the WebView goes through a base64 bridge — very large
@@ -261,10 +301,22 @@ export async function syncDeviceLibrary() {
   try {
     if (!(await ensureStoragePermission(addToast, ask))) return
 
+    const scanFolders = readScanFolders()
+    if (!scanFolders.length) {
+      addToast('Device scan is off — no folders are selected in Settings → Storage.', 'info')
+      return
+    }
+
+    addToast('Scanning your device for new books…', 'info')
+
     const { files } = await DeviceBooks.scan()
     const registry = readImportRegistry()
-    const newFiles = selectNewDeviceFiles(files, registry)
-    if (!newFiles.length) return
+    const inFolders = (files || []).filter((file) => fileInScanFolders(file.path, scanFolders))
+    const newFiles = selectNewDeviceFiles(inFolders, registry)
+    if (!newFiles.length) {
+      addToast('Device scan complete — no new books found.', 'success')
+      return
+    }
 
     if (!initialized.value) await fetchAllData()
 
