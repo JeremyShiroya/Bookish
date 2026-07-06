@@ -326,7 +326,7 @@ export async function verifyBookMetadataResults<T extends Record<string, any>>(
   options: AiVerifierOptions = {},
 ): Promise<Array<T & { aiVerified?: boolean; aiProvider?: string; aiWarnings?: string[] }>> {
   const sanitized = results.map((result) => sanitizeBookMetadataResult(targetTitle, targetAuthor, result))
-  const env = options.env || process.env
+  const env = options.env || (typeof process !== 'undefined' ? process.env : {})
   const config = resolveConfig(env)
   if (!config || !sanitized.length) return sanitized
 

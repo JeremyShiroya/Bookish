@@ -312,8 +312,12 @@ function dedupeGoogleResults(results: GoogleImageResult[]) {
 }
 
 async function searchGoogleProgrammableImages(query: string, options: GoogleImageOptions, target: number): Promise<GoogleImageResult[]> {
-  const key = process.env.GOOGLE_SEARCH_API_KEY;
-  const cx = process.env.GOOGLE_SEARCH_CX;
+  // `process` is undefined in the native WebView — accessing process.env there
+  // throws "process is not defined", which would reject the whole image search.
+  // Guard it so on-device search simply falls through to HTML scraping.
+  const env = typeof process !== 'undefined' ? process.env : undefined;
+  const key = env?.GOOGLE_SEARCH_API_KEY;
+  const cx = env?.GOOGLE_SEARCH_CX;
   if (!key || !cx) return [];
 
   try {

@@ -51,10 +51,36 @@ describe('mobile native app configuration', () => {
   test('native WebView advertises Edge so on-device Read Aloud synthesis works', () => {
     const capacitorConfig = read('capacitor.config.ts')
     const ttsComposable = read('composables/useTTS.js')
+    const mobileDriver = read('composables/tts/mobileTtsDriver.js')
 
     expect(capacitorConfig).toContain("appendUserAgent: 'EdgA/143.0.0.0'")
-    expect(ttsComposable).toContain('synthesizeEdgeSpeechInBrowser')
+    // Edge on-device synthesis now lives in the isolated mobile driver…
+    expect(mobileDriver).toContain('synthesizeEdgeSpeechInBrowser')
+    // …and the shared engine routes native playback through it.
+    expect(ttsComposable).toContain('synthesizeMobileSpeech')
     expect(ttsComposable).toContain('isNativeCapacitorPlatform')
+  })
+
+  test('TTS is split into independent desktop and mobile drivers', () => {
+    const desktopDriver = read('composables/tts/desktopTtsDriver.js')
+    const mobileDriver = read('composables/tts/mobileTtsDriver.js')
+    const nativeSpeech = read('composables/tts/nativeSpeech.js')
+    const ttsComposable = read('composables/useTTS.js')
+
+    // Desktop synth talks to the server endpoint.
+    expect(desktopDriver).toContain('/api/tts')
+    expect(desktopDriver).toContain('synthesizeDesktopSpeech')
+
+    // Mobile falls back to the phone's built-in voice when Edge fails, via the
+    // native TTS plugin (the Android WebView has no window.speechSynthesis).
+    expect(mobileDriver).toContain('nativeSpeechSupported')
+    expect(mobileDriver).toContain('native: true')
+    expect(nativeSpeech).toContain('@capacitor-community/text-to-speech')
+    expect(nativeSpeech).toContain('createNativeSpeechAudio')
+
+    // The shared engine selects the driver by platform.
+    expect(ttsComposable).toContain('synthesizeDesktopSpeech')
+    expect(ttsComposable).toContain('synthesizeMobileSpeech')
   })
 
   test('native builds can reach a real Nuxt backend for server-backed features', () => {

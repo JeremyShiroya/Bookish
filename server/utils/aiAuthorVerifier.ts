@@ -249,7 +249,7 @@ export async function verifyAuthorDetails(
   details: AuthorDetails,
   options: AiAuthorOptions = {},
 ): Promise<AuthorDetails> {
-  const env = options.env || process.env
+  const env = options.env || (typeof process !== 'undefined' ? process.env : {})
   const config = resolveConfig(env)
   if (!config || details.source === 'none') return details
 

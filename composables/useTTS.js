@@ -1,7 +1,9 @@
 import { computed } from 'vue'
 import { useState } from '#app'
 import { useApiEndpoint } from '~/composables/useApiEndpoint'
-import { synthesizeEdgeSpeechInBrowser } from '~/composables/useEdgeSpeechClient'
+import { synthesizeDesktopSpeech } from '~/composables/tts/desktopTtsDriver'
+import { synthesizeMobileSpeech, resetMobileTtsDriver } from '~/composables/tts/mobileTtsDriver'
+import { createNativeSpeechAudio, loadNativeVoices } from '~/composables/tts/nativeSpeech'
 import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
 import { firstChunkForPage } from '~/composables/usePdfManifest'
 import { useBookishSettings } from '~/composables/useBookishSettings'
@@ -504,24 +506,18 @@ export function findContentStart(chunks) {
 
 // ── Composable ─────────────────────────────────────────────────────────────
 
-// Synthesize one sentence of speech. Native builds talk to the Edge Read
-// Aloud endpoint straight from the WebView (no Nuxt server on device); the
-// web app keeps using the server endpoint. If on-device synthesis fails and
-// a backend is configured, the server is tried as a fallback.
+// Synthesize one sentence of speech by delegating to the platform's own,
+// independent TTS driver:
+//   • desktop/web → composables/tts/desktopTtsDriver (server /api/tts)
+//   • native app  → composables/tts/mobileTtsDriver  (WebView Edge + device-voice
+//                    fallback, returned as a { native: true } marker)
+// The two drivers are isolated so a change to one platform never affects the
+// other. Returns either { audio, boundaries } or { native, text, voice, speed }.
 async function synthesizeSpeech({ text, voice, speed, apiUrl, apiBaseUrl }) {
-  const fetchFromServer = () => $fetch(apiUrl('/api/tts'), {
-    method: 'POST',
-    body: { text, voice, speed },
-  })
-
-  if (!isNativeCapacitorPlatform()) return fetchFromServer()
-
-  try {
-    return await synthesizeEdgeSpeechInBrowser({ text, voice, speed })
-  } catch (error) {
-    if (!apiBaseUrl) throw error
-    return fetchFromServer()
+  if (isNativeCapacitorPlatform()) {
+    return synthesizeMobileSpeech({ text, voice, speed, apiUrl, apiBaseUrl })
   }
+  return synthesizeDesktopSpeech({ text, voice, speed, apiUrl })
 }
 
 export const useTTS = () => {
@@ -642,7 +638,9 @@ export const useTTS = () => {
     if (_currentAudio) {
       _currentAudio.onended = null
       _currentAudio.onerror = null
-      _currentAudio.pause()
+      // Device-voice player: fully cancel the utterance, not just pause it.
+      if (_currentAudio.stop) _currentAudio.stop()
+      else _currentAudio.pause()
       _currentAudio = null
     }
     _prefetchChunk = null
@@ -689,6 +687,11 @@ export const useTTS = () => {
         chunkText: chunk,
         audio: data.audio ?? null,
         boundaries: data.boundaries ?? [],
+        // Device-voice marker: no pre-synthesized audio; the engine speaks it
+        // live via the Web Speech API when it reaches this chunk.
+        native: !!data.native,
+        nativeText: data.native ? (data.text ?? chunk) : undefined,
+        nativeVoice: data.native ? data.voice : undefined,
       }
       _cacheAudio(chunkIdx, result)
       return result
@@ -757,7 +760,13 @@ export const useTTS = () => {
       requestedChunkText,
     )
     if (prefetched) {
-      chunkData = { audio: prefetched.audio, boundaries: prefetched.boundaries ?? [] }
+      chunkData = {
+        audio: prefetched.audio,
+        boundaries: prefetched.boundaries ?? [],
+        native: !!prefetched.native,
+        nativeText: prefetched.nativeText,
+        nativeVoice: prefetched.nativeVoice,
+      }
       _prefetchChunk = null
     } else {
       _prefetchChunk = null
@@ -769,7 +778,7 @@ export const useTTS = () => {
     if (ttsStatus.value !== 'playing') return
     if (_chunkIdx !== requestedChunkIdx || _chunks[requestedChunkIdx] !== requestedChunkText) return
 
-    if (!chunkData?.audio) {
+    if (!chunkData || (!chunkData.audio && !chunkData.native)) {
       const { addToast } = useToast()
       addToast('TTS failed — check your connection.', 'error')
       ttsPlayingChunkIdx.value = -1
@@ -778,7 +787,25 @@ export const useTTS = () => {
       return
     }
 
-    const audio = new Audio(chunkData.audio)
+    // Build the player: a device-voice speaker for native chunks (no timed word
+    // boundaries → highlighting is skipped), otherwise an <audio> element.
+    let audio
+    if (chunkData.native) {
+      const voices = await loadNativeVoices()
+      // Re-check generation: loading device voices can await on first use.
+      if (_prefetchGeneration !== myGen || ttsStatus.value !== 'playing') return
+      if (_chunkIdx !== requestedChunkIdx || _chunks[requestedChunkIdx] !== requestedChunkText) return
+      audio = createNativeSpeechAudio({
+        text: chunkData.nativeText ?? requestedChunkText,
+        voice: chunkData.nativeVoice ?? normalizeAvailableVoice(ttsVoiceId.value),
+        speed: ttsSpeed.value,
+        volume: ttsVolume.value,
+        voices,
+      })
+      chunkData.boundaries = []
+    } else {
+      audio = new Audio(chunkData.audio)
+    }
     audio.volume = ttsVolume.value
     _currentAudio = audio
     _currentBoundaries = chunkData.boundaries ?? []
@@ -1001,6 +1028,9 @@ export const useTTS = () => {
   const setVoice = (voiceId) => {
     const nextSettings = updateSettings({ ttsVoice: normalizeAvailableVoice(voiceId) })
     ttsVoiceId.value = nextSettings.ttsVoice
+    // Explicitly choosing a voice is a natural point to retry cloud synthesis
+    // if we'd fallen back to the device voice earlier in the session.
+    resetMobileTtsDriver()
     _clearAudioCache()
     _persistSession()
     if (ttsStatus.value === 'playing') {
