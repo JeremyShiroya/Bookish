@@ -12,17 +12,20 @@ describe('mobile UX batch', () => {
     expect(books).toContain('class="add-book-fab"')
     expect(books).toMatch(/\.add-book-fab\s*\{[^}]*position:\s*fixed/)
     expect(books).not.toContain('mobile-add-book-btn"')
-    // Status chips live on the left; the view toggle is pinned to the right end.
+    // The reading-status Filter dropdown lives on the left; the view toggle is
+    // pinned to the right end.
     const controlsLeft = books.slice(books.indexOf('class="controls-left"'), books.indexOf('class="controls-right"'))
     const controlsRight = books.slice(books.indexOf('class="controls-right"'), books.indexOf('Grid View'))
-    expect(controlsLeft).toContain('status-chips')
+    expect(controlsLeft).toContain('filter-dropdown')
     expect(controlsLeft).not.toContain('view-chips')
     expect(controlsRight).toContain('view-chips')
   })
 
   test('mobile books page carries no desktop-only leftovers', () => {
     const books = read('components/mobile/BooksMobile.vue')
-    for (const marker of ['data-table', 'pagination', 'isMobileViewport', 'filter-dropdown', 'sfp-pill', 'metric-card', 'books-header']) {
+    // The Filter dropdown (filter-dropdown / sfp-pill) is now an intentional
+    // mobile control, so it is no longer treated as a desktop-only leftover.
+    for (const marker of ['data-table', 'pagination', 'isMobileViewport', 'metric-card', 'books-header']) {
       expect(books, marker).not.toContain(marker)
     }
   })
@@ -104,12 +107,17 @@ describe('mobile UX batch', () => {
     expect(plugin).toContain('Base64.encodeToString')
   })
 
-  test('series card blur uses the playlist cover-image technique, not the colour bleed', () => {
+  test('series card blur paints a real cover image (series-detail hero technique)', () => {
     const seriesCard = read('components/shared/SeriesCollageCard.vue')
-    // The opt-in blur is the playlists-card technique (real blurred cover), and
-    // the default background is the original #e8e8f1 surface, not white.
+    // The opt-in blur paints a real <img> cover — the same technique as the
+    // series-detail hero backdrop — so device cover URLs render and a dead cover
+    // degrades via onCoverError, rather than a CSS background-image.
     expect(seriesCard).toContain('card-bg')
+    expect(seriesCard).toMatch(/\.card-bg img\s*\{/)
     expect(seriesCard).toContain('filter: blur(25px) saturate(150%)')
+    expect(seriesCard).toContain('onCoverError($event, series.name)')
+    expect(seriesCard).not.toMatch(/\.card-bg\s*\{[^}]*background-size/)
+    // The default background stays the original #e8e8f1 surface, not white.
     expect(seriesCard).toContain('#e8e8f1')
     expect(seriesCard).not.toContain('color-mix(in srgb, var(--color-surface-primary)')
 

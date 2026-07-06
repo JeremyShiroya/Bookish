@@ -28,31 +28,44 @@
           <!-- Controls Row (chips + filters on left, add book + view toggle on right) -->
           <div class="controls-row in-container">
             <div class="controls-left">
-              <!-- Reading Status Chips -->
-              <div
-                class="status-chips"
-                ref="chipsRef"
-                @mouseleave="chipHoverIndex = -1"
-              >
-                <div
-                  class="chip-highlight"
-                  :style="chipHighlightStyle"
-                  :class="{ 'is-active': isChipHighlightActive }"
-                ></div>
+              <!-- Reading-status filter dropdown -->
+              <div class="filter-dropdown" ref="filterRef">
                 <button
-                  class="status-chip"
-                  :class="{ active: selectedStatus === 'all' }"
-                  @click="setStatus('all')"
-                  @mouseenter="chipHoverIndex = 0"
-                >All</button>
-                <button
-                  v-for="(status, idx) in readingStatuses"
-                  :key="status"
-                  class="status-chip"
-                  :class="{ active: selectedStatus === status }"
-                  @click="setStatus(status)"
-                  @mouseenter="chipHoverIndex = idx + 1"
-                >{{ status }}</button>
+                  type="button"
+                  class="filter-button"
+                  :class="{ open: filterOpen }"
+                  @click="filterOpen = !filterOpen"
+                >
+                  <i class="ri-filter-3-line"></i>
+                  <span class="filter-label-text">Filter</span>
+                  <span v-if="selectedStatus !== 'all'" class="filter-active-dot"></span>
+                  <i class="ri-arrow-down-s-line dropdown-arrow" :class="{ rotated: filterOpen }"></i>
+                </button>
+
+                <div v-show="filterOpen" class="dropdown-menu filter-panel">
+                  <div class="sfp-section">
+                    <div class="sfp-section-header">
+                      <i class="ri-bookmark-line"></i>
+                      Status
+                    </div>
+                    <div class="sfp-pills">
+                      <button
+                        type="button"
+                        class="sfp-pill"
+                        :class="{ active: selectedStatus === 'all' }"
+                        @click="setStatus('all')"
+                      >All</button>
+                      <button
+                        v-for="status in readingStatuses"
+                        :key="status"
+                        type="button"
+                        class="sfp-pill"
+                        :class="{ active: selectedStatus === status }"
+                        @click="setStatus(status)"
+                      >{{ status }}</button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -286,49 +299,9 @@ const bookMetrics = computed(() => {
   };
 });
 
-// Sliding pill for status chips (mirrors Sidebar.vue pattern)
-const chipsRef = ref(null);
-const chipHoverIndex = ref(-1);
-const chipHighlightStyle = ref({ left: '0px', width: '0px', opacity: 0 });
-const isChipHighlightActive = ref(false);
-
-const activeChipIndex = computed(() => {
-  if (selectedStatus.value === 'all') return 0;
-  const idx = readingStatuses.indexOf(selectedStatus.value);
-  return idx === -1 ? 0 : idx + 1;
-});
-
-const updateChipHighlight = async () => {
-  await nextTick();
-  if (!chipsRef.value) return;
-
-  let targetIndex = chipHoverIndex.value;
-  let isActive = false;
-
-  if (targetIndex === -1) {
-    targetIndex = activeChipIndex.value;
-    isActive = true;
-  } else if (targetIndex === activeChipIndex.value) {
-    isActive = true;
-  }
-
-  isChipHighlightActive.value = isActive;
-
-  const chips = chipsRef.value.querySelectorAll('.status-chip');
-  const targetEl = chips[targetIndex];
-  if (!targetEl) {
-    chipHighlightStyle.value = { ...chipHighlightStyle.value, opacity: 0 };
-    return;
-  }
-
-  chipHighlightStyle.value = {
-    left: `${targetEl.offsetLeft}px`,
-    width: `${targetEl.offsetWidth}px`,
-    opacity: 1,
-  };
-};
-
-watch([activeChipIndex, chipHoverIndex], updateChipHighlight);
+// Reading-status filter dropdown (open/close + outside-click dismissal)
+const filterRef = ref(null);
+const filterOpen = ref(false);
 
 // Sliding pill for view-mode chips (Grid / Table)
 const viewChipsRef = ref(null);
@@ -376,6 +349,13 @@ const displayedBooks = computed(() => filteredBooks.value);
 // Methods
 const setStatus = (value) => {
   selectedStatus.value = value;
+  filterOpen.value = false;
+};
+
+const handleClickOutside = (event) => {
+  if (!event.target.closest(".filter-dropdown")) {
+    filterOpen.value = false;
+  }
 };
 
 
@@ -406,21 +386,21 @@ const deleteBook = () => {
 };
 
 const handleResize = () => {
-  updateChipHighlight();
   updateViewHighlight();
 };
 
 onMounted(() => {
   handleResize();
   setTimeout(() => {
-    updateChipHighlight();
     updateViewHighlight();
   }, 100);
   window.addEventListener("resize", handleResize);
+  document.addEventListener("click", handleClickOutside);
 });
 
 onUnmounted(() => {
   window.removeEventListener("resize", handleResize);
+  document.removeEventListener("click", handleClickOutside);
 });
 </script>
 
@@ -430,9 +410,6 @@ onUnmounted(() => {
   margin: 0 auto;
 }
 
-
-
-
 .controls-row {
   display: flex;
   justify-content: space-between;
@@ -440,19 +417,6 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: 1rem;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /* Floating add button — fixed above the bottom nav, unaffected by scroll. */
 .add-book-fab {
@@ -507,16 +471,6 @@ onUnmounted(() => {
   font-size: 1.125rem;
 }
 
-
-
-
-
-
-
-
-
-
-
 /* Icon-only chips inside view toggle */
 .view-chip-icon {
   padding: 0.4rem 0.65rem;
@@ -538,7 +492,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem;
-  background: var(--color-surface-card);
+  background: var(--color-surface-hover);
   border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
 }
@@ -1024,18 +978,136 @@ onUnmounted(() => {
 
 
 
-/* === Status Chips (filter row) === */
-.status-chips {
+/* === Reading-status Filter dropdown === */
+.filter-dropdown {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem;
-  background: var(--color-surface-card);
-  border: 1px solid var(--color-border-card);
-  border-radius: 10px;
 }
 
+.filter-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-card);
+  border-radius: var(--mobile-control-radius);
+  background: var(--color-surface-card);
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: var(--mobile-caption-size);
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.filter-button:hover,
+.filter-button.open {
+  border-color: var(--color-brand-primary);
+  background: var(--color-brand-primary-faint);
+  color: var(--color-text-primary);
+}
+
+.filter-button > i:first-child {
+  font-size: 1rem;
+  color: var(--color-text-secondary);
+}
+
+.filter-button.open > i:first-child {
+  color: var(--color-brand-primary);
+}
+
+.filter-label-text {
+  font-weight: 500;
+}
+
+.filter-active-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-brand-primary);
+}
+
+.filter-button .dropdown-arrow {
+  font-size: 1rem;
+  color: var(--color-text-muted);
+  transition: transform 0.2s ease;
+}
+
+.filter-button .dropdown-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.filter-panel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 50;
+  min-width: 240px;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border-card);
+  border-radius: 14px;
+  background: var(--color-background-app);
+  box-shadow: var(--shadow-modal);
+}
+
+.sfp-section {
+  padding: 0.6rem 0.5rem;
+}
+
+.sfp-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.55rem;
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.sfp-section-header i {
+  color: var(--color-brand-primary);
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.sfp-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.sfp-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.32rem 0.8rem;
+  border: 1px solid var(--color-border-card);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--mobile-caption-size);
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.sfp-pill:hover {
+  border-color: var(--color-brand-primary);
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+}
+
+.sfp-pill.active {
+  border-color: var(--color-brand-primary);
+  background: var(--color-surface-hover);
+  color: var(--color-brand-primary);
+  font-weight: 500;
+}
+
+/* === View-toggle chips === */
 .chip-highlight {
   position: absolute;
   top: 4px;
@@ -1512,16 +1584,11 @@ onUnmounted(() => {
     padding: 0 var(--mobile-page-padding-inline) 16px;
   }
 
-  /* One row: status chips scroll on the left, view toggle pinned right. */
+  /* One row: Filter dropdown on the left, view toggle pinned right. */
   .controls-left {
     flex: 1 1 auto;
     min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .controls-left::-webkit-scrollbar {
-    display: none;
+    overflow: visible;
   }
 
   .controls-right {
@@ -1530,7 +1597,6 @@ onUnmounted(() => {
   }
 
 
-  .status-chips,
   .view-chips {
     gap: 6px;
     padding: 0;
@@ -1569,7 +1635,8 @@ onUnmounted(() => {
   }
 
   .view-chip-icon.active {
-    background: var(--color-brand-primary-soft);
+      background: var(--color-surface-hover);
+
     color: var(--color-brand-primary);
   }
 

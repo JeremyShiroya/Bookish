@@ -215,17 +215,17 @@
 
           <div v-if="voicePickerOpen" class="voice-list" role="listbox" aria-label="Narrator voices">
             <button
-              v-for="voice in ttsVoices"
+              v-for="voice in displayVoices"
               :key="voice.id"
               type="button"
               class="voice-option"
-              :class="{ active: voice.id === ttsVoiceId }"
+              :class="{ active: voice.id === activeVoiceId }"
               role="option"
-              :aria-selected="voice.id === ttsVoiceId"
+              :aria-selected="voice.id === activeVoiceId"
               @click="chooseVoice(voice.id)"
             >
               <span>{{ voice.name }}</span>
-              <i v-if="voice.id === ttsVoiceId" class="ri-check-line"></i>
+              <i v-if="voice.id === activeVoiceId" class="ri-check-line"></i>
             </button>
           </div>
 
@@ -279,6 +279,7 @@ import { onCoverError } from "~/composables/useCoverFallback";
 import PdfViewer from "~/components/shared/PdfViewer.vue";
 import SkeletonLoader from "~/components/shared/SkeletonLoader.vue";
 import { useTTS } from "~/composables/useTTS";
+import { isNativeCapacitorPlatform } from "~/composables/useNativePlatform";
 import MobileBottomNav from "./MobileBottomNav.vue";
 
 const props = defineProps({
@@ -339,6 +340,15 @@ const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
 const mediaOpen = ref(false);
 const voicePickerOpen = ref(false);
 const replaceBottomNav = ref(false);
+const isOffline = ref(false);
+
+// On the native app, an offline device can't reach Edge cloud voices — narration
+// falls back to the phone's built-in voice. Surface that in the picker instead of
+// dangling Edge voice names the device can't actually use.
+const OFFLINE_VOICE = { id: "__offline_device__", name: "Offline voice" };
+const useOfflineVoice = computed(() => isNativeCapacitorPlatform() && isOffline.value);
+const displayVoices = computed(() => (useOfflineVoice.value ? [OFFLINE_VOICE] : ttsVoices.value));
+const activeVoiceId = computed(() => (useOfflineVoice.value ? OFFLINE_VOICE.id : ttsVoiceId.value));
 let lastScrollY = 0;
 let downTravel = 0;
 let upTravel = 0;
@@ -362,6 +372,7 @@ const chapterLabel = computed(() => {
 });
 
 const currentVoiceName = computed(() => {
+  if (useOfflineVoice.value) return OFFLINE_VOICE.name;
   const voice = ttsVoices.value.find((item) => item.id === ttsVoiceId.value);
   return voice ? voice.name : "Switch narrator";
 });
@@ -397,7 +408,9 @@ const toggleMediaPlay = () => {
 };
 
 const chooseVoice = (voiceId) => {
-  setVoice(voiceId);
+  // The offline entry is informational — keep the underlying Edge selection so it
+  // resumes when the device is back online.
+  if (voiceId !== OFFLINE_VOICE.id) setVoice(voiceId);
   voicePickerOpen.value = false;
 };
 
@@ -586,14 +599,23 @@ const onScroll = () => {
   else if (upTravel > 14) replaceBottomNav.value = false;
 };
 
+const updateOnlineStatus = () => {
+  isOffline.value = typeof navigator !== "undefined" && navigator.onLine === false;
+};
+
 onMounted(() => {
   lastScrollY = window.scrollY || 0;
   window.addEventListener("scroll", onScroll, { passive: true });
+  updateOnlineStatus();
+  window.addEventListener("online", updateOnlineStatus);
+  window.addEventListener("offline", updateOnlineStatus);
   observePlaceholders();
 });
 
 onUnmounted(() => {
   window.removeEventListener("scroll", onScroll);
+  window.removeEventListener("online", updateOnlineStatus);
+  window.removeEventListener("offline", updateOnlineStatus);
   cancelLongPress();
   _placeholderObserver?.disconnect();
   if (_mountScrollRaf !== null) cancelAnimationFrame(_mountScrollRaf);

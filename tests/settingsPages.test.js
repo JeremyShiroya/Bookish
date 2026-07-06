@@ -61,6 +61,20 @@ describe('settings pages wiring', () => {
     expect(read('components/mobile/FavouritesMobile.vue')).not.toContain('favourites-header')
     expect(read('components/mobile/BooksMobile.vue')).not.toContain('data-table')
     expect(read('components/mobile/BooksMobile.vue')).not.toContain('pagination')
-    expect(read('components/mobile/BooksMobile.vue')).not.toContain('filter-dropdown')
+  })
+
+  test('mobile books page filters reading status via a Filter dropdown (All default)', () => {
+    const books = read('components/mobile/BooksMobile.vue')
+
+    // Reading status is chosen from a Filter dropdown (styled after the desktop
+    // Filter panel), replacing the old inline status chips.
+    expect(books).toContain('filter-dropdown')
+    expect(books).toContain('filter-panel')
+    expect(books).toContain("setStatus('all')")
+    expect(books).toContain('readingStatuses')
+    // All is the default selection.
+    expect(books).toContain('ref("all")')
+    // The old sliding-chip status selector is gone.
+    expect(books).not.toContain('status-chips')
   })
 })

@@ -5,14 +5,14 @@
     type="button"
     @click="$emit('open', series)"
   >
-    <!-- Optional blurred cover-image background (same technique as the
-         playlists-page cards). Not the detail-hero colour bleed. -->
+    <!-- Optional blurred cover-image background. Uses a real <img> (the same
+         technique as the series-detail hero backdrop) rather than a CSS
+         background-image, so device/blob cover URLs render and a dead cover
+         degrades to the branded placeholder via onCoverError. -->
     <template v-if="background === 'blur' && coverStack.length">
-      <span
-        class="card-bg"
-        :style="{ backgroundImage: `url(${coverStack[0]})` }"
-        aria-hidden="true"
-      ></span>
+      <span class="card-bg" aria-hidden="true">
+        <img :src="coverStack[0]" alt="" @error="onCoverError($event, series.name)" />
+      </span>
       <span class="card-bg-overlay" aria-hidden="true"></span>
     </template>
 
@@ -158,15 +158,21 @@ const fanStyle = (i, n) => {
   box-shadow: 0 26px 52px rgba(15, 23, 42, 0.18);
 }
 
-/* ── Blurred cover-image background (playlists-card technique) ─────────────── */
+/* ── Blurred cover-image background (series-detail hero technique) ─────────── */
 .card-bg {
   position: absolute;
-  inset: -20px;
+  inset: 0;
   z-index: 0;
-  background-size: cover;
-  background-position: center;
+  overflow: hidden;
+}
+
+.card-bg img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   filter: blur(25px) saturate(150%);
-  transform: scale(1.2);
+  transform: scale(1.35);
 }
 
 .card-bg-overlay {
