@@ -335,5 +335,28 @@ export function buildMetadataResults(
       seen.add(key);
       return true;
     })
+    .map(sanitizeMetadataResult)
     .slice(0, 8);
+}
+
+// Deterministic guard against obviously-wrong series values (e.g. a byline
+// scraped as a series name, or the series simply echoing the author). This
+// runs on every path, so the native app — which has no Groq verification —
+// still gets curated results.
+export function sanitizeMetadataResult<T extends { series?: string | null; author?: string | null; seriesInstallment?: string | null; seriesTotal?: string | null }>(item: T): T {
+  const series = (item.series ?? '').toString().trim();
+  if (!series) return item;
+
+  const author = (item.author ?? '').toString().trim();
+  const norm = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const bogus =
+    /^by\b/i.test(series)                          // "By Author Name"
+    || !/[a-z]/i.test(series)                      // digits / punctuation only
+    || (author && norm(series) === norm(author))   // series == author
+    || (author && norm(series) === norm(`by${author}`));
+
+  if (bogus) {
+    return { ...item, series: null, seriesInstallment: null, seriesTotal: null };
+  }
+  return item;
 }

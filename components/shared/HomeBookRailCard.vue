@@ -6,6 +6,7 @@
         class="home-book-cover"
         :src="book.cover"
         :alt="book.title"
+        @error="onCoverError($event, book.title)"
       />
       <span v-else class="home-book-cover fallback-cover">
         {{ bookInitial }}
@@ -18,6 +19,7 @@
 
 <script setup>
 import { computed } from "vue";
+import { onCoverError } from "~/composables/useCoverFallback";
 
 const props = defineProps({
   book: {

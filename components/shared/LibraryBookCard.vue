@@ -1,7 +1,9 @@
 <template>
-  <article class="library-book-card" @click="emit('open', book)">
-    <div class="card-background" :style="{ backgroundImage: `url(${coverUrl})` }"></div>
-    <div class="card-overlay"></div>
+  <article class="library-book-card" :class="{ 'no-backdrop': cardBackground === 'blank' }" @click="emit('open', book)">
+    <template v-if="cardBackground !== 'blank'">
+      <div class="card-background" :style="{ backgroundImage: `url(${coverUrl})` }"></div>
+      <div class="card-overlay"></div>
+    </template>
 
     <div class="card-cover">
       <img :src="coverUrl" :alt="book.title" @error="handleCoverError" />
@@ -99,6 +101,11 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  // 'blur' shows the blurred cover backdrop (default); 'blank' hides it.
+  cardBackground: {
+    type: String,
+    default: 'blur',
+  },
 })
 
 const emit = defineEmits(['open', 'play', 'favourite', 'playlist', 'edit', 'hide', 'delete'])
@@ -163,6 +170,21 @@ const formatPersonalRating = (rating) => {
   transform: translateY(-4px);
   border-color: var(--color-border-on-image-strong);
   box-shadow: var(--shadow-card-hover);
+}
+
+/* Blank background: a plain solid card. Remap the on-image text colours to the
+   normal text colours so everything stays readable without the dark backdrop. */
+.library-book-card.no-backdrop {
+  --color-text-on-image-primary: var(--color-text-primary);
+  --color-text-on-image-secondary: var(--color-text-secondary);
+  --color-text-on-image-muted: var(--color-text-muted);
+  --color-border-on-image: var(--color-border-card);
+  --color-border-on-image-strong: var(--color-brand-primary);
+  --color-surface-on-image: var(--color-surface-secondary);
+  --color-surface-on-image-soft: var(--color-surface-secondary);
+  background: var(--color-surface-primary);
+  border-color: var(--color-border-card);
+  color: var(--color-text-primary);
 }
 
 .card-background,

@@ -17,7 +17,7 @@
         </p>
         
         <div class="book-preview">
-          <img :src="book.cover" :alt="book.title" class="book-thumbnail" />
+          <img :src="book.cover" :alt="book.title" class="book-thumbnail" @error="onCoverError($event, book.title)" />
           <div class="book-details">
             <h3>{{ book.title }}</h3>
             <p>{{ book.author }}</p>
@@ -39,6 +39,8 @@
 </template>
 
 <script setup>
+import { onCoverError } from '~/composables/useCoverFallback'
+
 const props = defineProps({
   book: {
     type: Object,

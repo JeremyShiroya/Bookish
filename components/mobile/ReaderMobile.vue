@@ -50,7 +50,15 @@
       </div>
 
       <template v-else>
-        <div v-if="isPdfRenderable" class="reader-mobile-pdf">
+        <div
+          v-if="isPdfRenderable"
+          class="reader-mobile-pdf"
+          @touchstart.passive="onReadingTouchStart"
+          @touchmove.passive="onReadingTouchMove"
+          @touchend="onReadingTouchEnd"
+          @touchcancel="onReadingTouchEnd"
+          @contextmenu.prevent
+        >
           <PdfViewer
             :ref="setPdfViewer"
             :src="pdfSource"
@@ -85,7 +93,7 @@
           @contextmenu.prevent
         >
           <section v-if="hasCover" id="ch-cover" class="reader-mobile-cover">
-            <img :src="book.cover" :alt="`${book.title} cover`" />
+            <img :src="book.cover" :alt="`${book.title} cover`" @error="onCoverError($event, book.title)" />
             <h2>{{ book.title }}</h2>
             <p v-if="book.author">by {{ book.author }}</p>
           </section>
@@ -267,6 +275,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { onCoverError } from "~/composables/useCoverFallback";
 import PdfViewer from "~/components/shared/PdfViewer.vue";
 import SkeletonLoader from "~/components/shared/SkeletonLoader.vue";
 import { useTTS } from "~/composables/useTTS";
@@ -494,6 +503,8 @@ const observePlaceholders = async () => {
   const placeholders = document.querySelectorAll("[data-section-placeholder]");
   if (!placeholders.length) return;
 
+  // Large margin so sections mount well before they scroll into view, even
+  // during a fast fling — no blank pages.
   _placeholderObserver = new IntersectionObserver((entries) => {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
@@ -501,21 +512,46 @@ const observePlaceholders = async () => {
       if (!Number.isNaN(index)) emit("mount-section", index);
       _placeholderObserver?.unobserve(entry.target);
     }
-  }, { rootMargin: "1600px 0px" });
+  }, { rootMargin: "3000px 0px" });
 
   placeholders.forEach((el) => _placeholderObserver.observe(el));
 };
 
+// Safety net: if a fast fling outruns the observer, mount any placeholder that
+// is close to the viewport. Time-throttled so it never runs more than ~8×/sec.
+let _lastNearbyMount = 0;
+const mountNearbyPlaceholders = () => {
+  const now = Date.now();
+  if (now - _lastNearbyMount < 120) return;
+  _lastNearbyMount = now;
+  const placeholders = document.querySelectorAll("[data-section-placeholder]");
+  if (!placeholders.length) return;
+  const vh = window.innerHeight;
+  for (const el of placeholders) {
+    const rect = el.getBoundingClientRect();
+    if (rect.bottom > -vh * 2 && rect.top < vh * 3) {
+      const index = Number(el.dataset.sectionPlaceholder);
+      if (!Number.isNaN(index)) emit("mount-section", index);
+    }
+  }
+};
+
+// Watch only the chapter COUNT, not the array identity. mobileChapterList
+// returns a fresh array on every section mount, so watching the array itself
+// re-ran the observer setup dozens of times during load — thrashing the
+// IntersectionObserver so some sections never mounted. The count changes only
+// when a new book loads.
 watch(
-  () => props.chapterList,
+  () => props.chapterList.length,
   () => { observePlaceholders(); },
-  { deep: false },
 );
 
 // ── Scroll-linked dock / bottom nav swap ───────────────────────────────────
 //
 // Direction changes reset the opposite travel counter, so tiny scroll jitter
 // can't flip the dock state back and forth mid-animation.
+
+let _mountScrollRaf = null;
 
 const onScroll = () => {
   const nextY = window.scrollY || 0;
@@ -524,6 +560,14 @@ const onScroll = () => {
 
   if (readHereMenu.value.visible) hideReadHereMenu();
   cancelLongPress();
+
+  // Throttled fallback mount so fast scrolling never reveals a blank page.
+  if (_mountScrollRaf === null) {
+    _mountScrollRaf = requestAnimationFrame(() => {
+      _mountScrollRaf = null;
+      mountNearbyPlaceholders();
+    });
+  }
 
   if (delta > 0) {
     downTravel += delta;
@@ -552,6 +596,7 @@ onUnmounted(() => {
   window.removeEventListener("scroll", onScroll);
   cancelLongPress();
   _placeholderObserver?.disconnect();
+  if (_mountScrollRaf !== null) cancelAnimationFrame(_mountScrollRaf);
 });
 </script>
 
@@ -657,16 +702,30 @@ onUnmounted(() => {
   min-height: auto;
 }
 
+/* Clear separation between chapters, like turning to a fresh page. */
+.reader-mobile-section + .reader-mobile-section {
+  margin-top: 1.6rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--color-reader-highlight-border, rgba(0, 0, 0, 0.08));
+}
+
 /* Unmounted chapters hold estimated space until the page mounts their HTML. */
 .reader-section-placeholder {
   width: 100%;
 }
 
+/* ReadEra-style body typography: comfortable measure, generous leading,
+   justified text with hyphenation, and clean spacing for every element. */
 .reader-mobile-text {
   color: var(--mobile-reader-text);
-  font-size: 14.5px;
-  line-height: 1.22;
-  word-break: break-word;
+  font-size: 17px;
+  line-height: 1.62;
+  letter-spacing: 0.002em;
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  overflow-wrap: break-word;
   /* Long-press opens "Read from here" instead of native text selection. */
   -webkit-user-select: none;
   user-select: none;
@@ -674,7 +733,76 @@ onUnmounted(() => {
 }
 
 .reader-mobile-text :deep(p) {
-  margin: 0 0 0.65rem;
+  margin: 0 0 0.35rem;
+  /* First-line indent, no big gaps — the classic book paragraph rhythm. */
+  text-indent: 1.3em;
+  orphans: 2;
+  widows: 2;
+}
+
+/* No indent for the first paragraph of a chapter, or paragraphs that follow a
+   heading, image, or break — matches how print books open a section. */
+.reader-mobile-text :deep(p:first-child),
+.reader-mobile-text :deep(h1 + p),
+.reader-mobile-text :deep(h2 + p),
+.reader-mobile-text :deep(h3 + p),
+.reader-mobile-text :deep(h4 + p),
+.reader-mobile-text :deep(hr + p),
+.reader-mobile-text :deep(figure + p),
+.reader-mobile-text :deep(blockquote + p),
+.reader-mobile-text :deep(img + p) {
+  text-indent: 0;
+}
+
+.reader-mobile-text :deep(h1),
+.reader-mobile-text :deep(h2),
+.reader-mobile-text :deep(h3),
+.reader-mobile-text :deep(h4) {
+  margin: 1.6em 0 0.7em;
+  color: var(--mobile-reader-text);
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: left;
+  text-indent: 0;
+  hyphens: none;
+}
+
+.reader-mobile-text :deep(h1) { font-size: 1.55em; }
+.reader-mobile-text :deep(h2) { font-size: 1.32em; }
+.reader-mobile-text :deep(h3) { font-size: 1.15em; }
+.reader-mobile-text :deep(h4) { font-size: 1.04em; }
+
+.reader-mobile-text :deep(blockquote) {
+  margin: 1em 0;
+  padding: 0.2em 0 0.2em 1em;
+  border-left: 3px solid var(--color-reader-highlight-border, rgba(138, 43, 226, 0.4));
+  color: var(--mobile-reader-muted);
+  font-style: italic;
+  text-indent: 0;
+}
+
+.reader-mobile-text :deep(ul),
+.reader-mobile-text :deep(ol) {
+  margin: 0.6em 0;
+  padding-left: 1.5em;
+  text-align: left;
+}
+
+.reader-mobile-text :deep(li) {
+  margin: 0.25em 0;
+  text-indent: 0;
+}
+
+.reader-mobile-text :deep(hr) {
+  margin: 1.4em auto;
+  width: 40%;
+  border: 0;
+  border-top: 1px solid var(--color-reader-highlight-border, rgba(0, 0, 0, 0.12));
+}
+
+.reader-mobile-text :deep(a) {
+  color: var(--color-brand-primary);
+  text-decoration: none;
 }
 
 .reader-mobile-text :deep(.tts-active) {
@@ -683,11 +811,43 @@ onUnmounted(() => {
   outline: 1px solid var(--color-reader-highlight-border);
 }
 
-.reader-mobile-text :deep(img) {
+/* Images: never overflow, always centered, with breathing room and captions. */
+.reader-mobile-text :deep(img),
+.reader-mobile-text :deep(svg),
+.reader-mobile-text :deep(image) {
   display: block;
   max-width: 100%;
   height: auto;
-  margin: 1rem auto;
+  margin: 1.1em auto;
+  border-radius: 4px;
+}
+
+.reader-mobile-text :deep(figure) {
+  margin: 1.2em 0;
+  text-indent: 0;
+}
+
+.reader-mobile-text :deep(figcaption) {
+  margin-top: 0.4em;
+  color: var(--mobile-reader-muted);
+  font-size: 0.85em;
+  font-style: italic;
+  text-align: center;
+  text-indent: 0;
+}
+
+.reader-mobile-text :deep(table) {
+  max-width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.reader-mobile-text :deep(td),
+.reader-mobile-text :deep(th) {
+  padding: 0.35em 0.55em;
+  border: 1px solid var(--color-reader-highlight-border, rgba(0, 0, 0, 0.12));
+  text-indent: 0;
 }
 
 .reader-mobile-cover {

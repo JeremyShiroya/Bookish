@@ -1,9 +1,33 @@
 import { toRaw } from 'vue'
+import { assetWebSrc, assetsAvailable, useDeviceAssets } from '~/composables/useDeviceAssets'
 
 const DB_NAME = 'bookish-storage'
 const STORE_NAME = 'book-content'
 const PDF_SOURCE_STORE_NAME = 'book-pdf-source'
 const DB_VERSION = 2
+
+// Marker kept in IndexedDB when a book's PDF bytes live on the device
+// filesystem instead of in IndexedDB (native app).
+const DEVICE_FILE_MARKER = { __deviceFile: 'pdf' }
+const pdfFileName = (bookId) => `${bookId}.pdf`
+
+// Convert whatever the caller passed as a PDF source into an ArrayBuffer,
+// without pulling in pdf.js.
+async function sourceToArrayBuffer(source) {
+  if (!source) return null
+  const raw = toRaw(source)
+  if (raw instanceof ArrayBuffer) return raw.slice(0)
+  if (ArrayBuffer.isView(raw)) return raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)
+  if (typeof Blob !== 'undefined' && raw instanceof Blob) return raw.arrayBuffer()
+  if (typeof raw === 'string' && !/^(https?:|capacitor:|file:|blob:)/i.test(raw)) {
+    const base64 = raw.includes(',') ? raw.split(',')[1] : raw
+    const binary = atob(base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+    return bytes.buffer
+  }
+  return null
+}
 
 function cloneForStorage(value) {
   if (value === null || value === undefined) return value
@@ -96,24 +120,44 @@ function summarizeStore(db, storeName) {
 }
 
 export const useBookStorage = () => {
-  const savePdfSource = async (bookId, source) => {
-    if (source === undefined) return
+  const deviceAssets = useDeviceAssets()
 
+  const putPdfSourceRecord = async (bookId, value) => {
     const db = await openDB()
     return new Promise((resolve, reject) => {
       const tx = db.transaction(PDF_SOURCE_STORE_NAME, 'readwrite')
       const store = tx.objectStore(PDF_SOURCE_STORE_NAME)
-
-      if (source === null) {
-        store.delete(bookId)
-      } else {
-        store.put(normalizeSourceForStorage(source), bookId)
-      }
-
+      if (value === null) store.delete(bookId)
+      else store.put(value, bookId)
       tx.oncomplete = () => resolve()
       tx.onerror = (e) => reject(e.target.error)
       tx.onabort = (e) => reject(e.target.error ?? new DOMException('Transaction aborted'))
     })
+  }
+
+  const savePdfSource = async (bookId, source) => {
+    if (source === undefined) return
+
+    // Native: keep the (large) PDF bytes on the filesystem, not in IndexedDB.
+    // IndexedDB only holds a small marker so we know where to look.
+    if (assetsAvailable()) {
+      if (source === null) {
+        await deviceAssets.remove('pdfs', pdfFileName(bookId))
+        await putPdfSourceRecord(bookId, null)
+        return
+      }
+      const buffer = await sourceToArrayBuffer(source)
+      if (buffer) {
+        const saved = await deviceAssets.saveArrayBuffer('pdfs', pdfFileName(bookId), buffer)
+        if (saved) {
+          await putPdfSourceRecord(bookId, { ...DEVICE_FILE_MARKER })
+          return
+        }
+      }
+      // Fell through (couldn't write file) — fall back to IndexedDB below.
+    }
+
+    await putPdfSourceRecord(bookId, source === null ? null : normalizeSourceForStorage(source))
   }
 
   const saveBookContent = async (bookId, {
@@ -169,15 +213,42 @@ export const useBookStorage = () => {
       req.onerror = (e) => reject(e.target.error)
     })
 
-    if (!content && !source) return null
+    let resolvedSource = source ?? content?.source ?? null
+
+    // Native: resolve the PDF source to a streamable device-file URL.
+    if (assetsAvailable()) {
+      const name = pdfFileName(bookId)
+      const isMarker = resolvedSource && typeof resolvedSource === 'object' && resolvedSource.__deviceFile
+      if (isMarker || await deviceAssets.exists('pdfs', name)) {
+        // Marker (or file already present) → hand pdf.js the on-disk URL.
+        const uri = await deviceAssets.getUri('pdfs', name)
+        resolvedSource = uri ? assetWebSrc(uri) : null
+      } else if (resolvedSource && resolvedSource !== null) {
+        // Legacy PDF still living in IndexedDB — migrate it to the filesystem
+        // once, then serve it from disk from now on.
+        const buffer = await sourceToArrayBuffer(resolvedSource)
+        if (buffer) {
+          const saved = await deviceAssets.saveArrayBuffer('pdfs', name, buffer)
+          if (saved?.webSrc) {
+            await putPdfSourceRecord(bookId, { ...DEVICE_FILE_MARKER })
+            resolvedSource = saved.webSrc
+          }
+        }
+      }
+    }
+
+    if (!content && (resolvedSource === null || resolvedSource === undefined)) return null
 
     const result = { ...(content ?? { content: null, pages: 0 }) }
-    const resolvedSource = source ?? content?.source ?? null
-    if (resolvedSource !== null) result.source = resolvedSource
+    if (resolvedSource !== null && resolvedSource !== undefined) result.source = resolvedSource
     return result
   }
 
   const deleteBookContent = async (bookId) => {
+    // Remove the on-device PDF file too (native).
+    if (assetsAvailable()) {
+      await deviceAssets.remove('pdfs', pdfFileName(bookId))
+    }
     const db = await openDB()
     return new Promise((resolve, reject) => {
       const stores = db.objectStoreNames.contains(PDF_SOURCE_STORE_NAME)

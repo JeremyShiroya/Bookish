@@ -1,34 +1,89 @@
 <template>
-  <button class="series-card" type="button" @click="$emit('open', series)">
-    <span class="series-meta">
-      <span class="series-name">{{ series.name }}</span>
-      <span class="series-count">{{ collectedCount }}/{{ totalCount }} Books</span>
-    </span>
+  <button
+    class="series-card"
+    :class="[`layout-${layout}`, `bg-${background}`]"
+    type="button"
+    @click="$emit('open', series)"
+  >
+    <!-- Optional blurred cover-image background (same technique as the
+         playlists-page cards). Not the detail-hero colour bleed. -->
+    <template v-if="background === 'blur' && coverStack.length">
+      <span
+        class="card-bg"
+        :style="{ backgroundImage: `url(${coverStack[0]})` }"
+        aria-hidden="true"
+      ></span>
+      <span class="card-bg-overlay" aria-hidden="true"></span>
+    </template>
 
-    <span class="series-fan" aria-hidden="true">
-      <img
-        v-for="(cover, i) in coverStack"
-        :key="i"
-        class="fan-cover"
-        :src="cover"
-        :style="fanStyle(i, coverStack.length)"
-        alt=""
-      />
-      <span v-if="coverStack.length === 0" class="fan-empty">
-        <i class="ri-book-shelf-line"></i>
+    <!-- Playlist-style layout: name top-left, angled covers bottom-right,
+         count badge bottom-left. -->
+    <template v-if="layout === 'cover'">
+      <span class="pl-name">{{ series.name }}</span>
+
+      <span class="pl-covers" aria-hidden="true">
+        <img
+          v-if="coverStack[1]"
+          class="pl-cover pl-cover--back"
+          :src="coverStack[1]"
+          alt=""
+          @error="onCoverError($event, series.name)"
+        />
+        <img
+          v-if="coverStack[0]"
+          class="pl-cover pl-cover--front"
+          :src="coverStack[0]"
+          alt=""
+          @error="onCoverError($event, series.name)"
+        />
+        <span v-if="!coverStack.length" class="pl-empty"><i class="ri-book-shelf-line"></i></span>
       </span>
-    </span>
+
+      <span class="pl-badge">
+        <i class="ri-book-shelf-line"></i>
+        {{ collectedCount }}/{{ totalCount }} Books
+      </span>
+    </template>
+
+    <!-- Fan layout: the classic centred, fanned stack. -->
+    <template v-else>
+      <span class="series-meta">
+        <span class="series-name">{{ series.name }}</span>
+        <span class="series-count">{{ collectedCount }}/{{ totalCount }} Books</span>
+      </span>
+
+      <span class="series-fan" aria-hidden="true">
+        <img
+          v-for="(cover, i) in coverStack"
+          :key="i"
+          class="fan-cover"
+          :src="cover"
+          :style="fanStyle(i, coverStack.length)"
+          alt=""
+          @error="onCoverError($event, series.name)"
+        />
+        <span v-if="coverStack.length === 0" class="fan-empty">
+          <i class="ri-book-shelf-line"></i>
+        </span>
+      </span>
+    </template>
   </button>
 </template>
 
 <script setup>
 import { computed } from "vue";
+import { useBookishSettings } from "~/composables/useBookishSettings";
+import { onCoverError } from "~/composables/useCoverFallback";
 
 const props = defineProps({
   series: { type: Object, required: true },
 });
 
 defineEmits(["open"]);
+
+const { settings } = useBookishSettings();
+const layout = computed(() => settings.value.seriesCardLayout || "fan");
+const background = computed(() => settings.value.seriesCardBackground || "blank");
 
 const bookCount = computed(() => props.series.books?.length || 0);
 
@@ -93,7 +148,7 @@ const fanStyle = (i, n) => {
   transition: transform 0.28s ease, box-shadow 0.28s ease;
 }
 
-/* Keep the dark-mode card on the themed dark surface. */
+/* Dark mode keeps the card on the themed dark surface. */
 :root[data-theme="dark"] .series-card {
   background: var(--color-surface-primary);
 }
@@ -103,6 +158,25 @@ const fanStyle = (i, n) => {
   box-shadow: 0 26px 52px rgba(15, 23, 42, 0.18);
 }
 
+/* ── Blurred cover-image background (playlists-card technique) ─────────────── */
+.card-bg {
+  position: absolute;
+  inset: -20px;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(25px) saturate(150%);
+  transform: scale(1.2);
+}
+
+.card-bg-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--gradient-image-card-overlay);
+}
+
+/* ── Fan layout ───────────────────────────────────────────────────────────── */
 .series-meta {
   position: absolute;
   top: 20px;
@@ -132,6 +206,17 @@ const fanStyle = (i, n) => {
   line-height: 1.2;
 }
 
+/* On a blur background the text sits over imagery — go white with a shadow. */
+.bg-blur .series-name {
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+
+.bg-blur .series-count {
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
 .series-fan {
   position: absolute;
   right: 0;
@@ -143,8 +228,6 @@ const fanStyle = (i, n) => {
   transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* On hover the fan scales from its base, so the outer books spread outward
-   and rise more than the inner ones — a subtle "fan opening" lift. */
 .series-card:hover .series-fan {
   transform: scale(1.05) translateY(-6px);
 }
@@ -177,13 +260,108 @@ const fanStyle = (i, n) => {
   font-size: 2.6rem;
 }
 
+/* ── Playlist-style ("cover") layout ──────────────────────────────────────── */
+.pl-name {
+  position: absolute;
+  top: 1.7rem;
+  left: 1rem;
+  right: 48%;
+  z-index: 3;
+  color: var(--color-text-primary);
+  font-size: 1.12rem;
+  font-weight: 600 !important;
+  line-height: 1.25;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.bg-blur .pl-name {
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.pl-covers {
+  position: absolute;
+  right: -4px;
+  bottom: -8px;
+  z-index: 3;
+  width: 55%;
+  height: 95%;
+  pointer-events: none;
+}
+
+.pl-cover {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  height: 90%;
+  aspect-ratio: 2 / 3;
+  border-radius: 5px;
+  object-fit: cover;
+  box-shadow: -4px 4px 20px rgba(0, 0, 0, 0.45);
+}
+
+.pl-cover--front {
+  right: 14%;
+  z-index: 2;
+  transform: rotate(15deg);
+}
+
+.pl-cover--back {
+  right: -2%;
+  z-index: 1;
+  opacity: 0.85;
+  transform: rotate(28deg);
+}
+
+.pl-empty {
+  position: absolute;
+  right: 12%;
+  bottom: 6%;
+  display: grid;
+  width: 70px;
+  height: 105px;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--color-brand-primary-soft);
+  color: var(--color-brand-primary);
+  font-size: 2rem;
+}
+
+.pl-badge {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.24rem 0.68rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-card);
+  background: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pl-badge i {
+  font-size: 0.82rem;
+}
+
+/* On a blur background the badge becomes the glassy playlist pill. */
+.bg-blur .pl-badge {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
 @media (max-width: 380px) {
   .series-card {
     height: 190px;
-  }
-
-  .series-name {
-    font-size: var(--mobile-body-size);
   }
 
   .series-count {

@@ -94,6 +94,14 @@ const dataUrlToBytes = (dataUrl) => {
   return bytes
 }
 
+// A location pdf.js can stream from directly (device file served by the
+// WebView, blob, or remote URL) — as opposed to inline base64/data.
+const isStreamableUrl = (source) => (
+  typeof source === 'string'
+  && !source.startsWith('data:')
+  && /^(https?:|capacitor:|file:|blob:)/i.test(source)
+)
+
 const sourceToBytes = async (source) => {
   if (source instanceof Uint8Array) return source
   if (source instanceof ArrayBuffer) return new Uint8Array(source.slice(0))
@@ -296,8 +304,11 @@ const renderPdf = async () => {
       'pdfjs-dist/build/pdf.worker.mjs',
       import.meta.url
     ).toString()
-    const bytes = await sourceToBytes(props.src)
-    pdfDocument = await pdfjsLib.getDocument({ data: bytes }).promise
+    // Stream device files / URLs straight from disk (pdf.js fetches ranges as
+    // pages are shown) instead of loading the whole PDF into the JS heap.
+    pdfDocument = isStreamableUrl(props.src)
+      ? await pdfjsLib.getDocument({ url: props.src }).promise
+      : await pdfjsLib.getDocument({ data: await sourceToBytes(props.src) }).promise
     if (generation !== renderGeneration) return
     await buildPages()
   } catch (error) {

@@ -414,16 +414,31 @@ let _mountIdleId = null
 let _mountTimerId = null
 
 function estimateSectionHeight(html) {
-  // ~0.35px of rendered column height per raw HTML character at the mobile
-  // font size — a coarse guess; real height replaces it on mount.
-  return Math.max(320, Math.min(24000, Math.round((html || '').length * 0.35)))
+  // Estimate rendered column height from the visible text length. Tuned for the
+  // reader's 17px / 1.62 line-height body so placeholders are close to the real
+  // height, minimising the scroll jump when a section mounts. Each image adds a
+  // rough block so image-heavy chapters don't collapse to a tiny placeholder.
+  const raw = html || ''
+  const textLen = raw.replace(/<[^>]+>/g, '').length
+  const imageCount = (raw.match(/<img\b|<image\b|<svg\b/gi) || []).length
+  return Math.max(360, Math.min(40000, Math.round(textLen * 0.62) + imageCount * 300))
 }
 
-const mobileChapterList = computed(() => chapterList.value.map((chapter, index) => (
-  mountedSections.value[index]
-    ? chapter
-    : { ...chapter, html: null, estHeight: estimateSectionHeight(chapter.html) }
-)))
+// Placeholder heights are expensive to compute (regex per chapter) and never
+// change once the content is parsed. Precompute them ONCE per chapter list so
+// mobileChapterList — which recomputes on every single section mount — doesn't
+// re-scan every chapter's HTML each time (that O(n²) work froze the reader).
+const _sectionHeights = computed(() => chapterList.value.map((c) => estimateSectionHeight(c.html)))
+
+const mobileChapterList = computed(() => {
+  const heights = _sectionHeights.value
+  const mounted = mountedSections.value
+  return chapterList.value.map((chapter, index) => (
+    mounted[index]
+      ? chapter
+      : { ...chapter, html: null, estHeight: heights[index] }
+  ))
+})
 
 function initialSectionIndex() {
   const total = chapterList.value.length
@@ -544,7 +559,12 @@ const tocEmptyMessage = computed(() => {
   return 'This document has no table of contents.'
 })
 
+// The section highlight can be turned off in Preferences. Gating it here
+// disables both the EPUB sentence band and the PDF chunk overlay at once.
+const highlightEnabled = computed(() => settings.value.readerHighlight !== false)
+
 const activeTtsChunkIndex = computed(() => {
+  if (!highlightEnabled.value) return -1
   if (ttsBook.value?.id !== book.value?.id || ttsStatus.value === 'idle') return -1
   return ttsPlayingChunkIdx.value
 })
@@ -778,7 +798,17 @@ async function confirmReadFromHere() {
 // Locate the sentence under a touch point for the mobile long-press menu.
 // Builds the chunk map on demand (it's deferred to idle after load).
 function resolveChunkAtPoint(x, y) {
-  if (!import.meta.client || isPdfBook.value || !allReadableChunks.value.length) return -1
+  if (!import.meta.client || !allReadableChunks.value.length) return -1
+
+  // PDF: resolve the page under the finger → that page's first readable chunk.
+  if (isPdfBook.value) {
+    const pageEl = document.elementFromPoint(x, y)?.closest?.('[data-page]')
+    const page = Number(pageEl?.dataset?.page)
+    if (Number.isNaN(page)) return -1
+    const chunk = firstChunkForPage(pdfManifest.value, page)
+    return chunk?.id ?? -1
+  }
+
   if (!_chunkEls.length) _buildChunkMap()
 
   const spanAtPoint = () => {
@@ -818,7 +848,11 @@ async function playFromChunk(chunkIdx) {
   const target = Math.max(0, Math.min(allReadableChunks.value.length - 1, Number(chunkIdx) || 0))
 
   pendingReadFromHereWasPlaying.value = false
-  pendingReadFromHerePage.value = currentPdfPage.value
+  // For a PDF, resolve the page that owns the pressed chunk so playback and the
+  // saved reading marker land on the long-pressed page.
+  pendingReadFromHerePage.value = isPdfBook.value
+    ? (pageForChunk(pdfManifest.value, target) || currentPdfPage.value)
+    : currentPdfPage.value
   pendingReadFromHereChunk.value = target
   await confirmReadFromHere()
 }
@@ -1114,8 +1148,12 @@ function _highlightChunk(index) {
   }
   if (!el) return
 
-  el.classList.add('tts-active')
-  _activeEl = el
+  // Only paint the highlight band when the preference is on; still scroll so
+  // "Jump to narration" works with highlighting disabled.
+  if (highlightEnabled.value) {
+    el.classList.add('tts-active')
+    _activeEl = el
+  }
 
   // Follow narration only while the reader is near it. If the user scrolled
   // away, don't yank the viewport back — they can use "Jump to narration".
@@ -1221,7 +1259,9 @@ async function saveReadingProgress(position) {
   const next = readingProgressSnapshot(position)
   if (next.progress === (book.value.progress || 0) && next.status === (book.value.status || 'Unread')) return
 
-  const updated = { ...book.value, ...next }
+  // Stamp when the book was actually read so "Currently Reading" can order by
+  // real reading activity, not by unrelated edits that bump updatedAt.
+  const updated = { ...book.value, ...next, lastReadAt: new Date().toISOString() }
   book.value = updated
   try {
     await updateBook(updated)
@@ -1271,30 +1311,18 @@ function updateBookEdge() {
 let _scrollRaf = null
 
 function updateCurrentChapterFromScroll() {
-  if (isPdfBook.value || !chapterList.value.length) return
+  if (isPdfBook.value || !chapterList.value.length || !import.meta.client) return
 
-  const sections = chapterList.value
-    .map((_, index) => document.getElementById(`ch-${index}`))
-    .filter(Boolean)
-  if (!sections.length) return
-
-  const anchorY = 72
-  let bestIndex = currentChapterIdx.value
-  let bestDistance = Number.POSITIVE_INFINITY
-
-  sections.forEach((section) => {
-    const rect = section.getBoundingClientRect()
-    const distance = rect.top <= anchorY
-      ? Math.abs(anchorY - rect.top) * 0.5
-      : Math.abs(rect.top - anchorY)
-    const index = Number(section.id.slice(3))
-    if (!Number.isNaN(index) && distance < bestDistance) {
-      bestDistance = distance
-      bestIndex = index
-    }
-  })
-
-  if (bestIndex !== currentChapterIdx.value) currentChapterIdx.value = bestIndex
+  // O(1) hit-test at the reading anchor line instead of measuring every
+  // section each frame. Reading a book with dozens of chapters used to call
+  // getBoundingClientRect on all of them per scroll frame — the layout thrash
+  // is what froze the chapter pill and the whole reader while scrolling.
+  const anchorEl = document.elementFromPoint(Math.round(window.innerWidth / 2), 80)
+  const section = anchorEl?.closest?.('[id^="ch-"]')
+  const index = Number(section?.id?.slice(3))
+  if (!Number.isNaN(index) && index !== currentChapterIdx.value) {
+    currentChapterIdx.value = index
+  }
 }
 
 function onReaderScroll() {
@@ -1454,10 +1482,25 @@ watch(rawContent, async () => {
   updateBookEdge()
 })
 
-watch(activeTtsChunkIndex, (index) => {
+watch(activeTtsChunkIndex, async (index) => {
   if (isPdfBook.value) return
-  if (index < 0) clearHtmlHighlight()
-  else _highlightChunk(index)
+  if (index < 0) {
+    clearHtmlHighlight()
+    return
+  }
+  // Narration may have moved into a chapter that hasn't been mounted yet
+  // (progressive rendering). Mount it, wait for the DOM, rebuild the chunk
+  // spans, then highlight — otherwise the highlight lands on nothing.
+  const section = sectionForChunk(index)
+  if (!mountedSections.value[section]) {
+    mountSection(section)
+    await nextTick()
+    await nextTick()
+    _buildChunkMap()
+  } else if (!_chunkEls[index]) {
+    _buildChunkMap()
+  }
+  _highlightChunk(index)
 })
 
 watch([activeTtsChunkIndex, ttsWordIdx], () => {

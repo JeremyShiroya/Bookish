@@ -78,6 +78,15 @@ export const pdfSourceToBytes = async (source) => {
     return new Uint8Array(await source.arrayBuffer())
   }
   if (typeof source === 'string') {
+    // A device-file / remote URL (not inline base64): fetch its bytes.
+    if (!source.startsWith('data:') && /^(https?:|capacitor:|file:|blob:)/i.test(source)) {
+      try {
+        const response = await fetch(source)
+        return new Uint8Array(await response.arrayBuffer())
+      } catch {
+        return null
+      }
+    }
     const base64 = source.includes(',') ? source.split(',')[1] : source
     const binary = atob(base64)
     const bytes = new Uint8Array(binary.length)

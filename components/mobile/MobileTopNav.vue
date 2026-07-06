@@ -16,7 +16,7 @@
     </button>
 
     <div class="nav-actions">
-      <div class="streak-pill" title="Reading streak">
+      <div v-if="showStreak" class="streak-pill" title="Reading streak">
         <i class="ri-flashlight-fill"></i>
         <span>{{ streakCount }}</span>
       </div>
@@ -35,6 +35,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted } from "vue";
+import { useBookishSettings } from "~/composables/useBookishSettings";
 import { useStreak } from "~/composables/useStreak";
 import {
   BOOKISH_PROFILE_UPDATED_EVENT,
@@ -43,6 +44,8 @@ import {
 
 const router = useRouter();
 const { streakCount } = useStreak();
+const { settings } = useBookishSettings();
+const showStreak = computed(() => settings.value.showStreak !== false);
 const { profile, activeAvatarPreset, loadProfile } = useUserProfile();
 
 const profileAvatarSrc = computed(() => {

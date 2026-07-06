@@ -161,10 +161,12 @@
       @confirm="deleteBook"
     />
 
-    <!-- Floating add button — stays put while the list scrolls -->
+    <!-- Floating add button — stays put while the list scrolls, and lifts
+         above the mini player when narration is active. -->
     <button
       type="button"
       class="add-book-fab"
+      :class="{ 'above-mini-player': miniPlayerVisible }"
       aria-label="Add book"
       @click="router.push('/add')"
     >
@@ -210,6 +212,10 @@ const { addToast } = useToast();
 const isBookActive = (book) =>
   ttsBook.value?.id === book.id && ttsStatus.value !== 'idle'
 
+// The mini player is showing whenever something is loaded into TTS; lift the
+// FAB so it isn't hidden behind the bar.
+const miniPlayerVisible = computed(() => !!ttsBook.value && ttsStatus.value !== 'idle')
+
 const handleHideBook = async (book) => {
   await hideBook(book.id)
   addToast(`"${book.title}" is now hidden from your library.`, 'info')
@@ -242,6 +248,12 @@ const selectedPlaylistBook = ref(null);
 // Computed filtered books
 const filteredBooks = computed(() => {
   let filtered = [...books.value];
+
+  // Format preference (Preferences → Format): show all, or only pdf / epub.
+  const format = settings.value.formatFilter || 'all';
+  if (format !== 'all') {
+    filtered = filtered.filter((book) => String(book.format || '').toLowerCase() === format);
+  }
 
   // Filter by status
   if (selectedStatus.value !== "all") {
@@ -447,7 +459,7 @@ onUnmounted(() => {
   position: fixed;
   right: 18px;
   bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom) + 18px);
-  z-index: 1120;
+  z-index: 1310;
   display: grid;
   width: 54px;
   height: 54px;
@@ -459,6 +471,12 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 28px;
   box-shadow: 0 8px 22px rgba(138, 43, 226, 0.38);
+  transition: bottom 0.28s ease;
+}
+
+/* Clears the ~62px mini player (which sits above the nav) plus a gap. */
+.add-book-fab.above-mini-player {
+  bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom) + 90px);
 }
 
 .add-book-fab:active {

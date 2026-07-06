@@ -1,7 +1,8 @@
-const DB_NAME = 'bookish-library'
+export const LIBRARY_DB_NAME = 'bookish-library'
+const DB_NAME = LIBRARY_DB_NAME
 const DB_VERSION = 2
-const PROFILE_ID = 'local'
-const DEFAULT_PROFILE = Object.freeze({
+export const PROFILE_ID = 'local'
+export const DEFAULT_PROFILE = Object.freeze({
   id: PROFILE_ID,
   displayName: 'Reader',
   avatarType: 'image',
@@ -16,7 +17,7 @@ const USER_AVATAR_PATH_PREFIX = '/Images/User%20Avatars/'
 // shallow spread doesn't help because nested arrays/objects stay reactive. Every
 // write therefore goes through a deep plain-object snapshot first. Without this,
 // edits and progress saves fail silently while the UI still reports success.
-function toPlainRecord(value) {
+export function toPlainRecord(value) {
   try {
     return JSON.parse(JSON.stringify(value))
   } catch {
@@ -24,7 +25,7 @@ function toPlainRecord(value) {
   }
 }
 
-function nextTimestamp(previousTimestamp) {
+export function nextTimestamp(previousTimestamp) {
   const now = new Date()
   if (!previousTimestamp) return now.toISOString()
 
@@ -54,7 +55,7 @@ function openLibraryDB() {
   })
 }
 
-function normalizeProfile(profile, existing = null) {
+export function normalizeProfile(profile, existing = null) {
   const source = profile && typeof profile === 'object' ? profile : {}
   const displayName = String(source.displayName ?? existing?.displayName ?? DEFAULT_PROFILE.displayName)
     .trim()

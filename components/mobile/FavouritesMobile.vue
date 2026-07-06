@@ -8,17 +8,23 @@
     </div>
 
     <template v-else-if="initialized">
-        <div v-if="favourites.length > 0" class="books-grid">
+        <div
+          v-if="favourites.length > 0"
+          :class="favouritesLayout === 'list' ? 'favourites-list' : 'books-grid'"
+        >
           <LibraryBookCard
             v-for="book in favourites"
             :key="book.id"
             :book="book"
             :active="isBookActive(book)"
+            :card-background="favouritesBackground"
+            :class="{ 'mobile-list-book-card': favouritesLayout === 'list' }"
             @open="router.push(`/book/${book.id}`)"
             @play="handlePlay"
             @favourite="toggleFavourite(book.id)"
             @playlist="selectedPlaylistBook = book"
             @edit="router.push(`/edit/${book.id}`)"
+            @hide="hideBook(book.id)"
             @delete="deleteFavouriteBook(book)"
           />
         </div>
@@ -55,8 +61,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useBooks } from "~/composables/useBooks";
+import { useBookishSettings } from '~/composables/useBookishSettings';
 import { useTTS } from '~/composables/useTTS';
 import EmptyState from "../shared/EmptyState.vue";
 import LibraryBookCard from '../shared/LibraryBookCard.vue';
@@ -66,7 +73,10 @@ import SkeletonLoader from '../shared/SkeletonLoader.vue';
 import MobileBottomNav from './MobileBottomNav.vue';
 import MobileTopNav from './MobileTopNav.vue';
 
-const { favourites, toggleFavourite, deleteBook, loading, initialized } = useBooks();
+const { favourites, toggleFavourite, deleteBook, hideBook, loading, initialized } = useBooks();
+const { settings } = useBookishSettings();
+const favouritesLayout = computed(() => settings.value.favouritesCardLayout || 'grid');
+const favouritesBackground = computed(() => settings.value.favouritesCardBackground || 'blur');
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const router = useRouter();
 const selectedPlaylistBook = ref(null);
@@ -111,6 +121,14 @@ const confirmDelete = async () => {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 2rem;
   justify-content: start;
+}
+
+/* List positioning option: one card per row, full width. */
+.favourites-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  padding: 0 var(--mobile-page-padding-inline);
 }
 
 

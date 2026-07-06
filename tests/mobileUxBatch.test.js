@@ -41,11 +41,15 @@ describe('mobile UX batch', () => {
     expect(storage).toContain('Scan device now')
   })
 
-  test('mini playing bar shows outside the reader and opens the narrated section', () => {
+  test('mini playing bar shows only on tab roots and opens the narrated section', () => {
     const bar = read('components/mobile/MobilePlayingBar.vue')
-    expect(bar).toContain("route.path.startsWith('/reader')")
+    // Whitelisted to the main tab roots — hidden on detail/settings/reader pages.
+    expect(bar).toContain('NAV_ROUTES.has(route.path)')
     expect(bar).toContain('router.push(`/reader/${ttsBook.value.id}`)')
     expect(bar).toContain('bar-progress-fill')
+    // Swipe-to-close.
+    expect(bar).toContain('onTouchEnd')
+    expect(bar).toContain('stopTTS()')
 
     const layout = read('layouts/default.vue')
     expect(layout).toContain('MobilePlayingBar')
@@ -53,6 +57,85 @@ describe('mobile UX batch', () => {
     const reader = read('pages/reader/[id].vue')
     expect(reader).toContain('sectionForChunk(ttsChunkIdx.value)')
     expect(reader).toContain('jumpToNarration()')
+  })
+
+  test('mini player is teleported to body with a themed blur backdrop', () => {
+    const bar = read('components/mobile/MobilePlayingBar.vue')
+    expect(bar).toContain('<Teleport to="body">')
+    expect(bar).toContain('bar-backdrop')
+    expect(bar).not.toContain('--color-surface-inverse')
+    expect(bar).toContain("matchMedia('(max-width: 768px)')")
+  })
+
+  test('add FAB lifts above the mini player and sits above it in z-order', () => {
+    const books = read('components/mobile/BooksMobile.vue')
+    expect(books).toContain('miniPlayerVisible')
+    expect(books).toContain('above-mini-player')
+    expect(books).toMatch(/\.add-book-fab\s*\{[^}]*z-index:\s*1310/)
+  })
+
+  test('continue-reading card exposes a working play control', () => {
+    const card = read('components/shared/HomeContinueReadingCard.vue')
+    expect(card).toContain("$emit('play', book)")
+    expect(card).toContain('@click.stop')
+    expect(card).toContain('ri-pause-fill')
+
+    const home = read('components/mobile/HomeMobile.vue')
+    expect(home).toContain('handleContinuePlay')
+    expect(home).toContain('@play="handleContinuePlay"')
+  })
+
+  test('currently-reading ordering favours real reading activity', () => {
+    const useBooks = read('composables/useBooks.js')
+    expect(useBooks).toContain('lastReadAt')
+    expect(useBooks).toContain("a.status === 'Reading'")
+
+    const reader = read('pages/reader/[id].vue')
+    expect(reader).toContain('lastReadAt: new Date().toISOString()')
+  })
+
+  test('device import reads bytes through the native plugin', () => {
+    const sync = read('composables/useDeviceLibrarySync.js')
+    expect(sync).toContain('DeviceBooks.readFile')
+    expect(sync).toContain('readDeviceFileBase64')
+
+    const plugin = read('android/app/src/main/java/com/bookish/app/DeviceBooksPlugin.java')
+    expect(plugin).toContain('public void readFile(PluginCall call)')
+    expect(plugin).toContain('Base64.encodeToString')
+  })
+
+  test('series card blur uses the playlist cover-image technique, not the colour bleed', () => {
+    const seriesCard = read('components/shared/SeriesCollageCard.vue')
+    // The opt-in blur is the playlists-card technique (real blurred cover), and
+    // the default background is the original #e8e8f1 surface, not white.
+    expect(seriesCard).toContain('card-bg')
+    expect(seriesCard).toContain('filter: blur(25px) saturate(150%)')
+    expect(seriesCard).toContain('#e8e8f1')
+    expect(seriesCard).not.toContain('color-mix(in srgb, var(--color-surface-primary)')
+
+    const cover = read('components/shared/CoverImageModal.vue')
+    expect(cover).toContain('cover-modal-body')
+    expect(cover).toMatch(/\.cover-modal-body\s*\{[^}]*overflow-y:\s*auto/)
+  })
+
+  test('preferences page shows visual previews for each card option', () => {
+    const prefs = read('components/mobile/PreferencesMobile.vue')
+    expect(prefs).toContain('SeriesPreview')
+    expect(prefs).toContain('FavouritePreview')
+    expect(prefs).toContain('class="preview"')
+
+    expect(existsSync(resolve(root, 'components/shared/previews/SeriesCardPreview.vue'))).toBe(true)
+    expect(existsSync(resolve(root, 'components/shared/previews/FavouriteCardPreview.vue'))).toBe(true)
+  })
+
+  test('reader uses comfortable book typography and PDF long-press', () => {
+    const reader = read('components/mobile/ReaderMobile.vue')
+    expect(reader).toMatch(/\.reader-mobile-text\s*\{[^}]*text-align:\s*justify/)
+    expect(reader).toMatch(/\.reader-mobile-text\s*\{[^}]*hyphens:\s*auto/)
+    expect(reader).toMatch(/reader-mobile-pdf[\s\S]{0,140}onReadingTouchStart/)
+
+    const readerPage = read('pages/reader/[id].vue')
+    expect(readerPage).toContain("closest?.('[data-page]')")
   })
 
   test('series and playlist detail pages use the hero redesign', () => {

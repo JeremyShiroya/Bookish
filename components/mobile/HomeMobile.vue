@@ -49,7 +49,7 @@
             type="button"
             @click="openBook(book); homeSearch = ''"
           >
-            <img v-if="book.cover" :src="book.cover" :alt="book.title" />
+            <img v-if="book.cover" :src="book.cover" :alt="book.title" @error="onCoverError($event, book.title)" />
             <span v-else class="mobile-search-cover-fallback">
               {{ book.title?.charAt(0) || 'B' }}
             </span>
@@ -65,7 +65,12 @@
       <section class="mobile-home-section">
         <h2 class="mobile-section-title">Currently Reading</h2>
         <div v-if="currentReadingBook" class="continue-single">
-          <HomeContinueReadingCard :book="currentReadingBook" @open="openBook" />
+          <HomeContinueReadingCard
+            :book="currentReadingBook"
+            :is-playing="isBookPlaying(currentReadingBook)"
+            @open="openBook"
+            @play="handleContinuePlay"
+          />
         </div>
         <EmptyState
           v-else
@@ -127,6 +132,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBooks } from '~/composables/useBooks'
+import { onCoverError } from '~/composables/useCoverFallback'
 import { useTTS } from '~/composables/useTTS'
 import EmptyState from '../shared/EmptyState.vue'
 import HomeBookRailCard from '../shared/HomeBookRailCard.vue'
@@ -146,9 +152,24 @@ const {
   error,
   fetchAllData,
 } = useBooks()
-const { ttsBook } = useTTS()
+const { ttsBook, ttsStatus, play: playTTS, togglePlay: toggleTTS } = useTTS()
 const router = useRouter()
 const homeSearch = ref('')
+
+const isBookPlaying = (book) => (
+  !!book && ttsBook.value?.id === book.id && ttsStatus.value === 'playing'
+)
+
+// Play icon toggles narration in place; @click.stop keeps the card's own
+// click (which opens book detail) from firing.
+const handleContinuePlay = (book) => {
+  if (!book) return
+  if (ttsBook.value?.id === book.id && ttsStatus.value !== 'idle') {
+    toggleTTS()
+    return
+  }
+  playTTS(book)
+}
 
 const mobileRecentBooks = computed(() => (
   recentlyAddedBooks.value.length > 0

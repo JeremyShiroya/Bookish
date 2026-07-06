@@ -17,7 +17,11 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 
+import android.util.Base64;
+
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayDeque;
 import java.util.Locale;
 
@@ -89,6 +93,46 @@ public class DeviceBooksPlugin extends Plugin {
     @PermissionCallback
     private void storagePermissionCallback(PluginCall call) {
         check(call);
+    }
+
+    /**
+     * Reads a book file's bytes and returns them base64-encoded. Reading here
+     * (with the same MANAGE_EXTERNAL_STORAGE grant that let us list the file)
+     * is more reliable than Capacitor Filesystem, which does not resolve raw
+     * absolute paths outside the app sandbox.
+     */
+    @PluginMethod
+    public void readFile(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null || path.isEmpty()) {
+            call.reject("A file path is required");
+            return;
+        }
+        if (!hasFullAccess()) {
+            call.reject("Storage permission has not been granted");
+            return;
+        }
+
+        new Thread(() -> {
+            File file = new File(path);
+            if (!file.exists() || !file.canRead()) {
+                call.reject("File cannot be read: " + path);
+                return;
+            }
+            try (FileInputStream in = new FileInputStream(file)) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] chunk = new byte[65536];
+                int read;
+                while ((read = in.read(chunk)) != -1) {
+                    out.write(chunk, 0, read);
+                }
+                JSObject ret = new JSObject();
+                ret.put("data", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP));
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("Failed to read file: " + e.getMessage());
+            }
+        }).start();
     }
 
     @PluginMethod

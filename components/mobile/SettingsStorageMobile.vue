@@ -68,6 +68,43 @@
       </template>
     </section>
 
+    <!-- Offline covers -->
+    <section class="card">
+      <div class="card-head">
+        <i class="ri-image-2-line"></i>
+        <div>
+          <h2>Offline covers</h2>
+          <p>Save every book cover to this device so they always show — even without a connection.</p>
+        </div>
+      </div>
+
+      <div v-if="covers.running" class="backfill-progress">
+        <div class="backfill-progress-labels">
+          <span class="backfill-title">{{ covers.currentTitle }}</span>
+          <span class="backfill-count">{{ covers.current }} / {{ covers.total }}</span>
+        </div>
+        <div class="backfill-bar">
+          <div class="backfill-fill" :style="{ width: `${coversPercent}%` }"></div>
+        </div>
+        <button class="ghost-btn" type="button" @click="stopCovers">Stop</button>
+      </div>
+
+      <template v-else>
+        <button class="primary-btn" type="button" @click="saveCoversOffline">
+          <i class="ri-download-cloud-2-line"></i>
+          Save covers for offline
+        </button>
+        <p v-if="covers.finished" class="backfill-summary">
+          <template v-if="covers.total === 0">All covers are already saved on this device.</template>
+          <template v-else>
+            Saved {{ covers.cached }} of {{ covers.total }} cover{{ covers.total === 1 ? '' : 's' }}.
+            <template v-if="covers.failed"> {{ covers.failed }} couldn't be reached.</template>
+            <template v-if="covers.repaired"> {{ covers.repaired }} lost their source — tap “Fetch metadata for my library” above to restore them.</template>
+          </template>
+        </p>
+      </template>
+    </section>
+
     <!-- Scanned folders -->
     <section class="card">
       <div class="card-head">
@@ -234,7 +271,7 @@ import { useLibraryBackup } from '~/composables/useLibraryBackup'
 import { useTTS } from '~/composables/useTTS'
 import { useToast } from '~/composables/useToast'
 
-const { books, updateBook, fetchAllData, restoreHiddenBooks, countHiddenBooks } = useBooks()
+const { books, updateBook, fetchAllData, restoreHiddenBooks, countHiddenBooks, cacheRemoteLibraryCovers } = useBooks()
 const { loadSettings } = useBookishSettings()
 const { getStorageSummary } = useBookStorage()
 const { createDownload, importBookishData, wipeBookishData } = useLibraryBackup()
@@ -322,6 +359,68 @@ const startBackfill = async () => {
 
 const stopBackfill = () => {
   _stopRequested = true
+}
+
+// ── Offline covers ───────────────────────────────────────────────────────────
+
+const covers = reactive({
+  running: false,
+  finished: false,
+  current: 0,
+  total: 0,
+  currentTitle: '',
+  cached: 0,
+  failed: 0,
+  repaired: 0,
+})
+let _coversStopRequested = false
+
+const coversPercent = computed(() => (
+  covers.total ? Math.round((covers.current / covers.total) * 100) : 0
+))
+
+const saveCoversOffline = async () => {
+  if (covers.running) return
+  _coversStopRequested = false
+  covers.running = true
+  covers.finished = false
+  covers.current = 0
+  covers.total = 0
+  covers.cached = 0
+  covers.failed = 0
+  covers.repaired = 0
+
+  try {
+    const result = await cacheRemoteLibraryCovers({
+      shouldStop: () => _coversStopRequested,
+      onProgress: ({ current, total, title }) => {
+        covers.current = current
+        covers.total = total
+        covers.currentTitle = title
+      },
+    })
+    covers.total = result.total
+    covers.cached = result.cached
+    covers.failed = result.failed
+    covers.repaired = result.repaired || 0
+    covers.finished = true
+    await refreshStorageSummary()
+
+    if (!result.total) addToast('All covers are already saved on this device.', 'success')
+    else if (_coversStopRequested) addToast('Saving covers stopped.', 'info')
+    else if (result.repaired) addToast(`Saved ${result.cached} covers — ${result.repaired} lost their source; run "Fetch metadata" to restore them.`, 'info')
+    else if (result.failed) addToast(`Saved ${result.cached} covers — ${result.failed} couldn't be reached.`, 'info')
+    else addToast(`Saved ${result.cached} cover${result.cached === 1 ? '' : 's'} for offline.`, 'success')
+  } catch (error) {
+    console.error('[Storage] Saving covers offline failed:', error)
+    addToast('Could not save covers — please try again.', 'error')
+  } finally {
+    covers.running = false
+  }
+}
+
+const stopCovers = () => {
+  _coversStopRequested = true
 }
 
 // ── Scanned folders ─────────────────────────────────────────────────────────

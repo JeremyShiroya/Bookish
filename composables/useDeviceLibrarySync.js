@@ -162,7 +162,9 @@ function generateCoverPlaceholder(title) {
 }
 
 function base64ToFile(base64, name, extension) {
-  const binary = atob(base64)
+  // Tolerate a data: URI prefix or stray whitespace from either reader path.
+  const clean = String(base64 || '').replace(/^data:[^,]*,/, '').replace(/\s/g, '')
+  const binary = atob(clean)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
   const type = extension === 'pdf' ? 'application/pdf' : 'application/epub+zip'
@@ -207,9 +209,22 @@ async function ensureStoragePermission(addToast, askForConsent) {
   return !!regained.granted
 }
 
+// Prefer the native plugin's reader (same permission that listed the file);
+// fall back to Capacitor Filesystem only if that fails.
+async function readDeviceFileBase64(path) {
+  try {
+    const { data } = await DeviceBooks.readFile({ path })
+    if (data) return data
+  } catch (error) {
+    console.warn('[DeviceSync] Native readFile failed, trying Filesystem:', error)
+  }
+  const { data } = await Filesystem.readFile({ path })
+  return data
+}
+
 async function importDeviceFile(file, { addBook, saveBookContent }) {
   const extension = file.name.split('.').pop().toLowerCase()
-  const { data } = await Filesystem.readFile({ path: file.path })
+  const data = await readDeviceFileBase64(file.path)
   const documentFile = base64ToFile(data, file.name, extension)
 
   let extracted = {}

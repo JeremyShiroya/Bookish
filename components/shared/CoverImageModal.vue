@@ -30,7 +30,7 @@
         </button>
       </div>
 
-      <div v-else>
+      <div v-else class="cover-modal-body">
         <div v-if="loading" class="cover-picker-loading">
           <MultiStepLoader
             :loading="loading"
@@ -138,11 +138,20 @@ defineEmits(['close', 'upload', 'search', 'select'])
 }
 
 .cover-modal-header {
+  flex: 0 0 auto;
   padding: 1.5rem;
   border-bottom: 1px solid var(--color-border-subtle);
   display: flex;
   justify-content: space-between;
   gap: 1rem;
+}
+
+/* Bounded scroll region so long cover result lists can scroll. */
+.cover-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .cover-modal-header h3 {
@@ -238,7 +247,6 @@ defineEmits(['close', 'upload', 'search', 'select'])
 
 .cover-picker-grid {
   padding: 1.5rem;
-  overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   gap: 1rem;

@@ -231,6 +231,7 @@ watch(
   display: flex;
   align-items: flex-start;
   gap: 1.1rem;
+  min-width: 0;
 }
 
 .cover-frame {
@@ -321,11 +322,21 @@ watch(
 
 .detail-rating {
   margin-top: 0.1rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .detail-rating :deep(.goodreads-rating) {
   flex-wrap: wrap;
   row-gap: 0.15rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Let long "12,345 ratings · 987 reviews" text wrap instead of overflowing. */
+.detail-rating :deep(.goodreads-count) {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .quick-actions {

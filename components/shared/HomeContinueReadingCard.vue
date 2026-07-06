@@ -13,6 +13,7 @@
         class="continue-cover"
         :src="book.cover"
         :alt="book.title"
+        @error="onCoverError($event, book.title)"
       />
       <span v-else class="continue-cover fallback-cover">{{ bookInitial }}</span>
     </span>
@@ -20,23 +21,37 @@
       <span class="continue-title">{{ book.title }}</span>
       <span class="continue-meta">{{ totalPagesLabel }} Pages - {{ bookFormat }}</span>
     </span>
-    <span class="continue-play" title="Listen" aria-hidden="true">
-      <i class="ri-play-line"></i>
+    <span
+      class="continue-play"
+      :class="{ playing: isPlaying }"
+      :title="isPlaying ? 'Pause' : 'Listen'"
+      role="button"
+      tabindex="0"
+      :aria-label="isPlaying ? 'Pause' : 'Listen'"
+      @click.stop="$emit('play', book)"
+      @keydown.enter.stop="$emit('play', book)"
+    >
+      <i :class="isPlaying ? 'ri-pause-fill' : 'ri-play-fill'"></i>
     </span>
   </button>
 </template>
 
 <script setup>
 import { computed } from "vue";
+import { onCoverError } from "~/composables/useCoverFallback";
 
 const props = defineProps({
   book: {
     type: Object,
     required: true,
   },
+  isPlaying: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-defineEmits(["open"]);
+defineEmits(["open", "play"]);
 
 const totalPagesLabel = computed(() => props.book.pages || "-");
 const bookFormat = computed(() => props.book.format || "EPUB");
@@ -194,6 +209,16 @@ const bookInitial = computed(() => props.book.title?.trim()?.charAt(0)?.toUpperC
   background: var(--color-surface-on-image-hover);
   border-color: var(--color-text-on-image-secondary);
   transform: translateY(-50%) scale(1.05);
+}
+
+.continue-play.playing {
+  background: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+  color: #fff;
+}
+
+.continue-play:active {
+  transform: translateY(-50%) scale(0.92);
 }
 
 @media (max-width: 360px) {

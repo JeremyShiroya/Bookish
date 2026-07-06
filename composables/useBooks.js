@@ -1,7 +1,9 @@
 import { computed } from "vue";
 import { useState } from "#app";
 import { useBookStorage } from '~/composables/useBookStorage';
-import { isRemoteCoverUrl, useCoverImageCache } from '~/composables/useCoverImageCache';
+import { coverAssetName, isLocalAssetCover, isRemoteCoverUrl, useCoverImageCache } from '~/composables/useCoverImageCache';
+import { useDeviceAssets } from '~/composables/useDeviceAssets';
+import { coverPlaceholder } from '~/composables/useCoverFallback';
 import { getGoodreadsRating } from '~/composables/useGoodreadsRating';
 import { useLibraryStore } from '~/composables/useLibraryStore';
 import { useApiEndpoint } from '~/composables/useApiEndpoint';
@@ -94,28 +96,82 @@ export const useBooks = () => {
     return result.sort((a, b) => a.name.localeCompare(b.name));
   });
 
-  const cacheRemoteLibraryCovers = async () => {
-    if (!import.meta.client) return;
+  // Downloads every remote cover to on-device storage and rewrites each book's
+  // cover to the local file, so covers render instantly and survive going
+  // offline. Also self-heals covers that point at a device file which is no
+  // longer there: it re-downloads from the saved remote source when we still
+  // have it, or clears the cover to a placeholder so a metadata refetch can
+  // supply a fresh one. Runs opportunistically after each library load, and can
+  // be driven manually from Settings → Storage (with progress + a summary).
+  const cacheRemoteLibraryCovers = async ({ onProgress, shouldStop } = {}) => {
+    if (!import.meta.client) return { total: 0, cached: 0, failed: 0, repaired: 0 };
     const { cacheCoverImage } = useCoverImageCache();
-    const remoteCoverBooks = books.value.filter(book =>
-      book?.id && isRemoteCoverUrl(book.cover) && !coverCacheInFlight.has(book.id)
+    const { exists } = useDeviceAssets();
+
+    // Resolve the remote URL we should download for a book: a live remote cover,
+    // or the saved source of one that's already (or was) cached on device.
+    const remoteSourceFor = (book) => {
+      if (isRemoteCoverUrl(book.cover)) return book.cover;
+      if (isRemoteCoverUrl(book.coverSource)) return book.coverSource;
+      return null;
+    };
+
+    const targets = books.value.filter(book =>
+      book?.id && !coverCacheInFlight.has(book.id)
+      && (remoteSourceFor(book) || isLocalAssetCover(book.cover))
     );
-    for (const book of remoteCoverBooks) {
+    const total = targets.length;
+    let cached = 0;
+    let failed = 0;
+    let repaired = 0;
+
+    for (let i = 0; i < targets.length; i += 1) {
+      if (shouldStop?.()) break;
+      const book = targets[i];
+      onProgress?.({ current: i + 1, total, title: book.title });
       coverCacheInFlight.add(book.id);
       try {
-        const cachedCover = await cacheCoverImage(book.cover);
-        if (!cachedCover || cachedCover === book.cover) continue;
-        const index = books.value.findIndex(item => item.id === book.id);
-        if (index !== -1) {
-          books.value[index] = { ...books.value[index], cover: cachedCover };
-          await updateBook(books.value[index]);
+        // A cover that already lives on device: keep it if the file is really
+        // there; otherwise fall through to re-download or repair.
+        if (isLocalAssetCover(book.cover) && !remoteSourceFor(book)) {
+          const name = coverAssetName(book.cover);
+          if (name && await exists('covers', name)) continue;
+          // Source lost and the file is gone — blank it to a clean placeholder
+          // so it stops 404-ing and a metadata fetch can refill it.
+          await patchBookCover(book.id, { cover: coverPlaceholder(book.title), coverSource: '' });
+          repaired += 1;
+          continue;
         }
+
+        const source = remoteSourceFor(book);
+        if (!source) { failed += 1; continue; }
+
+        const cachedCover = await cacheCoverImage(source);
+        if (!cachedCover || cachedCover === book.cover || cachedCover === source) {
+          // Unchanged means the download never landed (dead link, blocked, or
+          // offline). Remember the source so a later run can retry / heal it.
+          if (book.coverSource !== source) await patchBookCover(book.id, { coverSource: source });
+          failed += 1;
+          continue;
+        }
+        await patchBookCover(book.id, { cover: cachedCover, coverSource: source });
+        cached += 1;
       } catch (err) {
         console.warn('Failed to cache remote cover:', err);
+        failed += 1;
       } finally {
         coverCacheInFlight.delete(book.id);
       }
     }
+    return { total, cached, failed, repaired };
+  };
+
+  // Apply a cover patch to the in-memory list and persist it.
+  const patchBookCover = async (id, patch) => {
+    const index = books.value.findIndex(item => item.id === id);
+    if (index === -1) return;
+    books.value[index] = { ...books.value[index], ...patch };
+    await updateBook(books.value[index]);
   };
 
   const fetchAllData = async (force = false) => {
@@ -158,11 +214,21 @@ export const useBooks = () => {
     [...books.value].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 10)
   );
 
-  const recentlyReadBooks = computed(() =>
-    books.value
+  // "Currently reading" ordering: books actually in progress, most recently
+  // READ first (lastReadAt), so editing a book or fetching metadata — which
+  // touches updatedAt — never bumps an unrelated book to the top. Books with a
+  // "Reading" status rank above ones that merely have progress.
+  const recentlyReadBooks = computed(() => {
+    const readingActivity = (book) => new Date(book.lastReadAt || book.updatedAt || 0).getTime();
+    return books.value
       .filter(b => b.status === 'Reading' || b.progress > 0)
-      .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-  );
+      .sort((a, b) => {
+        const aReading = a.status === 'Reading' ? 1 : 0;
+        const bReading = b.status === 'Reading' ? 1 : 0;
+        if (aReading !== bReading) return bReading - aReading;
+        return readingActivity(b) - readingActivity(a);
+      });
+  });
 
   const favourites = computed(() => books.value.filter(b => b.isFavourite));
 
@@ -400,6 +466,7 @@ export const useBooks = () => {
     addBookToPlaylist,
     fetchAllData,
     fetchBookById,
+    cacheRemoteLibraryCovers,
     fetchAndStoreAuthorDetails,
   };
 };

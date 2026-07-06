@@ -113,7 +113,19 @@ export function parseSeriesFromText(value?: string | null) {
     };
   }
 
-  return { series: text.replace(/\s+series$/i, '') || null, seriesInstallment: null, seriesTotal: null };
+  // Bare text with no installment marker is an unreliable series signal — a
+  // byline ("By Author"), breadcrumb, or genre often slips in here. Reject the
+  // obvious non-series shapes rather than inventing a series from them.
+  const bare = text.replace(/\s+series$/i, '').trim();
+  if (
+    !bare
+    || /^by\b/i.test(bare)               // "By Author Name"
+    || !/[a-z]/i.test(bare)              // numbers / punctuation only
+    || bare.split(/\s+/).length > 8      // sentence, not a series title
+  ) {
+    return { series: null, seriesInstallment: null, seriesTotal: null };
+  }
+  return { series: bare, seriesInstallment: null, seriesTotal: null };
 }
 
 export function parseGoodreadsSeriesTotal(html: string) {

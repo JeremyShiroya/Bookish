@@ -16,7 +16,20 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   ttsVolume: 1.0,
   metadataAutoFill: true,
   trackSplitting: false,
+  // ── Appearance preferences (Settings → Preferences) ──────────────────────
+  seriesCardBackground: 'blank',   // 'blank' | 'blur'
+  seriesCardLayout: 'fan',         // 'fan' (books centered) | 'cover'
+  favouritesCardBackground: 'blur',// 'blur' | 'blank'
+  favouritesCardLayout: 'grid',    // 'grid' | 'list'
+  readerHighlight: true,           // highlight the section being read
+  showStreak: true,                // reading-streak pill in the top nav
+  formatFilter: 'all',             // 'all' | 'pdf' | 'epub'
 })
+
+export const CARD_BACKGROUND_OPTIONS = Object.freeze(['blank', 'blur'])
+export const SERIES_CARD_LAYOUT_OPTIONS = Object.freeze(['fan', 'cover'])
+export const FAVOURITES_CARD_LAYOUT_OPTIONS = Object.freeze(['grid', 'list'])
+export const FORMAT_FILTER_OPTIONS = Object.freeze(['all', 'pdf', 'epub'])
 
 export const LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS = Object.freeze([6, 8, 10, 12])
 export const LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS = Object.freeze([8, 10, 20, 30, 50, 100])
@@ -105,6 +118,27 @@ export function normalizeBookishSettings(value) {
     trackSplitting: source.trackSplitting === undefined
       ? DEFAULT_BOOKISH_SETTINGS.trackSplitting
       : source.trackSplitting === true,
+    seriesCardBackground: CARD_BACKGROUND_OPTIONS.includes(source.seriesCardBackground)
+      ? source.seriesCardBackground
+      : DEFAULT_BOOKISH_SETTINGS.seriesCardBackground,
+    seriesCardLayout: SERIES_CARD_LAYOUT_OPTIONS.includes(source.seriesCardLayout)
+      ? source.seriesCardLayout
+      : DEFAULT_BOOKISH_SETTINGS.seriesCardLayout,
+    favouritesCardBackground: CARD_BACKGROUND_OPTIONS.includes(source.favouritesCardBackground)
+      ? source.favouritesCardBackground
+      : DEFAULT_BOOKISH_SETTINGS.favouritesCardBackground,
+    favouritesCardLayout: FAVOURITES_CARD_LAYOUT_OPTIONS.includes(source.favouritesCardLayout)
+      ? source.favouritesCardLayout
+      : DEFAULT_BOOKISH_SETTINGS.favouritesCardLayout,
+    readerHighlight: source.readerHighlight === undefined
+      ? DEFAULT_BOOKISH_SETTINGS.readerHighlight
+      : source.readerHighlight !== false,
+    showStreak: source.showStreak === undefined
+      ? DEFAULT_BOOKISH_SETTINGS.showStreak
+      : source.showStreak !== false,
+    formatFilter: FORMAT_FILTER_OPTIONS.includes(source.formatFilter)
+      ? source.formatFilter
+      : DEFAULT_BOOKISH_SETTINGS.formatFilter,
   }
 }
 
