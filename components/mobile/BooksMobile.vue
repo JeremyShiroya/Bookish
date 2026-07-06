@@ -769,9 +769,6 @@ onUnmounted(() => {
   color: var(--color-text-on-image-secondary);
 }
 
-
-
-
 .goodreads-svg {
   width: 16px;
   height: 16px;
@@ -839,10 +836,6 @@ onUnmounted(() => {
   gap: 0.65rem;
 }
 
-
-
-
-
 .list-cover {
   width: 50px;
   height: 72px;
@@ -874,10 +867,6 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-
-
-
 
 .list-progress-cell {
   display: flex;
@@ -966,17 +955,6 @@ onUnmounted(() => {
   background: var(--color-status-danger-soft);
   color: var(--color-status-danger);
 }
-
-
-
-
-
-
-
-
-
-
-
 
 /* === Reading-status Filter dropdown === */
 .filter-dropdown {
@@ -1191,56 +1169,6 @@ onUnmounted(() => {
 .view-container:not(.is-card) .controls-row.in-container {
   padding: 0 0 1rem 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 .playlist-modal-overlay {
   position: fixed;
@@ -1635,12 +1563,9 @@ onUnmounted(() => {
   }
 
   .view-chip-icon.active {
-      background: var(--color-surface-hover);
-
+    background: var(--color-surface-hover);
     color: var(--color-brand-primary);
   }
-
-
 
   .books-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1656,11 +1581,6 @@ onUnmounted(() => {
     gap: 16px;
     padding: 0 var(--mobile-page-padding-inline);
   }
-
-
-
-
-
 
   .list-actions {
     opacity: 1;
