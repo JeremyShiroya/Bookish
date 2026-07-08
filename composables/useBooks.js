@@ -361,8 +361,14 @@ export const useBooks = () => {
     }
   };
 
+  // Permanently removes a book: its library record, its extracted content and
+  // PDF source, its cached cover file, and — for books auto-imported from device
+  // storage — the original document on the phone. This is destructive and
+  // irreversible; callers must confirm with the user first (DeleteConfirmModal
+  // spells out exactly what will be removed). Use `hideBook` to merely hide one.
   const deleteBook = async (bookId) => {
     const previousBooks = [...books.value];
+    const book = books.value.find(b => b.id === bookId) || null;
     books.value = books.value.filter(b => b.id !== bookId);
     try {
       const store = useLibraryStore();
@@ -371,8 +377,33 @@ export const useBooks = () => {
         : Promise.resolve();
       await Promise.all([store.deleteBook(bookId), deleteContentPromise]);
     } catch (err) {
+      // The record write failed — put the book back rather than leaving the UI
+      // claiming a deletion that never happened.
       books.value = previousBooks;
       console.error('Failed to delete book:', err);
+      throw err;
+    }
+
+    // Best-effort cleanup AFTER the record is gone. A failure here leaves an
+    // orphaned file, not a resurrected book, so it must not fail the delete.
+    if (import.meta.client && book) {
+      try {
+        const name = coverAssetName(book.cover);
+        if (name && isLocalAssetCover(book.cover)) {
+          await useDeviceAssets().remove('covers', name);
+        }
+      } catch (err) {
+        console.warn('Could not remove cached cover:', err);
+      }
+
+      if (book.deviceImport && book.deviceImportPath) {
+        try {
+          const { deleteDeviceImport } = await import('~/composables/useDeviceLibrarySync');
+          await deleteDeviceImport(book);
+        } catch (err) {
+          console.warn('Could not remove the book file from device storage:', err);
+        }
+      }
     }
   };
 

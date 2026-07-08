@@ -3,7 +3,11 @@
     <MobileTopNav />
 
 
-    <div v-if="sortedSeriesList.length > 0" class="series-grid">
+    <div v-if="showSkeleton" class="series-loading">
+      <MobileSkeleton page="series" :count="4" />
+    </div>
+
+    <div v-else-if="sortedSeriesList.length > 0" class="series-grid">
       <SeriesCollageCard
         v-for="series in sortedSeriesList"
         :key="series.id"
@@ -13,7 +17,7 @@
     </div>
 
     <EmptyState
-      v-else-if="showEmpty"
+      v-else-if="showEmpty && !showSkeleton"
       title="No series detected"
       description="Books that share series metadata will automatically group here."
       icon="ri-book-shelf-line"
@@ -37,9 +41,10 @@ import { useBooks } from "~/composables/useBooks";
 import EmptyState from "../shared/EmptyState.vue";
 import SeriesCollageCard from "../shared/SeriesCollageCard.vue";
 import MobileBottomNav from "./MobileBottomNav.vue";
+import MobileSkeleton from "./MobileSkeleton.vue";
 import MobileTopNav from "./MobileTopNav.vue";
 
-const { seriesList } = useBooks();
+const { seriesList, loading, initialized } = useBooks();
 const router = useRouter();
 const props = defineProps({
   items: {
@@ -59,6 +64,10 @@ const props = defineProps({
     default: true,
   },
 });
+
+// When the parent passes `items`, this is a section of another page that has
+// already loaded — only the standalone Series page waits on the library.
+const showSkeleton = computed(() => !props.items && loading.value && !initialized.value);
 
 const sortedSeriesList = computed(() =>
   (props.items || seriesList.value).map((series) => ({
@@ -86,6 +95,10 @@ const openSeries = (series) => {
 
 
 
+
+.series-loading {
+  padding: 0.5rem 0;
+}
 
 .series-grid {
   display: grid;

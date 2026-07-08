@@ -3,7 +3,7 @@
     <MobileTopNav />
 
     <div v-if="loading && !initialized" class="home-loading">
-      <HomeSkeleton />
+      <MobileSkeleton page="home" />
     </div>
 
     <EmptyState
@@ -137,9 +137,9 @@ import { useTTS } from '~/composables/useTTS'
 import EmptyState from '../shared/EmptyState.vue'
 import HomeBookRailCard from '../shared/HomeBookRailCard.vue'
 import HomeContinueReadingCard from '../shared/HomeContinueReadingCard.vue'
-import HomeSkeleton from '../shared/HomeSkeleton.vue'
 import SeriesCollageCard from '../shared/SeriesCollageCard.vue'
 import MobileBottomNav from './MobileBottomNav.vue'
+import MobileSkeleton from './MobileSkeleton.vue'
 import MobileTopNav from './MobileTopNav.vue'
 
 const {
@@ -257,6 +257,14 @@ const retryLoadLibrary = () => {
   font-size: var(--mobile-subtext-size);
 }
 
+/* type="search" draws its own blue clear button on Blink — two clear icons.
+   Hide it; the styled button below is the only affordance. */
+.mobile-search-bar input::-webkit-search-cancel-button,
+.mobile-search-bar input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 .mobile-search-clear {
   display: inline-flex;
   width: 28px;
@@ -266,8 +274,8 @@ const retryLoadLibrary = () => {
   justify-content: center;
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  background: rgba(100, 116, 139, 0.14);
+  border-radius: 0;
+  background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
 }

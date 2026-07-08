@@ -52,28 +52,29 @@
         </div>
       </section>
 
-      <!-- Favourites cards -->
+      <!-- Playlist cards (the Favourites grid/list choice now lives in that
+           page's own controls row, next to its filter). -->
       <section class="pref-group">
-        <h2 class="pref-group-title">Favourites cards</h2>
+        <h2 class="pref-group-title">Playlist cards</h2>
 
         <div class="pref-block">
           <div class="pref-copy">
             <span class="pref-label">Background</span>
-            <span class="pref-hint">Blurred cover image, or a plain card.</span>
+            <span class="pref-hint">Plain surface, or a blurred cover image.</span>
           </div>
           <div class="option-grid">
             <button
-              v-for="opt in favBackgroundOptions"
+              v-for="opt in backgroundOptions"
               :key="opt.value"
               type="button"
               class="option"
-              :class="{ active: settings.favouritesCardBackground === opt.value }"
-              @click="set('favouritesCardBackground', opt.value)"
+              :class="{ active: settings.playlistCardBackground === opt.value }"
+              @click="set('playlistCardBackground', opt.value)"
             >
               <span class="preview">
-                <FavouritePreview layout="grid" :background="opt.value" />
+                <SeriesPreview layout="cover" :background="opt.value" />
               </span>
-              <span class="option-label">{{ opt.label }}<i v-if="settings.favouritesCardBackground === opt.value" class="ri-check-line"></i></span>
+              <span class="option-label">{{ opt.label }}<i v-if="settings.playlistCardBackground === opt.value" class="ri-check-line"></i></span>
             </button>
           </div>
         </div>
@@ -81,62 +82,78 @@
         <div class="pref-block">
           <div class="pref-copy">
             <span class="pref-label">Layout</span>
-            <span class="pref-hint">A three-up grid, or a single-column list.</span>
+            <span class="pref-hint">Angled covers, or a fanned stack.</span>
           </div>
           <div class="option-grid">
             <button
-              v-for="opt in favLayoutOptions"
+              v-for="opt in playlistLayoutOptions"
               :key="opt.value"
               type="button"
               class="option"
-              :class="{ active: settings.favouritesCardLayout === opt.value }"
-              @click="set('favouritesCardLayout', opt.value)"
+              :class="{ active: settings.playlistCardLayout === opt.value }"
+              @click="set('playlistCardLayout', opt.value)"
             >
               <span class="preview">
-                <FavouritePreview :layout="opt.value" :background="settings.favouritesCardBackground" />
+                <SeriesPreview :layout="opt.value" :background="settings.playlistCardBackground" />
               </span>
-              <span class="option-label">{{ opt.label }}<i v-if="settings.favouritesCardLayout === opt.value" class="ri-check-line"></i></span>
+              <span class="option-label">{{ opt.label }}<i v-if="settings.playlistCardLayout === opt.value" class="ri-check-line"></i></span>
             </button>
           </div>
         </div>
       </section>
 
-      <!-- Reading -->
+      <!-- Reading — same visual-example treatment as the card sections above -->
       <section class="pref-group">
         <h2 class="pref-group-title">Reading</h2>
 
-        <div class="pref-row">
+        <div class="pref-block">
           <div class="pref-copy">
             <span class="pref-label">Highlight while reading</span>
             <span class="pref-hint">Highlight the sentence being read aloud.</span>
           </div>
-          <button
-            type="button"
-            class="pref-toggle"
-            role="switch"
-            :aria-checked="settings.readerHighlight !== false"
-            :class="{ on: settings.readerHighlight !== false }"
-            @click="set('readerHighlight', settings.readerHighlight === false)"
-          >
-            <span class="knob"></span>
-          </button>
+          <div class="option-grid">
+            <button
+              v-for="opt in toggleOptions"
+              :key="`hl-${opt.value}`"
+              type="button"
+              class="option"
+              :class="{ active: (settings.readerHighlight !== false) === opt.value }"
+              @click="set('readerHighlight', opt.value)"
+            >
+              <span class="preview">
+                <ReadingPreview kind="highlight" :on="opt.value" />
+              </span>
+              <span class="option-label">
+                {{ opt.label }}
+                <i v-if="(settings.readerHighlight !== false) === opt.value" class="ri-check-line"></i>
+              </span>
+            </button>
+          </div>
         </div>
 
-        <div class="pref-row">
+        <div class="pref-block">
           <div class="pref-copy">
             <span class="pref-label">Blurred cover in Listen mode</span>
             <span class="pref-hint">Soft blurred book cover behind the player.</span>
           </div>
-          <button
-            type="button"
-            class="pref-toggle"
-            role="switch"
-            :aria-checked="settings.listenCoverBlur !== false"
-            :class="{ on: settings.listenCoverBlur !== false }"
-            @click="set('listenCoverBlur', settings.listenCoverBlur === false)"
-          >
-            <span class="knob"></span>
-          </button>
+          <div class="option-grid">
+            <button
+              v-for="opt in toggleOptions"
+              :key="`lb-${opt.value}`"
+              type="button"
+              class="option"
+              :class="{ active: (settings.listenCoverBlur !== false) === opt.value }"
+              @click="set('listenCoverBlur', opt.value)"
+            >
+              <span class="preview">
+                <ReadingPreview kind="listen" :on="opt.value" />
+              </span>
+              <span class="option-label">
+                {{ opt.value ? 'Blurred cover' : 'Plain' }}
+                <i v-if="(settings.listenCoverBlur !== false) === opt.value" class="ri-check-line"></i>
+              </span>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -185,7 +202,9 @@
 <script setup>
 import { useBookishSettings } from '~/composables/useBookishSettings'
 import MobileSettingsNav from './MobileSettingsNav.vue'
-import FavouritePreview from '../shared/previews/FavouriteCardPreview.vue'
+import ReadingPreview from '../shared/previews/ReadingPreview.vue'
+// Playlist cards offer the same two layouts as series cards, so they share the
+// same preview mockup.
 import SeriesPreview from '../shared/previews/SeriesCardPreview.vue'
 
 const { settings, updateSettings } = useBookishSettings()
@@ -200,13 +219,15 @@ const seriesLayoutOptions = [
   { value: 'fan', label: 'Fanned' },
   { value: 'cover', label: 'Playlist style' },
 ]
-const favBackgroundOptions = [
-  { value: 'blur', label: 'Blur image' },
-  { value: 'blank', label: 'Default' },
+const playlistLayoutOptions = [
+  { value: 'cover', label: 'Angled covers' },
+  { value: 'fan', label: 'Fanned' },
 ]
-const favLayoutOptions = [
-  { value: 'grid', label: 'Grid' },
-  { value: 'list', label: 'List' },
+// Reading options are booleans, but they're presented as picture choices like
+// the card sections rather than as bare switches.
+const toggleOptions = [
+  { value: true, label: 'On' },
+  { value: false, label: 'Off' },
 ]
 const formatOptions = [
   { value: 'all', label: 'All' },

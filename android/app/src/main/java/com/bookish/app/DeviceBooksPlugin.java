@@ -135,6 +135,45 @@ public class DeviceBooksPlugin extends Plugin {
         }).start();
     }
 
+    /**
+     * Permanently deletes a document that Bookish imported from device storage.
+     *
+     * Only called after the user confirms an explicitly-worded "delete from this
+     * device" dialog. Resolves { deleted: false } when the file is already gone
+     * so removing a book never fails on a stale path.
+     */
+    @PluginMethod
+    public void deleteFile(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null || path.isEmpty()) {
+            call.reject("A file path is required");
+            return;
+        }
+        if (!hasFullAccess()) {
+            call.reject("Storage permission has not been granted");
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                File file = new File(path);
+                JSObject ret = new JSObject();
+                if (!file.exists()) {
+                    ret.put("deleted", false);
+                    ret.put("missing", true);
+                    call.resolve(ret);
+                    return;
+                }
+                boolean deleted = file.delete();
+                ret.put("deleted", deleted);
+                ret.put("missing", false);
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("Failed to delete file: " + e.getMessage());
+            }
+        }).start();
+    }
+
     @PluginMethod
     public void scan(PluginCall call) {
         if (!hasFullAccess()) {

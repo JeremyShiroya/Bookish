@@ -305,25 +305,6 @@
               :options="['Unread', 'Reading', 'Read']"
             />
           </div>
-          <div class="form-group">
-            <label>Personal Rating</label>
-            <div class="rating-input-container">
-              <div class="star-rating">
-                <i
-                  v-for="n in 10"
-                  :key="n"
-                  class="rating-star"
-                  :class="{
-                    'ri-star-fill': n <= newBook.rating,
-                    'ri-star-line': n > newBook.rating,
-                    'active': n <= newBook.rating
-                  }"
-                  @click="newBook.rating = n"
-                ></i>
-              </div>
-              <span class="rating-display">{{ newBook.rating || 0 }}/10</span>
-            </div>
-          </div>
         </div>
 
         <div class="form-group">
@@ -386,7 +367,6 @@ const newBook = ref({
   webReview: '',
   format: '',
   pages: 0,
-  rating: 0,
   progress: 0,
   status: 'Unread',
   isFavourite: false,
@@ -1236,35 +1216,10 @@ const saveBook = async () => {
   line-height: 1.5;
 }
 
-.rating-input-container {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 0.5rem 0;
-}
 
-.star-rating {
-  display: flex;
-  gap: 0.25rem;
-}
 
-.rating-star {
-  font-size: 1.75rem;
-  color: var(--color-border-strong);
-  cursor: pointer;
-  transition: color 0.2s, transform 0.2s;
-}
 
-.rating-star:hover,
-.rating-star.active {
-  color: var(--color-status-star);
-  transform: scale(1.1);
-}
 
-.rating-display {
-  font-size: 1.1rem;
-  color: var(--color-text-secondary);
-}
 
 .readonly-review :deep(.goodreads-rating),
 .metadata-info :deep(.goodreads-rating) {
@@ -1619,18 +1574,8 @@ const saveBook = async () => {
   min-width: 0;
 }
 
-.rating-input-container {
-  flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
-}
 
-.star-rating {
-  flex-wrap: wrap;
-}
 
-.rating-star {
-  font-size: 1.5rem;
-}
 
 .fetch-metadata-card {
   flex-direction: column;

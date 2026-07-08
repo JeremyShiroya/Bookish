@@ -416,7 +416,9 @@ defineExpose({ nextPage, prevPage, goToSection, goToSectionPage, getPosition });
   position: absolute;
   top: calc(64px + env(safe-area-inset-top));
   right: 20px;
-  bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom) + 66px);
+  /* --bottom-nav-space collapses to the safe-area inset in page mode (the app's
+     tab bar is hidden there); +66px leaves room for the chapter dock. */
+  bottom: calc(var(--bottom-nav-space, 72px) + 66px);
   left: 20px;
   overflow: hidden;
   touch-action: none;
@@ -433,7 +435,11 @@ defineExpose({ nextPage, prevPage, goToSection, goToSectionPage, getPosition });
   color: var(--mobile-reader-text);
   font-size: var(--mr-font-size, 17px);
   font-family: var(--mr-font-family, Georgia, "Times New Roman", serif);
-  font-weight: var(--mr-font-weight, 400);
+  /* !important, reluctantly: assets/css/main.css applies a global
+     `font-weight: 400 !important` to p/div/span/strong for the app chrome. Book
+     text is the one place the reader must own its weight, or the Thickness
+     control silently does nothing. */
+  font-weight: var(--mr-font-weight, 400) !important;
   line-height: var(--mr-line-height, 1.62);
   letter-spacing: 0.002em;
   text-align: var(--mr-text-align, justify);
@@ -459,6 +465,12 @@ defineExpose({ nextPage, prevPage, goToSection, goToSectionPage, getPosition });
 
 .paged-text :where(span, a, em, strong, i, b) {
   white-space: normal !important;
+}
+
+/* The global weight reset names these tags directly, so the book's paragraphs
+   have to be told to inherit the reader's chosen thickness. */
+.paged-text :where(p, div, span, b, strong, em, i, li, blockquote) {
+  font-weight: inherit !important;
 }
 
 .paged-text p {

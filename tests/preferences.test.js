@@ -15,7 +15,10 @@ describe('appearance preferences', () => {
     expect(DEFAULT_BOOKISH_SETTINGS.seriesCardLayout).toBe('fan')
     expect(DEFAULT_BOOKISH_SETTINGS.favouritesCardBackground).toBe('blur')
     expect(DEFAULT_BOOKISH_SETTINGS.favouritesCardLayout).toBe('grid')
+    expect(DEFAULT_BOOKISH_SETTINGS.playlistCardBackground).toBe('blur')
+    expect(DEFAULT_BOOKISH_SETTINGS.playlistCardLayout).toBe('cover')
     expect(DEFAULT_BOOKISH_SETTINGS.readerHighlight).toBe(true)
+    expect(DEFAULT_BOOKISH_SETTINGS.listenCoverBlur).toBe(true)
     expect(DEFAULT_BOOKISH_SETTINGS.showStreak).toBe(true)
     expect(DEFAULT_BOOKISH_SETTINGS.formatFilter).toBe('all')
   })
@@ -41,10 +44,14 @@ describe('appearance preferences', () => {
     const junk = normalizeBookishSettings({
       seriesCardLayout: 'nonsense',
       favouritesCardLayout: 'nope',
+      playlistCardLayout: 'spiral',
+      playlistCardBackground: 'rainbow',
       formatFilter: 'mobi',
     })
     expect(junk.seriesCardLayout).toBe('fan')
     expect(junk.favouritesCardLayout).toBe('grid')
+    expect(junk.playlistCardLayout).toBe('cover')
+    expect(junk.playlistCardBackground).toBe('blur')
     expect(junk.formatFilter).toBe('all')
   })
 
@@ -57,9 +64,18 @@ describe('appearance preferences', () => {
     expect(settings).not.toMatch(/Preferences[^}]*comingSoon/)
 
     const prefs = read('components/mobile/PreferencesMobile.vue')
-    for (const key of ['seriesCardBackground', 'seriesCardLayout', 'favouritesCardBackground', 'favouritesCardLayout', 'readerHighlight', 'showStreak', 'formatFilter']) {
+    for (const key of ['seriesCardBackground', 'seriesCardLayout', 'playlistCardBackground', 'playlistCardLayout', 'readerHighlight', 'listenCoverBlur', 'showStreak', 'formatFilter']) {
       expect(prefs, key).toContain(key)
     }
+
+    // The Favourites card section moved out of Preferences: its layout is now
+    // chosen from the grid/list toggle in the Favourites page's controls row.
+    expect(prefs).not.toContain('favouritesCardLayout')
+    expect(prefs).not.toContain('favouritesCardBackground')
+
+    // Every Reading option is illustrated, like the card sections above it.
+    expect(prefs).toContain('ReadingPreview')
+    expect(existsSync(resolve(root, 'components/shared/previews/ReadingPreview.vue'))).toBe(true)
   })
 
   test('components consume the appearance preferences', () => {
@@ -71,6 +87,13 @@ describe('appearance preferences', () => {
     const fav = read('components/mobile/FavouritesMobile.vue')
     expect(fav).toContain('favouritesCardLayout')
     expect(fav).toContain(':card-background="favouritesBackground"')
+    // Controls row (mirrors the Books page) owns the grid/list choice.
+    expect(fav).toContain('controls-row')
+    expect(fav).toContain('setLayout')
+
+    const playlists = read('components/mobile/PlaylistsMobile.vue')
+    expect(playlists).toContain('playlistCardLayout')
+    expect(playlists).toContain('playlistCardBackground')
 
     const card = read('components/shared/LibraryBookCard.vue')
     expect(card).toContain('cardBackground')

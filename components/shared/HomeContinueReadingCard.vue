@@ -1,10 +1,15 @@
 <template>
   <button class="continue-card" type="button" @click="$emit('open', book)">
     <span class="continue-card-bg-container">
-      <span
+      <img
+        v-if="book.cover"
         class="continue-bg"
-        :style="book.cover ? { backgroundImage: `url(${book.cover})` } : {}"
-      ></span>
+        :src="book.cover"
+        alt=""
+        aria-hidden="true"
+        @error="onCoverError($event, book.title)"
+      />
+      <span v-else class="continue-bg continue-bg-fallback"></span>
       <span class="continue-overlay"></span>
     </span>
     <span class="continue-cover-wrap">
@@ -90,32 +95,33 @@ const bookInitial = computed(() => props.book.title?.trim()?.charAt(0)?.toUpperC
   z-index: -1;
 }
 
+/* Blurred cover-image background — the SAME technique as SeriesCollageCard's
+   `.card-bg` (the reference implementation): an <img> covering the card, blurred
+   and scaled, under `--gradient-image-card-overlay`. This card used to blur a
+   hardcoded grey/mauve gradient instead of the actual cover, so it could never
+   match the series card. */
 .continue-bg,
 .continue-overlay {
   position: absolute;
 }
 
 .continue-bg {
-  top: -20px;
-  left: -20px;
-  right: -20px;
-  bottom: -20px;
-  background: linear-gradient(100deg, #5b5965 0%, #7e475f 54%, #8a8990 100%);
-  background-size: cover;
-  background-position: center;
+  display: block;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   filter: blur(25px) saturate(150%);
-  transform: scale(1.2);
+  transform: scale(1.35);
+}
+
+.continue-bg-fallback {
+  background: linear-gradient(100deg, #5b5965 0%, #7e475f 54%, #8a8990 100%);
 }
 
 .continue-overlay {
   inset: 0;
-  background:
-    linear-gradient(
-      135deg,
-      var(--color-background-overlay-strong) 0%,
-      var(--color-background-overlay-faint) 100%
-    ),
-    rgba(73, 69, 80, 0.18);
+  background: var(--gradient-image-card-overlay);
 }
 
 .continue-cover-wrap {

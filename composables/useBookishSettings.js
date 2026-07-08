@@ -20,7 +20,9 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   seriesCardBackground: 'blank',   // 'blank' | 'blur'
   seriesCardLayout: 'fan',         // 'fan' (books centered) | 'cover'
   favouritesCardBackground: 'blur',// 'blur' | 'blank'
-  favouritesCardLayout: 'grid',    // 'grid' | 'list'
+  favouritesCardLayout: 'grid',    // 'grid' | 'list' (set from the Favourites controls row)
+  playlistCardBackground: 'blur',  // 'blur' | 'blank'
+  playlistCardLayout: 'cover',     // 'cover' (angled covers) | 'fan' (fanned covers)
   readerHighlight: true,           // highlight the section being read
   listenCoverBlur: true,           // blurred cover backdrop in Listen mode
   showStreak: true,                // reading-streak pill in the top nav
@@ -29,6 +31,7 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
 
 export const CARD_BACKGROUND_OPTIONS = Object.freeze(['blank', 'blur'])
 export const SERIES_CARD_LAYOUT_OPTIONS = Object.freeze(['fan', 'cover'])
+export const PLAYLIST_CARD_LAYOUT_OPTIONS = Object.freeze(['fan', 'cover'])
 export const FAVOURITES_CARD_LAYOUT_OPTIONS = Object.freeze(['grid', 'list'])
 export const FORMAT_FILTER_OPTIONS = Object.freeze(['all', 'pdf', 'epub'])
 
@@ -131,6 +134,12 @@ export function normalizeBookishSettings(value) {
     favouritesCardLayout: FAVOURITES_CARD_LAYOUT_OPTIONS.includes(source.favouritesCardLayout)
       ? source.favouritesCardLayout
       : DEFAULT_BOOKISH_SETTINGS.favouritesCardLayout,
+    playlistCardBackground: CARD_BACKGROUND_OPTIONS.includes(source.playlistCardBackground)
+      ? source.playlistCardBackground
+      : DEFAULT_BOOKISH_SETTINGS.playlistCardBackground,
+    playlistCardLayout: PLAYLIST_CARD_LAYOUT_OPTIONS.includes(source.playlistCardLayout)
+      ? source.playlistCardLayout
+      : DEFAULT_BOOKISH_SETTINGS.playlistCardLayout,
     readerHighlight: source.readerHighlight === undefined
       ? DEFAULT_BOOKISH_SETTINGS.readerHighlight
       : source.readerHighlight !== false,

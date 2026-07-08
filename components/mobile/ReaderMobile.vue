@@ -314,7 +314,11 @@
       <i :class="isPlaying ? 'ri-pause-fill' : 'ri-play-fill'"></i>
     </button>
 
-    <div v-show="readerMode === 'read'" class="mobile-bottom-nav-wrap" aria-hidden="true">
+    <div
+      v-show="readerMode === 'read' && !usePagedReader"
+      class="mobile-bottom-nav-wrap"
+      aria-hidden="true"
+    >
       <MobileBottomNav />
     </div>
 
@@ -386,6 +390,7 @@
               min="0"
               max="100"
               :value="ttsProgress || 0"
+              :style="{ '--fill': `${ttsProgress || 0}%` }"
               aria-label="Audio progress"
               @input="seekToProgress(Number($event.target.value))"
             />
@@ -1401,6 +1406,12 @@ onUnmounted(() => {
   --mobile-reader-surface: var(--color-reader-dark-page);
 }
 
+/* Page mode is a full-screen book: the app's bottom tab bar is hidden, so the
+   space it reserved collapses and the chapter dock sits at the screen edge. */
+.reader-mobile-page.is-paged {
+  --bottom-nav-space: env(safe-area-inset-bottom);
+}
+
 /* "Book brown" — warm paper background, chosen from Display settings.
    Declared after .dark so it wins in either theme. */
 .reader-mobile-page.sepia {
@@ -1426,12 +1437,15 @@ onUnmounted(() => {
   background: var(--mobile-reader-bg);
 }
 
+/* Read mode: a quiet, paper-toned control. A saturated purple pill fought the
+   book page it sits above, so the track is a soft tint of the reader's own text
+   colour and the active pill is the raised reader surface. */
 .reader-mode-toggle {
   display: inline-flex;
   justify-self: center;
   padding: 3px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-brand-primary) 14%, var(--mobile-reader-surface));
+  background: color-mix(in srgb, var(--mobile-reader-text) 9%, transparent);
 }
 
 .reader-mode-toggle button {
@@ -1440,7 +1454,7 @@ onUnmounted(() => {
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--mobile-reader-text);
+  color: color-mix(in srgb, var(--mobile-reader-text) 60%, transparent);
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
@@ -1448,8 +1462,9 @@ onUnmounted(() => {
 }
 
 .reader-mode-toggle button.active {
-  background: var(--color-brand-primary);
-  color: #fff;
+  background: var(--mobile-reader-surface);
+  color: var(--mobile-reader-text);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.14);
 }
 
 .reader-top-actions {
@@ -1739,17 +1754,26 @@ onUnmounted(() => {
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
 }
 
+/* Listen mode: frosted glass over the blurred cover — the purple pill read as a
+   foreign UI chip on top of the artwork. */
 .reader-mobile-page.listen-blur .reader-mode-toggle {
-  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 
 .reader-mobile-page.listen-blur .reader-mode-toggle button {
-  color: #fff;
+  color: rgba(255, 255, 255, 0.72);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
 }
 
 .reader-mobile-page.listen-blur .reader-mode-toggle button.active {
-  background: var(--color-brand-primary);
+  background: rgba(255, 255, 255, 0.24);
   color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.22);
 }
 
 /* The sentence being narrated is highlighted just like in Read mode. */
@@ -1862,6 +1886,13 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
+/* Always measure against PAGE-mode geometry (no app tab bar), regardless of the
+   current reading mode — otherwise a book's page count, and every page number
+   derived from it, would change when the user toggles scroll/page mode. */
+.page-map-measurer :deep(.paged-viewport) {
+  bottom: calc(env(safe-area-inset-bottom) + 66px);
+}
+
 .reader-mobile-content.is-pdf-reader {
   padding: calc(60px + env(safe-area-inset-top)) 12px 150px;
 }
@@ -1908,7 +1939,9 @@ onUnmounted(() => {
   color: var(--mobile-reader-text);
   font-size: var(--mr-font-size, 17px);
   font-family: var(--mr-font-family, inherit);
-  font-weight: var(--mr-font-weight, 400);
+  /* !important, reluctantly — see ReaderPagedEpub: main.css forces
+     `font-weight: 400 !important` on p/div/span app-wide. */
+  font-weight: var(--mr-font-weight, 400) !important;
   line-height: var(--mr-line-height, 1.62);
   letter-spacing: 0.002em;
   text-align: var(--mr-text-align, justify);
@@ -1946,6 +1979,20 @@ onUnmounted(() => {
 .reader-mobile-text :deep(em),
 .reader-mobile-text :deep(strong) {
   white-space: normal !important;
+}
+
+/* The global weight reset names these tags directly — inherit the reader's
+   chosen thickness instead. */
+.reader-mobile-text :deep(p),
+.reader-mobile-text :deep(div),
+.reader-mobile-text :deep(span),
+.reader-mobile-text :deep(b),
+.reader-mobile-text :deep(strong),
+.reader-mobile-text :deep(em),
+.reader-mobile-text :deep(i),
+.reader-mobile-text :deep(li),
+.reader-mobile-text :deep(blockquote) {
+  font-weight: inherit !important;
 }
 
 .reader-mobile-text :deep(p) {
@@ -2432,9 +2479,30 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
+/* Same track + thumb as the Listen player's scrubber, so the two progress bars
+   in the reader read as one control. */
 .media-progress-row input {
   width: 100%;
-  accent-color: var(--color-brand-primary);
+  height: 5px;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-brand-primary) var(--fill, 0%),
+    color-mix(in srgb, var(--sheet-control-text) 30%, transparent) var(--fill, 0%)
+  );
+  touch-action: pan-x;
+}
+
+.media-progress-row input::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-brand-primary);
 }
 
 .speed-btn {

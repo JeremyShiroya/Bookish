@@ -291,25 +291,6 @@
                 :options="['Unread', 'Reading', 'Read']"
               />
             </div>
-            <div class="form-group">
-              <label>Personal Rating</label>
-              <div class="rating-input-container">
-                <div class="star-rating">
-                  <i 
-                    v-for="n in 10" 
-                    :key="n"
-                    class="rating-star"
-                    :class="{ 
-                      'ri-star-fill': n <= editBook.rating,
-                      'ri-star-line': n > editBook.rating,
-                      'active': n <= editBook.rating 
-                    }"
-                    @click="editBook.rating = n"
-                  ></i>
-                </div>
-                <span class="rating-display">{{ editBook.rating || 0 }}/10</span>
-              </div>
-            </div>
           </div>
 
           <div class="form-group">
@@ -374,7 +355,6 @@ const editBook = ref({
   webReview: '',
   format: '',
   pages: 0,
-  rating: 0,
   progress: 0,
   status: 'Unread',
   isFavourite: false,
@@ -1060,39 +1040,10 @@ const handleUpdateBook = async () => {
   pointer-events: none;
 }
 
-.rating-input-container {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 0.5rem 0;
-}
 
-.star-rating {
-  display: flex;
-  gap: 0.25rem;
-}
 
-.rating-star {
-  font-size: 1.75rem;
-  color: var(--color-border-strong);
-  cursor: pointer;
-  transition: all 0.2s;
-}
 
-.rating-star:hover,
-.rating-star.active {
-  color: var(--color-status-star);
-  transform: scale(1.1);
-}
 
-.rating-display {
-  font-size: 1.1rem;
-  color: var(--color-text-secondary);
-  font-weight: 400;
-  background: var(--color-surface-tertiary);
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-}
 
 .readonly-review {
   padding: 1rem;
@@ -1433,18 +1384,8 @@ const handleUpdateBook = async () => {
   justify-content: center;
 }
 
-.rating-input-container {
-  flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
-}
 
-.star-rating {
-  flex-wrap: wrap;
-}
 
-.rating-star {
-  font-size: 1.5rem;
-}
 
 .page-actions {
   flex-direction: column;

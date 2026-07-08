@@ -52,6 +52,7 @@
 
       <div v-if="filteredBooks.length" class="book-list">
         <LibraryBookCard
+          :show-personal-rating="false"
           v-for="book in filteredBooks"
           :key="book.id"
           :book="book"

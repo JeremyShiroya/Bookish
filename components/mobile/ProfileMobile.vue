@@ -35,20 +35,16 @@
               placeholder="Reader"
               @keyup.enter="saveProfileDetails"
             />
-            <button type="button" aria-label="Save profile" title="Save profile" @click="saveProfileDetails">
-              <i class="ri-check-line"></i>
-            </button>
           </div>
         </label>
 
+        <!-- The avatar is changed by tapping the camera badge on the avatar
+             itself, so a separate "Change avatar" button was redundant — as was
+             the check button beside the name input, which did what Save does. -->
         <div class="profile-actions">
           <button class="profile-action primary" type="button" @click="saveProfileDetails">
             <i class="ri-save-3-line"></i>
             <span>Save profile</span>
-          </button>
-          <button class="profile-action" type="button" @click="avatarModalOpen = true">
-            <i class="ri-image-line"></i>
-            <span>Change avatar</span>
           </button>
         </div>
       </div>
@@ -94,7 +90,6 @@
               @click="selectAvatar(avatar.src)"
             >
               <img :src="avatar.src" :alt="avatar.label" />
-              <span class="avatar-option-name">{{ avatar.label }}</span>
             </button>
           </div>
         </section>
@@ -298,8 +293,6 @@ onMounted(async () => {
 
 .profile-name-control {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
-  gap: 0.55rem;
 }
 
 .profile-name-control input {
@@ -313,7 +306,6 @@ onMounted(async () => {
   padding: 0 0.9rem;
 }
 
-.profile-name-control button,
 .profile-action {
   display: inline-flex;
   align-items: center;
@@ -325,17 +317,8 @@ onMounted(async () => {
   cursor: pointer;
 }
 
-.profile-name-control button {
-  width: 44px;
-  height: 44px;
-  color: var(--color-text-on-brand);
-  border-color: var(--color-brand-primary);
-  background: var(--color-brand-primary);
-}
-
 .profile-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.6rem;
 }
 
@@ -495,13 +478,6 @@ onMounted(async () => {
   object-fit: cover;
 }
 
-.avatar-option-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.72rem;
-}
-
   .profile-page {
     font-family: var(--mobile-font-family);
   }
@@ -552,11 +528,6 @@ onMounted(async () => {
     font-size: var(--mobile-subtext-size);
   }
 
-  .profile-name-control {
-    grid-template-columns: minmax(0, 1fr) var(--mobile-touch-target);
-    gap: 8px;
-  }
-
   .profile-name-control input {
     min-height: var(--mobile-touch-target);
     border-radius: var(--mobile-control-radius);
@@ -564,15 +535,9 @@ onMounted(async () => {
     font-size: var(--mobile-body-size);
   }
 
-  .profile-name-control button,
   .profile-action {
     border-radius: var(--mobile-control-radius);
     font-size: var(--mobile-body-size);
-  }
-
-  .profile-name-control button {
-    width: var(--mobile-touch-target);
-    height: var(--mobile-touch-target);
   }
 
   .profile-actions {
@@ -638,16 +603,7 @@ onMounted(async () => {
     padding: 8px;
   }
 
-  .avatar-option-name {
-    font-size: var(--mobile-caption-size);
-  }
-
-
 @media (max-width: 430px) {
-  .profile-actions {
-    grid-template-columns: 1fr;
-  }
-
   .avatar-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

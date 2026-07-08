@@ -3,26 +3,46 @@
     <MobileTopNav />
 
 
-    <div v-if="playlistsWithBooks.length > 0" class="playlists-grid">
+    <div v-if="showSkeleton" class="playlists-loading">
+      <MobileSkeleton page="playlists" :count="4" />
+    </div>
+
+    <div v-else-if="playlistsWithBooks.length > 0" class="playlists-grid">
       <div
         v-for="playlist in playlistsWithBooks"
         :key="playlist.id"
         class="playlist-card"
+        :class="[`l-${playlistLayout}`, { 'bg-blur': playlistBackground === 'blur' }]"
         @click="openPlaylist(playlist)"
         @contextmenu.prevent.stop="openContextMenu($event, playlist)"
       >
-        <!-- Blurred cover background -->
-        <div
-          class="card-bg"
-          :style="{ backgroundImage: playlist.previewBooks[0] ? `url(${resolveBookCover(playlist.previewBooks[0])})` : 'none' }"
-        ></div>
-        <div class="card-bg-overlay"></div>
+        <!-- Blurred cover background (Preferences → Playlist cards) -->
+        <template v-if="playlistBackground === 'blur'">
+          <div
+            class="card-bg"
+            :style="{ backgroundImage: playlist.previewBooks[0] ? `url(${resolveBookCover(playlist.previewBooks[0])})` : 'none' }"
+          ></div>
+          <div class="card-bg-overlay"></div>
+        </template>
 
         <!-- Playlist name — top left -->
         <span class="card-name">{{ playlist.name }}</span>
 
-        <!-- Up to 2 covers — bottom right, angled -->
-        <div class="card-covers">
+        <!-- 'cover': up to 2 angled covers, bottom right.
+             'fan':   up to 3 fanned covers, bottom centre (like series cards). -->
+        <div v-if="playlistLayout === 'fan'" class="card-fan">
+          <img
+            v-for="(previewBook, index) in playlist.previewBooks.slice(0, 3)"
+            :key="previewBook.id"
+            class="fan-cover"
+            :class="`fan-cover--${index}`"
+            :src="resolveBookCover(previewBook)"
+            :alt="previewBook.title"
+            @error="(e) => coverFallback(e, previewBook.title)"
+          />
+        </div>
+
+        <div v-else class="card-covers">
           <img
             v-if="playlist.previewBooks[1]"
             class="card-cover card-cover--back"
@@ -81,7 +101,7 @@
 
     <!-- Empty State -->
     <EmptyState
-      v-if="playlistsWithBooks.length === 0"
+      v-if="playlistsWithBooks.length === 0 && !showSkeleton"
       title="No playlists yet"
       description="Organize your library by creating playlists for favorites, moods, genres, or reading plans."
       icon="ri-play-list-2-line"
@@ -102,13 +122,19 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
+import { useBookishSettings } from "~/composables/useBookishSettings";
 import { useToast } from "~/composables/useToast";
 import EmptyState from "../shared/EmptyState.vue";
 import PlaylistEditModal from "../shared/PlaylistEditModal.vue";
 import MobileBottomNav from "./MobileBottomNav.vue";
+import MobileSkeleton from "./MobileSkeleton.vue";
 import MobileTopNav from "./MobileTopNav.vue";
 
-const { collections, books, updatePlaylist, deletePlaylist } = useBooks();
+const { collections, books, updatePlaylist, deletePlaylist, loading, initialized } = useBooks();
+const { settings } = useBookishSettings();
+const playlistLayout = computed(() => settings.value.playlistCardLayout || "cover");
+const playlistBackground = computed(() => settings.value.playlistCardBackground || "blur");
+const showSkeleton = computed(() => loading.value && !initialized.value);
 const { addToast } = useToast();
 const router = useRouter();
 const editingPlaylist = ref(null);
@@ -236,6 +262,10 @@ const coverFallback = (event, title) => {
 
 
 
+.playlists-loading {
+  padding: 0.5rem 0;
+}
+
 /* ── Grid ────────────────────────────────────────────────────── */
 
 .playlists-grid {
@@ -273,6 +303,50 @@ const coverFallback = (event, title) => {
 
 .playlist-card:hover {
   transform: scale(1.03);
+}
+
+/* "Blank" background: a plain surface card instead of the blurred cover, so the
+   name and count need the normal text colours rather than white-on-image. */
+.playlist-card:not(.bg-blur) {
+  background: #e8e8f1;
+}
+
+:root[data-theme='dark'] .playlist-card:not(.bg-blur) {
+  background: var(--color-surface-primary);
+}
+
+.playlist-card:not(.bg-blur) .card-name {
+  color: var(--color-text-primary);
+  text-shadow: none;
+}
+
+/* ── 'fan' layout — fanned covers, bottom centre (matches the series card) ─── */
+.card-fan {
+  position: absolute;
+  bottom: -14px;
+  left: 50%;
+  z-index: 3;
+  transform: translateX(-50%);
+}
+
+.fan-cover {
+  position: absolute;
+  bottom: 0;
+  width: 74px;
+  height: 112px;
+  border-radius: 5px;
+  object-fit: cover;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.34);
+  transform-origin: bottom center;
+}
+
+.fan-cover--0 { left: -37px; z-index: 3; }
+.fan-cover--1 { left: -96px; z-index: 2; transform: rotate(-11deg); }
+.fan-cover--2 { left: 22px; z-index: 2; transform: rotate(11deg); }
+
+/* In the fan layout the name sits across the top, not beside the covers. */
+.playlist-card.l-fan .card-name {
+  right: 1rem;
 }
 
 .playlist-context-menu {
@@ -318,13 +392,14 @@ const coverFallback = (event, title) => {
 
 /* ── Blurred background ──────────────────────────────────────── */
 
+/* Same blurred cover-image formula as the series card (the reference). */
 .card-bg {
   position: absolute;
-  inset: -20px;
+  inset: 0;
   background-size: cover;
   background-position: center;
   filter: blur(25px) saturate(150%);
-  transform: scale(1.2);
+  transform: scale(1.35);
   z-index: 0;
 }
 

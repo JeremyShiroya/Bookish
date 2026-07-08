@@ -4,7 +4,7 @@
 
     <!-- Loading State -->
     <div v-if="loading" class="books-loading">
-      <SkeletonLoader variant="books-grid" :count="12" />
+      <MobileSkeleton page="books" :count="12" />
     </div>
 
     <!-- Books Content -->
@@ -108,6 +108,7 @@
         <!-- Grid View -->
         <div v-if="viewMode === 'grid'" class="books-grid">
           <LibraryBookCard
+            :show-personal-rating="false"
             v-for="book in displayedBooks"
             :key="book.id"
             :book="book"
@@ -125,6 +126,7 @@
         <!-- List View -->
         <div v-else class="mobile-table-card-list">
           <LibraryBookCard
+            :show-personal-rating="false"
             v-for="book in displayedBooks"
             :key="book.id"
             class="mobile-list-book-card"
@@ -195,8 +197,8 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import DeleteConfirmModal from "../shared/DeleteConfirmModal.vue";
 import LibraryBookCard from "../shared/LibraryBookCard.vue";
 import AddToPlaylistModal from "../shared/AddToPlaylistModal.vue";
-import SkeletonLoader from "../shared/SkeletonLoader.vue";
 import MobileBottomNav from "./MobileBottomNav.vue";
+import MobileSkeleton from "./MobileSkeleton.vue";
 import MobileTopNav from "./MobileTopNav.vue";
 
 import { useBooks } from "~/composables/useBooks";
@@ -380,9 +382,16 @@ const closeDeleteModal = () => {
   selectedBook.value = null;
 };
 
-const deleteBook = () => {
-  removeBookFromStore(selectedBook.value.id);
+const deleteBook = async () => {
+  const book = selectedBook.value;
+  if (!book) return;
   closeDeleteModal();
+  try {
+    await removeBookFromStore(book.id);
+    addToast(`"${book.title}" was permanently deleted.`, 'success');
+  } catch {
+    addToast(`Could not delete "${book.title}".`, 'error');
+  }
 };
 
 const handleResize = () => {
@@ -895,14 +904,6 @@ onUnmounted(() => {
   color: var(--color-text-muted);
   min-width: 32px;
   text-align: right;
-}
-
-.list-rating-cell {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.85rem;
-  color: var(--color-text-secondary);
 }
 
 .list-goodreads-cell {

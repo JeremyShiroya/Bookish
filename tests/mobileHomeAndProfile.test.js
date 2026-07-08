@@ -29,7 +29,17 @@ describe('mobile home and profile refinements', () => {
     expect(profile).toContain('profile-avatar-ring')
     expect(profile).toContain('profile-actions')
     expect(profile).toContain('profile-preview-card')
-    expect(profile).toContain('avatar-option-name')
     expect(profile).toContain('appearance-panel')
+
+    // Avatars are shown as images only, and the two redundant controls (the
+    // check button beside the name, and the "Change avatar" button — the camera
+    // badge on the avatar already opens the picker) are gone.
+    expect(profile).not.toContain('avatar-option-name')
+    expect(profile).not.toContain('<span>Change avatar</span>')
+    expect(profile).not.toContain('ri-image-line')
+    expect(profile).not.toContain('ri-check-line')
+    // The camera badge remains the way in.
+    expect(profile).toContain('avatar-edit-badge')
+    expect(profile).toContain('ri-camera-line')
   })
 })

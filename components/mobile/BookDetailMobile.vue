@@ -44,6 +44,7 @@
           <GoodreadsRatingDisplay
             :web-review="book.webReview"
             compact
+            stacked
             class="detail-rating"
           />
 
@@ -320,15 +321,15 @@ watch(
   font-size: 1.05rem;
 }
 
+/* Stars + score on the first line, "76 ratings · 6 reviews" on the second —
+   the single cramped row is what made this block hard to read. */
 .detail-rating {
-  margin-top: 0.1rem;
+  margin-top: 0.35rem;
   max-width: 100%;
   min-width: 0;
 }
 
 .detail-rating :deep(.goodreads-rating) {
-  flex-wrap: wrap;
-  row-gap: 0.15rem;
   max-width: 100%;
   min-width: 0;
 }

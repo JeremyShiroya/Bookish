@@ -53,7 +53,7 @@
         <GoodreadsRatingDisplay :web-review="book.webReview" compact />
       </div>
 
-      <div class="personal-rating" title="Personal rating">
+      <div v-if="showPersonalRating" class="personal-rating" title="Personal rating">
         <span class="rating-label">Personal Rating</span>
         <i class="ri-star-fill"></i>
         <span>{{ formatPersonalRating(book.rating) }}</span>
@@ -105,6 +105,12 @@ const props = defineProps({
   cardBackground: {
     type: String,
     default: 'blur',
+  },
+  // The mobile library doesn't track a personal rating at all, so its cards
+  // opt out of the row entirely.
+  showPersonalRating: {
+    type: Boolean,
+    default: true,
   },
 })
 

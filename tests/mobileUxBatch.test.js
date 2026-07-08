@@ -126,14 +126,14 @@ describe('mobile UX batch', () => {
     expect(cover).toMatch(/\.cover-modal-body\s*\{[^}]*overflow-y:\s*auto/)
   })
 
-  test('preferences page shows visual previews for each card option', () => {
+  test('preferences page shows visual previews for every option, cards and reading alike', () => {
     const prefs = read('components/mobile/PreferencesMobile.vue')
     expect(prefs).toContain('SeriesPreview')
-    expect(prefs).toContain('FavouritePreview')
+    expect(prefs).toContain('ReadingPreview')
     expect(prefs).toContain('class="preview"')
 
     expect(existsSync(resolve(root, 'components/shared/previews/SeriesCardPreview.vue'))).toBe(true)
-    expect(existsSync(resolve(root, 'components/shared/previews/FavouriteCardPreview.vue'))).toBe(true)
+    expect(existsSync(resolve(root, 'components/shared/previews/ReadingPreview.vue'))).toBe(true)
   })
 
   test('reader uses comfortable book typography and PDF long-press', () => {
@@ -261,5 +261,155 @@ describe('mobile UX batch', () => {
   test('audio settings page is removed from mobile settings', () => {
     expect(existsSync(resolve(root, 'pages/settings/audio.vue'))).toBe(false)
     expect(read('components/mobile/SettingsMobile.vue')).not.toContain('/settings/audio')
+  })
+
+  test('mobile pages use mobile-shaped skeletons, not the wide-layout ones', () => {
+    expect(existsSync(resolve(root, 'components/mobile/MobileSkeleton.vue'))).toBe(true)
+    const skeleton = read('components/mobile/MobileSkeleton.vue')
+    for (const page of ['home', 'books', 'series', 'favourites', 'playlists']) {
+      expect(skeleton, page).toContain(`'${page}'`)
+    }
+
+    const pages = {
+      'components/mobile/HomeMobile.vue': 'home',
+      'components/mobile/BooksMobile.vue': 'books',
+      'components/mobile/SeriesMobile.vue': 'series',
+      'components/mobile/FavouritesMobile.vue': 'favourites',
+      'components/mobile/PlaylistsMobile.vue': 'playlists',
+    }
+    for (const [file, page] of Object.entries(pages)) {
+      const source = read(file)
+      expect(source, file).toContain(`<MobileSkeleton page="${page}"`)
+      expect(source, file).not.toContain('<SkeletonLoader')
+    }
+  })
+
+  test('the mobile library has no personal rating anywhere', () => {
+    for (const file of [
+      'components/mobile/BooksMobile.vue',
+      'components/mobile/BookDetailMobile.vue',
+      'components/mobile/AddBookMobile.vue',
+      'components/mobile/EditBookMobile.vue',
+    ]) {
+      const source = read(file)
+      expect(source, file).not.toContain('Personal Rating')
+      expect(source, file).not.toMatch(/\brating-star\b/)
+    }
+
+    // The shared card keeps the row for the wide layout, behind an opt-out prop.
+    const card = read('components/shared/LibraryBookCard.vue')
+    expect(card).toContain('showPersonalRating')
+    expect(card).toContain('v-if="showPersonalRating"')
+    for (const file of ['components/mobile/BooksMobile.vue', 'components/mobile/FavouritesMobile.vue']) {
+      expect(read(file), file).toContain(':show-personal-rating="false"')
+    }
+  })
+
+  test('deleting a book removes it for real, and the modal says so', () => {
+    const books = read('composables/useBooks.js')
+    // The record write is awaited and rethrown; cleanup of the cached cover and
+    // the on-device document happens after, best-effort.
+    expect(books).toContain('deleteDeviceImport')
+    expect(books).toMatch(/remove\('covers', name\)/)
+
+    const sync = read('composables/useDeviceLibrarySync.js')
+    expect(sync).toContain('export async function deleteDeviceImport')
+    // A tombstone keeps a deleted book deleted even if the file survived.
+    expect(sync).toContain('deletedByUser')
+    expect(sync).toContain('if (known.deletedByUser) return false')
+
+    const plugin = read('android/app/src/main/java/com/bookish/app/DeviceBooksPlugin.java')
+    expect(plugin).toContain('public void deleteFile(PluginCall call)')
+
+    const modal = read('components/shared/DeleteConfirmModal.vue')
+    expect(modal).toContain('permanently removes the book')
+    expect(modal).toContain('removesDeviceFile')
+    expect(modal).toContain('Delete permanently')
+    // Points the user at Hide, the non-destructive neighbour.
+    expect(modal).toContain('Hide')
+  })
+
+  test('reader thickness options map to weights the reader fonts actually ship', () => {
+    const prefs = read('composables/useMobileReaderPrefs.js')
+    // Georgia only has 400/700, so 300 and 500 collapsed onto 400 and the
+    // thickness control did nothing. Literata is variable across 300-700.
+    expect(prefs).toContain('Literata')
+    expect(prefs).not.toMatch(/stack:\s*"Georgia/)
+    expect(read('assets/css/main.css')).toContain('family=Literata')
+  })
+
+  // Regression: main.css applies `font-weight: 400 !important` to p/div/span for
+  // the app chrome, which silently defeated the reader's Thickness control. The
+  // book text must out-specify it, or Light/Normal/Medium/Bold all look the same.
+  test('reader body text wins the global font-weight !important reset', () => {
+    const globalCss = read('assets/css/main.css')
+    expect(globalCss).toMatch(/font-weight:\s*400\s*!important/)
+
+    const paged = read('components/mobile/ReaderPagedEpub.vue')
+    expect(paged).toMatch(/\.paged-text\s*\{[\s\S]*?font-weight:\s*var\(--mr-font-weight,\s*400\)\s*!important/)
+    expect(paged).toMatch(/\.paged-text\s*:where\([^)]*\bp\b[^)]*\)\s*\{[^}]*font-weight:\s*inherit\s*!important/)
+
+    const scroll = read('components/mobile/ReaderMobile.vue')
+    expect(scroll).toMatch(/\.reader-mobile-text\s*\{[\s\S]*?font-weight:\s*var\(--mr-font-weight,\s*400\)\s*!important/)
+    expect(scroll).toMatch(/font-weight:\s*inherit\s*!important/)
+  })
+
+  test('page mode hides the app tab bar and reclaims its space', () => {
+    const reader = read('components/mobile/ReaderMobile.vue')
+    expect(reader).toContain(`v-show="readerMode === 'read' && !usePagedReader"`)
+    expect(reader).toMatch(/\.reader-mobile-page\.is-paged\s*\{[^}]*--bottom-nav-space:\s*env\(safe-area-inset-bottom\)/)
+    // The paged viewport measures from that variable, not the raw nav height.
+    expect(read('components/mobile/ReaderPagedEpub.vue')).toContain('var(--bottom-nav-space, 72px) + 66px')
+  })
+
+  test('reader mode pills are unobtrusive: glass over artwork, paper over the page', () => {
+    const reader = read('components/mobile/ReaderMobile.vue')
+    // Read mode: the active pill is the reader surface, never brand purple.
+    expect(reader).toMatch(/\.reader-mode-toggle button\.active\s*\{[^}]*background:\s*var\(--mobile-reader-surface\)/)
+    // Listen mode over the blurred cover: frosted glass, still not purple.
+    expect(reader).toMatch(/listen-blur \.reader-mode-toggle\s*\{[^}]*backdrop-filter/)
+    expect(reader).toMatch(/listen-blur \.reader-mode-toggle button\.active\s*\{[^}]*rgba\(255, 255, 255, 0\.24\)/)
+    expect(reader).not.toMatch(/listen-blur \.reader-mode-toggle button\.active\s*\{[^}]*var\(--color-brand-primary\)/)
+
+    // The media sheet's scrubber matches the Listen player's, not accent-color.
+    expect(reader).not.toMatch(/\.media-progress-row input\s*\{[^}]*accent-color/)
+    expect(reader).toMatch(/\.media-progress-row input::-webkit-slider-thumb/)
+  })
+
+  test('home search bar shows exactly one clear affordance', () => {
+    const home = read('components/mobile/HomeMobile.vue')
+    // Blink's native search clear button is suppressed…
+    expect(home).toContain('::-webkit-search-cancel-button')
+    // …and ours is a bare icon, with no circular chip behind it.
+    expect(home).toMatch(/\.mobile-search-clear\s*\{[^}]*background:\s*transparent/)
+    expect(home).not.toMatch(/\.mobile-search-clear\s*\{[^}]*border-radius:\s*50%/)
+  })
+
+  test('the Currently Reading card blurs the real cover, like the series card', () => {
+    const card = read('components/shared/HomeContinueReadingCard.vue')
+    // It used to blur a hardcoded gradient, so it could never match.
+    expect(card).not.toContain('linear-gradient(100deg, #5b5965 0%, #7e475f 54%, #8a8990 100%);\n  background-size')
+    expect(card).toMatch(/\.continue-bg\s*\{[^}]*filter:\s*blur\(25px\)\s*saturate\(150%\)/)
+    expect(card).toMatch(/\.continue-bg\s*\{[^}]*transform:\s*scale\(1\.35\)/)
+    expect(card).toMatch(/\.continue-overlay\s*\{[^}]*var\(--gradient-image-card-overlay\)/)
+
+    // Same three declarations as the reference implementation.
+    const series = read('components/shared/SeriesCollageCard.vue')
+    expect(series).toMatch(/filter:\s*blur\(25px\)\s*saturate\(150%\)/)
+    expect(series).toMatch(/transform:\s*scale\(1\.35\)/)
+    expect(series).toContain('var(--gradient-image-card-overlay)')
+  })
+
+  test('mobile modals are reachable bottom sheets', () => {
+    const del = read('components/shared/DeleteConfirmModal.vue')
+    expect(del).toContain('delete-sheet')
+    expect(del).toMatch(/align-items:\s*flex-end/)
+
+    const playlist = read('components/shared/AddToPlaylistModal.vue')
+    expect(playlist).toContain('playlist-sheet')
+    expect(playlist).toMatch(/align-items:\s*flex-end/)
+    // Multi-select, and playlists already holding the book stay visible.
+    expect(playlist).toContain('selectedIds')
+    expect(playlist).toContain('alreadyHas')
   })
 })

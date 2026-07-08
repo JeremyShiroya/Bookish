@@ -1,210 +1,258 @@
 <template>
-  <div class="modal-overlay" @click="closeModal">
-    <div class="modal-container" @click.stop>
-      <div class="modal-header">
-        <div class="warning-icon">
-          <i class="ri-error-warning-line"></i>
-        </div>
-        <h2>Delete Book</h2>
-      </div>
-      
-      <div class="modal-content">
-        <p class="confirmation-text">
-          Are you sure you want to delete <strong>"{{ book.title }}"</strong> by {{ book.author }}?
-        </p>
-        <p class="warning-text">
-          This action cannot be undone.
-        </p>
-        
-        <div class="book-preview">
-          <img :src="book.cover" :alt="book.title" class="book-thumbnail" @error="onCoverError($event, book.title)" />
-          <div class="book-details">
-            <h3>{{ book.title }}</h3>
-            <p>{{ book.author }}</p>
-          </div>
+  <div class="delete-overlay" role="presentation" @click="closeModal">
+    <section
+      class="delete-sheet"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="delete-title"
+      aria-describedby="delete-description"
+      @click.stop
+    >
+      <span class="sheet-grabber" aria-hidden="true"></span>
+
+      <div class="delete-book">
+        <img :src="book.cover" :alt="book.title" class="delete-cover" @error="onCoverError($event, book.title)" />
+        <div class="delete-book-meta">
+          <strong>{{ book.title }}</strong>
+          <span>{{ book.author || 'Unknown author' }}</span>
         </div>
       </div>
 
-      <div class="modal-actions">
-        <button @click="closeModal" class="cancel-button">
-          Cancel
-        </button>
-        <button @click="confirmDelete" class="delete-button">
+      <h2 id="delete-title">Delete this book?</h2>
+      <p id="delete-description" class="delete-description">
+        This permanently removes the book from Bookish. It cannot be undone.
+      </p>
+
+      <!-- Spell out exactly what disappears, so "delete" is never mistaken for
+           the neighbouring "hide" action. -->
+      <ul class="delete-effects">
+        <li>
+          <i class="ri-book-2-line"></i>
+          <span>Its place in your library, progress and bookmarks</span>
+        </li>
+        <li v-if="removesDeviceFile" class="danger">
+          <i class="ri-smartphone-line"></i>
+          <span>
+            The <strong>{{ formatLabel }} file on your device</strong>
+            <em v-if="book.deviceImportPath">{{ book.deviceImportPath }}</em>
+          </span>
+        </li>
+        <li v-else>
+          <i class="ri-file-copy-2-line"></i>
+          <span>Its stored copy of the {{ formatLabel }} and cover</span>
+        </li>
+      </ul>
+
+      <p class="delete-hint">
+        Want it out of the way but kept? Close this and choose
+        <strong>Hide</strong> instead.
+      </p>
+
+      <div class="delete-actions">
+        <button type="button" class="delete-cancel" @click="closeModal">Cancel</button>
+        <button type="button" class="delete-confirm" @click="confirmDelete">
           <i class="ri-delete-bin-line"></i>
-          Delete Book
+          Delete permanently
         </button>
       </div>
-    </div>
+    </section>
   </div>
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { onCoverError } from '~/composables/useCoverFallback'
 
 const props = defineProps({
   book: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const emit = defineEmits(['close', 'confirm'])
 
-const closeModal = () => {
-  emit('close')
-}
+const formatLabel = computed(() => (props.book.format || 'book').toUpperCase())
 
-const confirmDelete = () => {
-  emit('confirm')
-}
+// Books auto-imported from device storage own the original document on the
+// phone; deleting the book deletes that file too.
+const removesDeviceFile = computed(() => Boolean(props.book.deviceImport && props.book.deviceImportPath))
+
+const closeModal = () => emit('close')
+const confirmDelete = () => emit('confirm')
 </script>
 
 <style scoped>
-.modal-overlay {
+.delete-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
+  z-index: 3400;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
   background: var(--color-background-overlay-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
-.modal-container {
-  background: var(--color-surface-primary);
-  border-radius: 0.75rem;
-  max-width: 400px;
-  width: 100%;
-  box-shadow: var(--shadow-modal);
-}
-
-.modal-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2rem 1.5rem 1rem;
-  text-align: center;
-}
-
-.warning-icon {
-  width: 4rem;
-  height: 4rem;
-  background: var(--color-status-danger-soft);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 1rem;
-}
-
-.warning-icon i {
-  font-size: 2rem;
-  color: var(--color-status-danger);
-}
-
-.modal-header h2 {
-  font-size: 1.25rem;
-  font-weight: 400;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.modal-content {
-  padding: 0 1.5rem 1rem;
-  text-align: center;
-}
-
-.confirmation-text {
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
-  margin-bottom: 0.5rem;
-  line-height: 1.5;
-}
-
-.warning-text {
-  font-size: 0.75rem;
-  color: var(--color-status-danger);
-  margin-bottom: 1.5rem;
-}
-
-.book-preview {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background: var(--color-surface-secondary);
-  border-radius: 0.5rem;
+/* A bottom sheet: the confirm button lands under the thumb rather than in the
+   middle of the screen, and the sheet can never be dismissed by a stray tap on
+   a full-width overlay button. */
+.delete-sheet {
+  width: min(520px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 10px 20px calc(20px + env(safe-area-inset-bottom));
+  border-radius: 20px 20px 0 0;
+  background: var(--color-surface-modal, var(--color-surface-primary));
+  box-shadow: 0 -14px 40px rgba(15, 23, 42, 0.24);
   text-align: left;
 }
 
-.book-thumbnail {
-  width: 50px;
-  height: 70px;
-  object-fit: cover;
-  border-radius: 0.25rem;
+.sheet-grabber {
+  display: block;
+  width: 36px;
+  height: 4px;
+  margin: 0 auto 18px;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  opacity: 0.5;
 }
 
-.book-details h3 {
-  font-size: 0.875rem;
-  font-weight: 400;
-  color: var(--color-text-primary);
-  margin: 0 0 0.25rem 0;
-}
-
-.book-details p {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  margin: 0;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 1rem;
-  padding: 1rem 1.5rem 1.5rem;
-}
-
-.cancel-button,
-.delete-button {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 400;
-  cursor: pointer;
-  transition: all 0.2s;
+.delete-book {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
+  gap: 0.85rem;
+  padding: 0.7rem;
+  border-radius: 12px;
+  background: var(--color-surface-secondary);
 }
 
-.cancel-button {
+.delete-cover {
+  width: 44px;
+  height: 62px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  object-fit: cover;
+  box-shadow: var(--shadow-cover);
+}
+
+.delete-book-meta {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.delete-book-meta strong {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-book-meta span {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.delete-sheet h2 {
+  margin: 1.1rem 0 0.3rem;
+  color: var(--color-text-primary);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.delete-description {
+  margin: 0 0 1rem;
+  color: var(--color-text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.delete-effects {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 12px;
+  list-style: none;
+}
+
+.delete-effects li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.delete-effects i {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+}
+
+.delete-effects .danger,
+.delete-effects .danger i {
+  color: var(--color-status-danger);
+}
+
+.delete-effects em {
+  display: block;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-hint {
+  margin: 0 0 1.2rem;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.delete-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: 0.7rem;
+}
+
+.delete-cancel,
+.delete-confirm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 48px;
+  padding: 0 0.9rem;
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.delete-cancel {
   border: 1px solid var(--color-border-strong);
   background: var(--color-surface-primary);
   color: var(--color-text-secondary);
 }
 
-.cancel-button:hover {
-  background: var(--color-surface-secondary);
-}
-
-.delete-button {
-  border: none;
+.delete-confirm {
+  border: 0;
   background: var(--color-status-danger);
   color: var(--color-text-on-brand);
 }
 
-.delete-button:hover {
+.delete-confirm:active {
   background: var(--color-status-danger-hover);
-}
-
-@media (max-width: 640px) {
-  .modal-actions {
-    flex-direction: column;
-  }
 }
 </style>

@@ -8,16 +8,21 @@ export const MOBILE_READER_PREFS_KEY = 'bookish:mobile-reader-prefs'
 
 export const READING_MODE_OPTIONS = Object.freeze(['page', 'scroll'])
 export const READER_BACKGROUND_OPTIONS = Object.freeze(['default', 'sepia'])
+// Every reader font must carry real 300-700 weights, otherwise the thickness
+// control does nothing: CSS font-matching silently collapses 300 and 500 onto
+// 400 when the family has no such face (Georgia only ships 400/700, which is why
+// Light/Normal/Medium used to render identically). Literata and General Sans are
+// variable/multi-weight; Roboto (Android) covers 300/400/500/700.
 export const READER_FONT_OPTIONS = Object.freeze([
-  { id: 'serif', label: 'Serif', stack: "Georgia, 'Times New Roman', serif" },
+  { id: 'serif', label: 'Serif', stack: "Literata, Georgia, 'Times New Roman', serif" },
   { id: 'app', label: 'App font', stack: 'var(--mobile-font-family)' },
-  { id: 'sans', label: 'Sans', stack: "system-ui, 'Segoe UI', Roboto, sans-serif" },
+  { id: 'sans', label: 'Sans', stack: "Roboto, system-ui, 'Segoe UI', sans-serif" },
 ])
 export const READER_WEIGHT_OPTIONS = Object.freeze([
   { id: 300, label: 'Light' },
   { id: 400, label: 'Normal' },
   { id: 500, label: 'Medium' },
-  { id: 600, label: 'Bold' },
+  { id: 700, label: 'Bold' },
 ])
 export const READER_LINE_SPACING_OPTIONS = Object.freeze([1.4, 1.62, 1.8, 2.0])
 export const READER_ALIGN_OPTIONS = Object.freeze(['justify', 'left'])

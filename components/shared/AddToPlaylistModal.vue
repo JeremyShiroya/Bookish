@@ -1,11 +1,16 @@
 <template>
-  <div class="playlist-overlay" @click="emit('close')">
-    <section class="playlist-dialog" role="dialog" aria-modal="true" aria-labelledby="playlist-dialog-title" @click.stop>
+  <div class="playlist-overlay" role="presentation" @click="emit('close')">
+    <section
+      class="playlist-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="playlist-sheet-title"
+      @click.stop
+    >
+      <span class="sheet-grabber" aria-hidden="true"></span>
+
       <header>
-        <div>
-          <span class="eyebrow">Organize your library</span>
-          <h2 id="playlist-dialog-title">Add to playlist</h2>
-        </div>
+        <h2 id="playlist-sheet-title">Add to playlist</h2>
         <button type="button" class="close-button" aria-label="Close" @click="emit('close')">
           <i class="ri-close-line"></i>
         </button>
@@ -19,63 +24,62 @@
         </div>
       </div>
 
-      <div v-if="availablePlaylists.length" class="playlist-list">
-        <label
-          v-for="playlist in availablePlaylists"
+      <!-- Creating a playlist is a row in the list, not a mode that replaces it:
+           the old modal swapped the whole list out for a text field. -->
+      <div class="playlist-list" role="group" aria-label="Your playlists">
+        <div v-if="creating" class="new-playlist-row">
+          <i class="ri-play-list-add-line"></i>
+          <input
+            ref="newPlaylistInput"
+            v-model="newPlaylistName"
+            type="text"
+            maxlength="100"
+            placeholder="Playlist name"
+            @keydown.enter.prevent="save"
+            @keydown.esc="cancelCreating"
+          />
+          <button type="button" class="row-ghost" aria-label="Cancel new playlist" @click="cancelCreating">
+            <i class="ri-close-line"></i>
+          </button>
+        </div>
+
+        <button v-else type="button" class="new-playlist-toggle" @click="startCreating">
+          <span class="row-icon accent"><i class="ri-add-line"></i></span>
+          <span class="row-copy"><strong>New playlist</strong></span>
+        </button>
+
+        <!-- Playlists already containing the book stay visible, marked "Added",
+             instead of silently vanishing from the list. -->
+        <button
+          v-for="playlist in playlists"
           :key="playlist.id"
-          class="playlist-choice"
-          :class="{ selected: selectedPlaylistId === String(playlist.id) }"
+          type="button"
+          class="playlist-row"
+          :class="{ selected: selectedIds.has(String(playlist.id)), added: playlist.alreadyHas }"
+          :disabled="playlist.alreadyHas"
+          :aria-pressed="selectedIds.has(String(playlist.id))"
+          @click="toggle(playlist)"
         >
-          <input v-model="selectedPlaylistId" type="radio" :value="String(playlist.id)" />
-          <span class="playlist-icon"><i class="ri-play-list-2-line"></i></span>
-          <span class="playlist-copy">
+          <span class="row-icon"><i class="ri-play-list-2-line"></i></span>
+          <span class="row-copy">
             <strong>{{ playlist.name }}</strong>
             <small>{{ playlist.bookIds?.length || 0 }} books</small>
           </span>
-          <span class="choice-check"><i class="ri-check-line"></i></span>
-        </label>
-      </div>
+          <span v-if="playlist.alreadyHas" class="row-added">Added</span>
+          <span v-else class="row-check"><i class="ri-check-line"></i></span>
+        </button>
 
-      <div v-if="creatingPlaylist || !availablePlaylists.length" class="new-playlist">
-        <label for="new-playlist-name">New playlist name</label>
-        <input
-          id="new-playlist-name"
-          ref="newPlaylistInput"
-          v-model="newPlaylistName"
-          type="text"
-          maxlength="100"
-          placeholder="Weekend reads"
-          @keydown.enter.prevent="save"
-        />
+        <p v-if="!playlists.length && !creating" class="playlist-empty">
+          You have no playlists yet. Create your first one above.
+        </p>
       </div>
-
-      <button
-        v-else
-        type="button"
-        class="create-toggle"
-        @click="startCreating"
-      >
-        <i class="ri-add-line"></i>
-        Create a new playlist
-      </button>
 
       <footer>
-        <button
-          v-if="creatingPlaylist && availablePlaylists.length"
-          type="button"
-          class="back-button"
-          @click="stopCreating"
-        >
-          Back to playlists
+        <button type="button" class="cancel-button" @click="emit('close')">Cancel</button>
+        <button type="button" class="save-button" :disabled="!canSave || saving" @click="save">
+          <i :class="saving ? 'ri-loader-4-line spin' : 'ri-check-line'"></i>
+          {{ saveLabel }}
         </button>
-        <span v-else></span>
-        <div class="footer-actions">
-          <button type="button" class="cancel-button" @click="emit('close')">Cancel</button>
-          <button type="button" class="save-button" :disabled="!canSave || saving" @click="save">
-            <i :class="saving ? 'ri-loader-4-line spin' : 'ri-play-list-add-line'"></i>
-            {{ saving ? 'Adding...' : 'Add book' }}
-          </button>
-        </div>
       </footer>
     </section>
   </div>
@@ -96,27 +100,39 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved'])
 const { collections, createPlaylist, addBookToPlaylist } = useBooks()
 const { addToast } = useToast()
-const selectedPlaylistId = ref('')
-const creatingPlaylist = ref(false)
+
+const selectedIds = ref(new Set())
+const creating = ref(false)
 const newPlaylistName = ref('')
 const newPlaylistInput = ref(null)
 const saving = ref(false)
 
-const availablePlaylists = computed(() => collections.value.filter(
-  playlist => !(playlist.bookIds || []).some(id => String(id) === String(props.book.id))
-))
+const playlists = computed(() => collections.value.map(playlist => ({
+  ...playlist,
+  alreadyHas: (playlist.bookIds || []).some(id => String(id) === String(props.book.id)),
+})))
 
-if (availablePlaylists.value.length) {
-  selectedPlaylistId.value = String(availablePlaylists.value[0].id)
-} else {
-  creatingPlaylist.value = true
-}
+const selectedCount = computed(() => selectedIds.value.size)
 
 const canSave = computed(() => (
-  creatingPlaylist.value
-    ? newPlaylistName.value.trim().length > 0
-    : Boolean(selectedPlaylistId.value)
+  creating.value ? newPlaylistName.value.trim().length > 0 : selectedCount.value > 0
 ))
+
+const saveLabel = computed(() => {
+  if (saving.value) return 'Adding…'
+  if (creating.value) return 'Create & add'
+  if (selectedCount.value > 1) return `Add to ${selectedCount.value} playlists`
+  return 'Add book'
+})
+
+const toggle = (playlist) => {
+  if (playlist.alreadyHas) return
+  const id = String(playlist.id)
+  const next = new Set(selectedIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedIds.value = next
+}
 
 const generateCoverPlaceholder = (title) => {
   const safeTitle = String(title || 'Book')
@@ -131,29 +147,35 @@ const handleCoverError = (event) => {
 }
 
 const startCreating = async () => {
-  creatingPlaylist.value = true
+  creating.value = true
   newPlaylistName.value = ''
   await nextTick()
   newPlaylistInput.value?.focus()
 }
 
-const stopCreating = () => {
-  creatingPlaylist.value = false
+const cancelCreating = () => {
+  creating.value = false
   newPlaylistName.value = ''
-  selectedPlaylistId.value = String(availablePlaylists.value[0]?.id || '')
 }
 
 const save = async () => {
   if (!canSave.value || saving.value) return
   saving.value = true
   try {
-    let playlistId = selectedPlaylistId.value
-    if (creatingPlaylist.value) {
-      const playlist = await createPlaylist({ name: newPlaylistName.value.trim() })
-      playlistId = String(playlist.id)
+    const targets = creating.value
+      ? [String((await createPlaylist({ name: newPlaylistName.value.trim() })).id)]
+      : [...selectedIds.value]
+
+    for (const playlistId of targets) {
+      await addBookToPlaylist(playlistId, props.book.id)
     }
-    await addBookToPlaylist(playlistId, props.book.id)
-    addToast('Book added to playlist', 'success')
+
+    addToast(
+      targets.length > 1
+        ? `Book added to ${targets.length} playlists`
+        : 'Book added to playlist',
+      'success',
+    )
     emit('saved')
     emit('close')
   } catch (error) {
@@ -170,50 +192,55 @@ const save = async () => {
   position: fixed;
   inset: 0;
   z-index: 3300;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
   background: var(--color-background-overlay-soft);
   backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
-.playlist-dialog {
-  width: min(500px, 100%);
-  overflow: hidden;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 18px;
-  background: var(--color-surface-modal);
-  box-shadow: var(--shadow-modal);
+/* Bottom sheet: reachable with one thumb, and the list scrolls under a pinned
+   header/footer instead of the whole dialog growing off-screen. */
+.playlist-sheet {
+  display: flex;
+  width: min(520px, 100%);
+  max-height: 86vh;
+  flex-direction: column;
+  padding: 10px 0 0;
+  border-radius: 20px 20px 0 0;
+  background: var(--color-surface-modal, var(--color-surface-primary));
+  box-shadow: 0 -14px 40px rgba(15, 23, 42, 0.24);
 }
 
-header,
-footer {
+.sheet-grabber {
+  width: 36px;
+  height: 4px;
+  margin: 0 auto 14px;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  opacity: 0.5;
+}
+
+header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1.2rem 1.4rem;
+  padding: 0 1.1rem 0.6rem;
 }
 
 header h2 {
-  margin: 0.2rem 0 0;
+  margin: 0;
   color: var(--color-text-primary);
-  font-size: 1.25rem;
-}
-
-.eyebrow {
-  color: var(--color-brand-primary);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 1.15rem;
+  font-weight: 600;
 }
 
 .close-button {
   display: grid;
-  place-items: center;
   width: 34px;
   height: 34px;
+  place-items: center;
   border: 0;
   border-radius: 9px;
   background: var(--color-surface-secondary);
@@ -225,186 +252,207 @@ header h2 {
 .book-preview {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  margin: 0 1.4rem 1rem;
-  padding: 0.75rem;
+  gap: 0.8rem;
+  margin: 0 1.1rem 0.8rem;
+  padding: 0.7rem;
   border-radius: 12px;
   background: var(--color-brand-primary-faint);
 }
 
 .book-preview img {
-  width: 42px;
-  height: 60px;
+  width: 40px;
+  height: 56px;
+  flex: 0 0 auto;
   border-radius: 6px;
   object-fit: cover;
   box-shadow: var(--shadow-cover);
 }
 
-.book-preview div,
-.playlist-copy {
+.book-preview div {
   display: grid;
   min-width: 0;
-  gap: 0.15rem;
+  gap: 0.1rem;
 }
 
-.book-preview strong,
-.playlist-copy strong {
+.book-preview strong {
   overflow: hidden;
   color: var(--color-text-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.book-preview span,
-.playlist-copy small {
+.book-preview span {
   color: var(--color-text-muted);
   font-size: 0.78rem;
 }
 
 .playlist-list {
   display: grid;
-  gap: 0.55rem;
-  max-height: 270px;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: 0.5rem;
+  min-height: 0;
   overflow-y: auto;
-  padding: 0 1.4rem;
+  padding: 0 1.1rem 0.4rem;
 }
 
-.playlist-choice {
+.playlist-row,
+.new-playlist-toggle,
+.new-playlist-row {
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem;
+  min-height: 60px;
+  padding: 0.6rem 0.75rem;
   border: 1px solid var(--color-border-subtle);
-  border-radius: 11px;
+  border-radius: 12px;
   background: var(--color-surface-input);
+  color: inherit;
   cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
-.playlist-choice.selected {
+.playlist-row.selected {
   border-color: var(--color-brand-primary);
   background: var(--color-surface-active);
 }
 
-.playlist-choice input {
-  position: absolute;
-  opacity: 0;
+.playlist-row.added {
+  cursor: default;
+  opacity: 0.62;
 }
 
-.playlist-icon {
+.row-icon {
   display: grid;
-  place-items: center;
   width: 38px;
   height: 38px;
   flex: 0 0 auto;
+  place-items: center;
   border-radius: 10px;
   background: var(--color-brand-primary-faint);
   color: var(--color-brand-primary);
 }
 
-.playlist-copy {
-  flex: 1;
+.row-icon.accent {
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
 }
 
-.choice-check {
+.row-copy {
   display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.row-copy strong {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-copy small {
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+}
+
+.row-check {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
   place-items: center;
-  width: 22px;
-  height: 22px;
   border: 1px solid var(--color-border-strong);
-  border-radius: 50%;
+  border-radius: 7px;
   color: transparent;
 }
 
-.selected .choice-check {
+.playlist-row.selected .row-check {
   border-color: var(--color-brand-primary);
   background: var(--color-brand-primary);
-  color: white;
+  color: var(--color-text-on-brand);
 }
 
-.create-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  width: calc(100% - 2.8rem);
-  margin: 0.8rem 1.4rem 0;
-  padding: 0.75rem;
-  border: 1px dashed var(--color-border-strong);
-  border-radius: 10px;
-  background: transparent;
+.row-added {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.new-playlist-row {
+  cursor: default;
+}
+
+.new-playlist-row > i {
   color: var(--color-brand-primary);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 600;
+  font-size: 1.2rem;
 }
 
-.new-playlist {
-  display: grid;
-  gap: 0.45rem;
-  padding: 0.4rem 1.4rem 0;
-}
-
-.new-playlist label {
-  color: var(--color-text-secondary);
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-.new-playlist input {
+.new-playlist-row input {
   width: 100%;
-  padding: 0.8rem 0.9rem;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 10px;
+  min-width: 0;
+  flex: 1;
+  border: 0;
   outline: 0;
-  background: var(--color-surface-input);
+  background: transparent;
   color: var(--color-text-primary);
   font: inherit;
 }
 
-.new-playlist input:focus {
-  border-color: var(--color-border-focus);
-  box-shadow: var(--shadow-focus-ring);
+.row-ghost {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.playlist-empty {
+  margin: 0.5rem 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  text-align: center;
 }
 
 footer {
-  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 0.7rem;
+  padding: 0.8rem 1.1rem calc(0.9rem + env(safe-area-inset-bottom));
   border-top: 1px solid var(--color-border-subtle);
-  background: var(--color-surface-secondary);
 }
 
-.footer-actions {
-  display: flex;
-  gap: 0.65rem;
-}
-
-.back-button,
 .cancel-button,
 .save-button {
-  min-height: 40px;
-  padding: 0.65rem 0.9rem;
-  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 48px;
+  border-radius: 12px;
   cursor: pointer;
   font: inherit;
-  font-size: 0.84rem;
+  font-size: 0.9rem;
   font-weight: 600;
 }
 
-.back-button {
-  border: 0;
-  background: transparent;
-  color: var(--color-brand-primary);
-}
-
 .cancel-button {
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-border-strong);
   background: var(--color-surface-primary);
   color: var(--color-text-secondary);
 }
 
 .save-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
   border: 0;
   background: var(--gradient-brand-primary);
   color: var(--color-text-on-brand);
@@ -413,5 +461,15 @@ footer {
 .save-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

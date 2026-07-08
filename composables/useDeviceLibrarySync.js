@@ -75,6 +75,37 @@ export function writeScanFolders(folders, storage = resolveStorage()) {
   return normalized
 }
 
+// Permanently remove a device-imported document from the phone, and forget it in
+// the import registry so the next scan doesn't treat it as a "new" file and
+// re-import the book the user just deleted. Best-effort: a missing file or a
+// denied permission must never block deleting the book from the library.
+export async function deleteDeviceImport(book) {
+  const path = book?.deviceImportPath
+  if (!path || !import.meta.client || !isNativeCapacitorPlatform()) return false
+
+  let deleted = false
+  try {
+    const result = await DeviceBooks.deleteFile({ path })
+    deleted = !!result?.deleted
+  } catch (error) {
+    console.warn('[DeviceSync] Could not delete device file', path, error)
+  }
+
+  // KEEP the registry entry and tombstone it. Clearing it would make the next
+  // scan treat the file as brand new — so a deletion that failed (permission
+  // revoked, read-only volume) would silently re-import the book the user just
+  // deleted. A tombstone keeps it deleted either way.
+  try {
+    const registry = readImportRegistry()
+    registry[path] = { ...(registry[path] || {}), bookId: null, deletedByUser: true }
+    writeImportRegistry(registry)
+  } catch {
+    // Quota failure only means the file gets re-checked on the next scan.
+  }
+
+  return deleted
+}
+
 export function fileInScanFolders(path, folders) {
   const target = String(path || '')
   return (folders || []).some((folder) => (
@@ -94,6 +125,9 @@ export function selectNewDeviceFiles(files, registry) {
     if (Number(file.size) > MAX_DEVICE_IMPORT_BYTES) return false
     const known = registry[file.path]
     if (!known) return true
+    // The user deleted this book. Never resurrect it, even if the file survived
+    // (deletion can fail) or its timestamp changed.
+    if (known.deletedByUser) return false
     return Number(known.size) !== Number(file.size) || Number(known.modified) !== Number(file.modified)
   })
 }
