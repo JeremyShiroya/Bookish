@@ -2,7 +2,12 @@
   <div
     :ref="setReaderPage"
     class="reader-mobile-page"
-    :class="[readerTheme, { replaceBottomNav: dockReplacingBottomNav }]"
+    :class="[readerTheme, {
+      replaceBottomNav: dockReplacingBottomNav,
+      sepia: prefs.background === 'sepia',
+      'is-paged': usePagedReader,
+    }]"
+    :style="readerStyleVars"
   >
     <header class="reader-mobile-topbar">
       <button
@@ -14,13 +19,32 @@
         <i class="ri-arrow-left-s-line"></i>
       </button>
 
-      <h1>{{ book?.title || "Reader" }}</h1>
+      <div class="reader-mode-toggle" role="tablist" aria-label="Reader mode">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="readerMode === 'listen'"
+          :class="{ active: readerMode === 'listen' }"
+          @click="setReaderMode('listen')"
+        >
+          Listen
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="readerMode === 'read'"
+          :class="{ active: readerMode === 'read' }"
+          @click="setReaderMode('read')"
+        >
+          Read
+        </button>
+      </div>
 
       <div class="reader-top-actions">
         <button
           type="button"
           class="reader-nav-btn"
-          aria-label="Audio controls"
+          aria-label="Audio and voice options"
           @click="mediaOpen = true"
         >
           <i class="ri-headphone-fill"></i>
@@ -28,13 +52,98 @@
         <button
           type="button"
           class="reader-nav-btn"
-          aria-label="Reader options"
-          @click="$emit('open-toc')"
+          aria-label="Display settings"
+          @click="displayOpen = true"
         >
-          <i class="ri-equalizer-2-line"></i>
+          <i class="ri-equalizer-line"></i>
         </button>
       </div>
     </header>
+
+    <div v-if="readerMode === 'listen'" class="reader-listen-view">
+      <template v-if="book">
+        <div v-if="listenBlurEnabled" class="listen-backdrop" aria-hidden="true">
+          <img :src="book.cover" alt="" @error="onCoverError($event, book.title)" />
+        </div>
+        <div class="listen-cover">
+          <img
+            :src="book.cover"
+            :alt="`${book.title} cover`"
+            @error="onCoverError($event, book.title)"
+          />
+        </div>
+        <h2 class="listen-title">{{ book.title }}</h2>
+        <p class="listen-byline">{{ listenByline }}</p>
+
+        <div class="listen-progress">
+          <span>{{ listenElapsed }}</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            :value="listenProgress"
+            :style="{ '--fill': `${listenProgress}%` }"
+            aria-label="Audio progress"
+            @input="seekToProgress(Number($event.target.value))"
+          />
+          <span>{{ listenTotal }}</span>
+        </div>
+
+        <div class="listen-controls">
+          <button type="button" aria-label="Back 10 seconds" @click="skipSeconds(-10)">
+            <i class="ri-replay-10-line"></i>
+          </button>
+          <button
+            type="button"
+            class="listen-play"
+            aria-label="Play or pause"
+            @click="toggleListenPlay"
+          >
+            <i :class="isPlaying ? 'ri-pause-fill' : 'ri-play-fill'"></i>
+          </button>
+          <button type="button" aria-label="Forward 10 seconds" @click="skipSeconds(10)">
+            <i class="ri-forward-10-line"></i>
+          </button>
+        </div>
+
+        <div class="listen-page-nav">
+          <button
+            type="button"
+            class="listen-page-step prev"
+            :disabled="!listenPrevLabel"
+            @click="stepListenPage(-1)"
+          >
+            <i class="ri-arrow-left-s-line"></i>
+            {{ listenPrevLabel }}
+          </button>
+          <span class="listen-page-current">{{ listenCurrentLabel }}</span>
+          <button
+            type="button"
+            class="listen-page-step next"
+            :disabled="!listenNextLabel"
+            @click="stepListenPage(1)"
+          >
+            {{ listenNextLabel }}
+            <i class="ri-arrow-right-s-line"></i>
+          </button>
+        </div>
+
+        <div class="listen-text">
+          <p v-if="listenChunks.length" class="listen-text-inner" :style="listenTextStyle">
+            <span
+              v-for="(chunk, index) in listenChunks"
+              :key="`${listenStartChunk}-${index}`"
+              :ref="(el) => setListenChunkEl(index, el)"
+              class="listen-chunk"
+              :class="{ active: listenStartChunk + index === activeListenChunk }"
+            >{{ chunk }} </span>
+          </p>
+          <p v-else class="listen-text-empty">
+            No readable text on this {{ isPdfBook ? "page" : "chapter" }}.
+          </p>
+        </div>
+      </template>
+    </div>
 
     <main
       class="reader-mobile-content"
@@ -81,6 +190,23 @@
             as it is.
           </p>
         </div>
+
+        <ReaderPagedEpub
+          v-else-if="usePagedReader"
+          ref="pagedRef"
+          :book-id="book.id"
+          :sections="fullSections"
+          :sanitize-html="sanitizeHtml"
+          :readable-chunks="readableChunks"
+          :section-counts="sectionCounts"
+          :active-chunk-index="activeTtsChunkIndex"
+          :highlight-enabled="true"
+          :geometry="pageGeometry"
+          :layout-hash="layoutHash"
+          :start-section="currentChapterIdx"
+          @position-change="onPagedPosition"
+          @long-press="onPagedLongPress"
+        />
 
         <div
           v-else
@@ -142,14 +268,14 @@
       </div>
     </Transition>
 
-    <div class="reader-chapter-dock">
+    <div v-show="readerMode === 'read'" class="reader-chapter-dock">
       <div class="chapter-pill">
         <button
           type="button"
           class="chapter-pill-step step-prev"
-          aria-label="Previous chapter"
+          aria-label="Previous page"
           :tabindex="dockReplacingBottomNav ? -1 : 0"
-          @click="$emit('previous-chapter')"
+          @click="dockStep(-1)"
         >
           <i class="ri-arrow-left-s-line"></i>
         </button>
@@ -158,14 +284,14 @@
           class="chapter-pill-title"
           @click="$emit('open-toc')"
         >
-          {{ chapterLabel }}
+          {{ dockLabel }}
         </button>
         <button
           type="button"
           class="chapter-pill-step step-next"
-          aria-label="Next chapter"
+          aria-label="Next page"
           :tabindex="dockReplacingBottomNav ? -1 : 0"
-          @click="$emit('next-chapter')"
+          @click="dockStep(1)"
         >
           <i class="ri-arrow-right-s-line"></i>
         </button>
@@ -173,6 +299,7 @@
     </div>
 
     <button
+      v-show="readerMode === 'read'"
       type="button"
       class="chapter-play"
       aria-label="Play chapter"
@@ -181,7 +308,7 @@
       <i :class="isPlaying ? 'ri-pause-fill' : 'ri-play-fill'"></i>
     </button>
 
-    <div class="mobile-bottom-nav-wrap" aria-hidden="true">
+    <div v-show="readerMode === 'read'" class="mobile-bottom-nav-wrap" aria-hidden="true">
       <MobileBottomNav />
     </div>
 
@@ -270,17 +397,193 @@
         </section>
       </div>
     </Teleport>
+
+    <Teleport to="body">
+      <div v-if="displayOpen" class="reader-media-layer">
+        <button
+          class="reader-media-backdrop"
+          type="button"
+          aria-label="Close display settings"
+          @click="displayOpen = false"
+        ></button>
+        <section
+          class="reader-media-sheet reader-display-sheet"
+          :class="readerTheme"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Display settings"
+        >
+          <div class="sheet-grabber"></div>
+          <h2>Display</h2>
+
+          <template v-if="!isPdfBook">
+            <div class="display-row">
+              <span class="display-label">Reading mode</span>
+              <div class="seg-group">
+                <button
+                  v-for="mode in ['page', 'scroll']"
+                  :key="mode"
+                  type="button"
+                  class="seg-btn"
+                  :class="{ active: prefs.readingMode === mode }"
+                  @click="updatePrefs({ readingMode: mode })"
+                >
+                  {{ mode === 'page' ? 'Pages' : 'Scroll' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="display-row">
+              <span class="display-label">Background</span>
+              <div class="seg-group">
+                <button
+                  type="button"
+                  class="seg-btn"
+                  :class="{ active: prefs.background === 'default' }"
+                  @click="updatePrefs({ background: 'default' })"
+                >
+                  Default
+                </button>
+                <button
+                  type="button"
+                  class="seg-btn seg-sepia"
+                  :class="{ active: prefs.background === 'sepia' }"
+                  @click="updatePrefs({ background: 'sepia' })"
+                >
+                  Book brown
+                </button>
+              </div>
+            </div>
+
+            <div class="display-row">
+              <span class="display-label">Font size</span>
+              <div class="size-stepper">
+                <button type="button" aria-label="Smaller text" @click="stepFontSize(-1)">A−</button>
+                <span>{{ prefs.fontSize }}</span>
+                <button type="button" aria-label="Larger text" @click="stepFontSize(1)">A+</button>
+              </div>
+            </div>
+
+            <div class="display-row">
+              <span class="display-label">Font</span>
+              <div class="seg-group">
+                <button
+                  v-for="font in fontOptions"
+                  :key="font.id"
+                  type="button"
+                  class="seg-btn"
+                  :class="{ active: prefs.fontFamily === font.id }"
+                  @click="updatePrefs({ fontFamily: font.id })"
+                >
+                  {{ font.label }}
+                </button>
+              </div>
+            </div>
+
+            <div class="display-row">
+              <span class="display-label">Thickness</span>
+              <div class="seg-group">
+                <button
+                  v-for="weight in weightOptions"
+                  :key="weight.id"
+                  type="button"
+                  class="seg-btn"
+                  :class="{ active: prefs.fontWeight === weight.id }"
+                  @click="updatePrefs({ fontWeight: weight.id })"
+                >
+                  {{ weight.label }}
+                </button>
+              </div>
+            </div>
+
+            <div class="display-row">
+              <span class="display-label">Line spacing</span>
+              <div class="seg-group">
+                <button
+                  v-for="spacing in lineSpacingOptions"
+                  :key="spacing"
+                  type="button"
+                  class="seg-btn"
+                  :class="{ active: prefs.lineSpacing === spacing }"
+                  @click="updatePrefs({ lineSpacing: spacing })"
+                >
+                  {{ spacing }}
+                </button>
+              </div>
+            </div>
+
+            <div class="display-row">
+              <span class="display-label">Alignment</span>
+              <div class="seg-group">
+                <button
+                  type="button"
+                  class="seg-btn"
+                  :class="{ active: prefs.textAlign === 'justify' }"
+                  @click="updatePrefs({ textAlign: 'justify' })"
+                >
+                  Justify
+                </button>
+                <button
+                  type="button"
+                  class="seg-btn"
+                  :class="{ active: prefs.textAlign === 'left' }"
+                  @click="updatePrefs({ textAlign: 'left' })"
+                >
+                  Left
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <p v-else class="display-pdf-note">
+            Display settings apply to EPUB books. PDF pages render exactly as
+            published.
+          </p>
+        </section>
+      </div>
+    </Teleport>
+
+    <!-- Offscreen page-map measurer: lays out one section at a time with the
+         exact reader geometry so global page numbers match the visible pages. -->
+    <div v-if="!isPdfBook" class="page-map-measurer" aria-hidden="true">
+      <div ref="measureHostRef" class="paged-viewport">
+        <div ref="measureContentRef" class="paged-content paged-text" :style="measureStyle"></div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { onCoverError } from "~/composables/useCoverFallback";
+import { firstChunkForPage, pageForChunk } from "~/composables/usePdfManifest";
 import PdfViewer from "~/components/shared/PdfViewer.vue";
 import SkeletonLoader from "~/components/shared/SkeletonLoader.vue";
 import { useTTS } from "~/composables/useTTS";
 import { isNativeCapacitorPlatform } from "~/composables/useNativePlatform";
+import { useBookishSettings } from "~/composables/useBookishSettings";
+import { mapSectionChunks } from "~/composables/useChunkSpans";
+import {
+  READER_FONT_OPTIONS,
+  READER_FONT_SIZE_MAX,
+  READER_FONT_SIZE_MIN,
+  READER_LINE_SPACING_OPTIONS,
+  READER_WEIGHT_OPTIONS,
+  readerFontStack,
+  readerPrefsLayoutHash,
+  useMobileReaderPrefs,
+} from "~/composables/useMobileReaderPrefs";
+import {
+  firstChunkOnPage,
+  globalPageFor,
+  locateGlobalPage,
+  pageMapCacheKey,
+  readPageMapCache,
+  totalPagesInMap,
+  writePageMapCache,
+} from "~/composables/useEpubPageMap";
 import MobileBottomNav from "./MobileBottomNav.vue";
+import ReaderPagedEpub from "./ReaderPagedEpub.vue";
 
 const props = defineProps({
   readerRefs: { type: Object, required: true },
@@ -305,6 +608,13 @@ const props = defineProps({
   sanitizeHtml: { type: Function, required: true },
   resolveChunkAtPoint: { type: Function, default: null },
   prewarmChunk: { type: Function, default: null },
+  // Flat readable-chunk texts (TTS playback order) + per-section counts, so the
+  // Listen view can show the sentences of the page/chapter being narrated.
+  readableChunks: { type: Array, default: () => [] },
+  sectionCounts: { type: Array, default: () => [] },
+  // Complete section list ({ title, html }) for the paged renderer and the
+  // page-map measurer — unlike chapterList, never windowed to placeholders.
+  fullSections: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits([
@@ -317,6 +627,8 @@ const emit = defineEmits([
   "previous-chapter",
   "next-chapter",
   "mount-section",
+  "position-change",
+  "go-to-section",
 ]);
 
 const {
@@ -326,11 +638,14 @@ const {
   ttsSpeed,
   ttsVoices,
   ttsVoiceId,
+  ttsPlayingChunkIdx,
   elapsedTime,
   totalTime,
   togglePlay,
   skipChunks,
+  skipSeconds,
   seekToProgress,
+  seekToChunk,
   setSpeed,
   setVoice,
 } = useTTS();
@@ -338,9 +653,207 @@ const {
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
 
 const mediaOpen = ref(false);
+const displayOpen = ref(false);
 const voicePickerOpen = ref(false);
 const replaceBottomNav = ref(false);
 const isOffline = ref(false);
+
+// ── Display preferences + paged reading (ReadEra-style) ─────────────────────
+
+const { prefs, updatePrefs } = useMobileReaderPrefs();
+const fontOptions = READER_FONT_OPTIONS;
+const weightOptions = READER_WEIGHT_OPTIONS;
+const lineSpacingOptions = READER_LINE_SPACING_OPTIONS;
+
+const stepFontSize = (delta) => {
+  updatePrefs({
+    fontSize: Math.max(
+      READER_FONT_SIZE_MIN,
+      Math.min(READER_FONT_SIZE_MAX, prefs.value.fontSize + delta),
+    ),
+  });
+};
+
+const usePagedReader = computed(() => !props.isPdfBook && prefs.value.readingMode === "page");
+const layoutHash = computed(() => readerPrefsLayoutHash(prefs.value));
+
+const readerStyleVars = computed(() => ({
+  "--mr-font-size": `${prefs.value.fontSize}px`,
+  "--mr-font-family": readerFontStack(prefs.value.fontFamily),
+  "--mr-font-weight": String(prefs.value.fontWeight),
+  "--mr-line-height": String(prefs.value.lineSpacing),
+  "--mr-text-align": prefs.value.textAlign,
+}));
+
+const pagedRef = ref(null);
+const pagedPos = ref({ section: 0, pageInSection: 0, sectionPages: 1 });
+
+const onPagedPosition = (pos) => {
+  pagedPos.value = pos;
+  hideReadHereMenu();
+  emit("position-change", pos);
+};
+
+const onPagedLongPress = ({ chunkIdx, x, y }) => {
+  const menuX = Math.max(12, Math.min(x - 82, window.innerWidth - 176));
+  const menuY = Math.max(70, y - 64);
+  readHereMenu.value = { visible: true, x: menuX, y: menuY, chunkIdx };
+  props.prewarmChunk?.(chunkIdx);
+};
+
+// TOC / parent navigation lands here as a currentChapterIdx change.
+watch(() => props.currentChapterIdx, (idx) => {
+  if (!usePagedReader.value || !Number.isFinite(idx)) return;
+  if (idx !== pagedPos.value.section) pagedRef.value?.goToSection(idx);
+});
+
+// ── Page geometry (shared by the visible pages and the offscreen measurer) ──
+
+const measureHostRef = ref(null);
+const measureContentRef = ref(null);
+const pageGeometry = ref({ width: 320, height: 480, gap: 40 });
+
+const measureStyle = computed(() => ({
+  columnWidth: `${pageGeometry.value.width}px`,
+  columnGap: `${pageGeometry.value.gap}px`,
+}));
+
+const updatePageGeometry = () => {
+  const host = measureHostRef.value;
+  if (!host) return;
+  const width = Math.max(120, Math.floor(host.clientWidth));
+  const height = Math.max(160, Math.floor(host.clientHeight));
+  if (width !== pageGeometry.value.width || height !== pageGeometry.value.height) {
+    pageGeometry.value = { width, height, gap: 40 };
+  }
+};
+
+// ── Whole-book page map ─────────────────────────────────────────────────────
+//
+// Measured offscreen, one section per idle slice, with the exact reader
+// geometry — so "Page 214" is a real page, not an estimate. Cached per
+// book + viewport + typography; reopening a book is instant.
+
+const pageMap = ref(null);
+let _pageMapToken = 0;
+
+const _idleSlice = () => new Promise((resolve) => {
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(() => resolve(), { timeout: 500 });
+  } else {
+    setTimeout(resolve, 40);
+  }
+});
+
+const buildPageMap = async () => {
+  const token = ++_pageMapToken;
+  pageMap.value = null;
+  if (props.isPdfBook || !import.meta.client) return;
+  const sections = props.fullSections || [];
+  if (!sections.length || !props.book?.id) return;
+  const { width, height, gap } = pageGeometry.value;
+  if (width < 140 || height < 200) return;
+
+  const key = pageMapCacheKey(props.book.id, {
+    width,
+    height,
+    layoutHash: layoutHash.value,
+    sectionCount: sections.length,
+  });
+  const cached = readPageMapCache(key);
+  if (cached) {
+    pageMap.value = cached;
+    return;
+  }
+
+  const el = measureContentRef.value;
+  if (!el) return;
+
+  const counts = [];
+  const chunkPages = new Array((props.readableChunks || []).length).fill(null);
+  const stride = width + gap;
+  let base = 0;
+
+  for (let index = 0; index < sections.length; index += 1) {
+    await _idleSlice();
+    if (token !== _pageMapToken) return;
+
+    el.innerHTML = props.sanitizeHtml(sections[index]?.html || "");
+    const chunkBase = sectionStartChunkLocal(index);
+    const count = (props.sectionCounts || [])[index] || 0;
+    const spans = new Map();
+    if (count > 0) {
+      mapSectionChunks(
+        el,
+        (props.readableChunks || []).slice(chunkBase, chunkBase + count),
+        chunkBase,
+        (chunkIdx, span) => spans.set(chunkIdx, span),
+      );
+    }
+
+    const pagesInSection = Math.max(1, Math.round((el.scrollWidth + gap) / stride));
+    for (const [chunkIdx, span] of spans) {
+      chunkPages[chunkIdx] = base + Math.max(
+        0,
+        Math.min(pagesInSection - 1, Math.floor((span.offsetLeft + 2) / stride)),
+      );
+    }
+    counts.push(pagesInSection);
+    base += pagesInSection;
+    // Publish progress so page numbers appear as soon as the reading position
+    // has been measured, not only when the whole book is done.
+    pageMap.value = { counts: counts.slice(), chunkPages };
+  }
+
+  el.innerHTML = "";
+  pageMap.value = { counts, chunkPages };
+  writePageMapCache(key, pageMap.value);
+};
+
+watch(
+  () => [
+    props.book?.id,
+    (props.fullSections || []).length,
+    layoutHash.value,
+    pageGeometry.value.width,
+    pageGeometry.value.height,
+  ],
+  () => { buildPageMap(); },
+);
+
+const pageMapTotal = computed(() => {
+  const counts = pageMap.value?.counts;
+  if (!counts || counts.length < (props.fullSections || []).length) return null;
+  return totalPagesInMap(counts);
+});
+
+const pagedGlobalPage = computed(() => {
+  if (!usePagedReader.value) return null;
+  const counts = pageMap.value?.counts;
+  if (!counts) return null;
+  return globalPageFor(counts, pagedPos.value.section, pagedPos.value.pageInSection);
+});
+
+// ── Chapter dock ────────────────────────────────────────────────────────────
+
+const dockStep = (delta) => {
+  if (usePagedReader.value) {
+    if (delta < 0) pagedRef.value?.prevPage();
+    else pagedRef.value?.nextPage();
+    return;
+  }
+  emit(delta < 0 ? "previous-chapter" : "next-chapter");
+};
+
+const dockLabel = computed(() => {
+  if (!usePagedReader.value) return chapterLabel.value;
+  const globalPage = pagedGlobalPage.value;
+  if (globalPage !== null) {
+    const total = pageMapTotal.value;
+    return total ? `Page ${globalPage + 1} / ${total}` : `Page ${globalPage + 1}`;
+  }
+  return `Page ${pagedPos.value.pageInSection + 1} / ${pagedPos.value.sectionPages}`;
+});
 
 // On the native app, an offline device can't reach Edge cloud voices — narration
 // falls back to the phone's built-in voice. Surface that in the picker instead of
@@ -396,6 +909,13 @@ const playFromHere = () => {
     togglePlay();
     return;
   }
+  if (usePagedReader.value) {
+    const chunk = pagedRef.value?.getPosition()?.firstChunkOfPage;
+    if (Number.isFinite(chunk) && chunk >= 0) {
+      emit("read-from-chunk", chunk);
+      return;
+    }
+  }
   emit("read-current-position");
 };
 
@@ -406,6 +926,224 @@ const toggleMediaPlay = () => {
   }
   emit("read-current-position");
 };
+
+// ── Listen mode ─────────────────────────────────────────────────────────────
+//
+// The Listen view is a fixed layer over the reading content (which stays
+// mounted underneath, so scroll position, section observers, and narration
+// auto-follow keep working). It shows the audiobook-style player plus the
+// text of the current page, sliding upward as narration advances.
+
+const READER_MODE_KEY = "bookish:reader-mode";
+
+const { settings: appSettings } = useBookishSettings();
+const listenBlurEnabled = computed(() => appSettings.value.listenCoverBlur !== false);
+
+const readerMode = ref("listen");
+
+const setReaderMode = (mode) => {
+  readerMode.value = mode;
+  try {
+    localStorage.setItem(READER_MODE_KEY, mode);
+  } catch {}
+};
+
+const isThisBookNarrating = computed(
+  () => ttsBook.value?.id === props.book?.id && ttsStatus.value !== "idle",
+);
+
+const listenByline = computed(() => {
+  const author = props.book?.author || "";
+  const year = props.book?.publishYear ? String(props.book.publishYear) : "";
+  return [author, year].filter(Boolean).join(" · ");
+});
+
+const listenProgress = computed(() => (isThisBookNarrating.value ? ttsProgress.value || 0 : 0));
+const listenElapsed = computed(() => (isThisBookNarrating.value ? elapsedTime.value || "00:00" : "00:00"));
+const listenTotal = computed(() => (isThisBookNarrating.value ? totalTime.value || "00:00" : "00:00"));
+
+// Which section (ch-N) / PDF page a flat chunk index falls in.
+const sectionForChunkLocal = (chunkIndex) => {
+  const counts = props.sectionCounts || [];
+  const target = Math.max(0, Number(chunkIndex) || 0);
+  let offset = 0;
+  for (let i = 0; i < counts.length; i += 1) {
+    const count = Math.max(0, Number(counts[i]) || 0);
+    if (target < offset + count) return i;
+    offset += count;
+  }
+  return Math.max(0, counts.length - 1);
+};
+
+const sectionStartChunkLocal = (sectionIndex) => {
+  const counts = props.sectionCounts || [];
+  let offset = 0;
+  for (let i = 0; i < sectionIndex && i < counts.length; i += 1) offset += counts[i] || 0;
+  return offset;
+};
+
+// While narrating, the playing chunk — not the scroll position — decides which
+// page/chapter the Listen view shows, so the text always matches the voice.
+const listenSectionIdx = computed(() => {
+  if (!props.isPdfBook && isThisBookNarrating.value && ttsPlayingChunkIdx.value >= 0) {
+    return sectionForChunkLocal(ttsPlayingChunkIdx.value);
+  }
+  return props.currentChapterIdx;
+});
+
+const listenPdfPage = computed(() => {
+  if (props.isPdfBook && isThisBookNarrating.value && ttsPlayingChunkIdx.value >= 0) {
+    return pageForChunk(props.pdfManifest, ttsPlayingChunkIdx.value) || props.currentPdfPage;
+  }
+  return props.currentPdfPage;
+});
+
+// The Listen stepper always shows REAL pages: PDF pages come from the
+// manifest; EPUB pages come from the measured page map (chunk → page), so the
+// number matches the printed page the voice is on — never a chapter index.
+const listenEpubGlobalPage = computed(() => {
+  const map = pageMap.value;
+  if (!map) return null;
+  if (isThisBookNarrating.value && ttsPlayingChunkIdx.value >= 0) {
+    const page = map.chunkPages?.[ttsPlayingChunkIdx.value];
+    return Number.isFinite(page) ? page : null;
+  }
+  if (usePagedReader.value) return pagedGlobalPage.value;
+  const chunk = sectionStartChunkLocal(listenSectionIdx.value);
+  const page = map.chunkPages?.[chunk];
+  if (Number.isFinite(page)) return page;
+  return globalPageFor(map.counts, listenSectionIdx.value, 0);
+});
+
+const listenPageNumber = computed(() => {
+  if (props.isPdfBook) return listenPdfPage.value;
+  const page = listenEpubGlobalPage.value;
+  return page === null ? null : page + 1;
+});
+
+const listenPageTotal = computed(() => {
+  if (props.isPdfBook) return props.totalPages || props.book?.pages || 1;
+  return pageMapTotal.value;
+});
+
+const listenCurrentLabel = computed(() => (
+  listenPageNumber.value === null ? "Page —" : `Page ${listenPageNumber.value}`
+));
+const listenPrevLabel = computed(() => (
+  listenPageNumber.value !== null && listenPageNumber.value > 1
+    ? `Page ${listenPageNumber.value - 1}`
+    : ""
+));
+const listenNextLabel = computed(() => {
+  const current = listenPageNumber.value;
+  if (current === null) return "";
+  const total = listenPageTotal.value;
+  if (total !== null && current >= total) return "";
+  return `Page ${current + 1}`;
+});
+
+// First flat chunk index of the page/chapter on screen.
+const listenStartChunk = computed(() => {
+  if (props.isPdfBook) {
+    return firstChunkForPage(props.pdfManifest, listenPdfPage.value)?.id ?? 0;
+  }
+  return sectionStartChunkLocal(listenSectionIdx.value);
+});
+
+const listenChunkCount = computed(() => {
+  if (props.isPdfBook) {
+    return (props.pdfManifest?.chunks || []).filter(
+      (item) => item.page === listenPdfPage.value,
+    ).length;
+  }
+  return (props.sectionCounts || [])[listenSectionIdx.value] || 0;
+});
+
+const listenChunks = computed(() => (props.readableChunks || []).slice(
+  listenStartChunk.value,
+  listenStartChunk.value + listenChunkCount.value,
+));
+
+const activeListenChunk = computed(() => (
+  isThisBookNarrating.value ? ttsPlayingChunkIdx.value : -1
+));
+
+const toggleListenPlay = () => {
+  if (isThisBookNarrating.value) {
+    togglePlay();
+    return;
+  }
+  if (usePagedReader.value) {
+    const chunk = pagedRef.value?.getPosition()?.firstChunkOfPage;
+    if (Number.isFinite(chunk) && chunk >= 0) {
+      emit("read-from-chunk", chunk);
+      return;
+    }
+  }
+  emit("read-from-chunk", Math.max(0, listenStartChunk.value));
+};
+
+// Prev/next page: while narrating, jump the narration to the adjacent page
+// (the view follows the voice); otherwise move the reading position by one
+// real page.
+const stepListenPage = (delta) => {
+  if (props.isPdfBook) {
+    if (isThisBookNarrating.value) {
+      const target = firstChunkForPage(props.pdfManifest, listenPdfPage.value + delta)?.id;
+      if (target !== null && target !== undefined) seekToChunk(target);
+      return;
+    }
+    emit(delta < 0 ? "previous-chapter" : "next-chapter");
+    return;
+  }
+
+  const map = pageMap.value;
+  const current = listenEpubGlobalPage.value;
+  if (!map || current === null) return;
+  const target = current + delta;
+  if (target < 0) return;
+
+  if (isThisBookNarrating.value) {
+    const chunk = firstChunkOnPage(map.chunkPages, target);
+    if (chunk >= 0) seekToChunk(chunk);
+    return;
+  }
+
+  if (usePagedReader.value) {
+    const location = locateGlobalPage(map.counts, target);
+    pagedRef.value?.goToSectionPage(location.section, location.pageInSection);
+    return;
+  }
+
+  // Scroll mode: move the reading position to the section holding that page.
+  const chunk = firstChunkOnPage(map.chunkPages, target);
+  if (chunk >= 0) emit("go-to-section", sectionForChunkLocal(chunk));
+};
+
+// Slide the text so the sentence being narrated sits at the top of the panel.
+let listenChunkEls = [];
+const listenTextOffset = ref(0);
+
+const setListenChunkEl = (index, el) => {
+  if (el) listenChunkEls[index] = el;
+};
+
+const listenTextStyle = computed(() => ({
+  transform: `translateY(-${listenTextOffset.value}px)`,
+}));
+
+watch([activeListenChunk, listenStartChunk, listenChunks], async () => {
+  await nextTick();
+  const relative = activeListenChunk.value - listenStartChunk.value;
+  const el = relative >= 0 && relative < listenChunks.value.length
+    ? listenChunkEls[relative]
+    : null;
+  listenTextOffset.value = el ? el.offsetTop : 0;
+});
+
+watch(listenChunks, () => {
+  listenChunkEls = [];
+});
 
 const chooseVoice = (voiceId) => {
   // The offline entry is informational — keep the underlying Edge selection so it
@@ -525,24 +1263,24 @@ const observePlaceholders = async () => {
       if (!Number.isNaN(index)) emit("mount-section", index);
       _placeholderObserver?.unobserve(entry.target);
     }
-  }, { rootMargin: "3000px 0px" });
+  }, { rootMargin: "6000px 0px" });
 
   placeholders.forEach((el) => _placeholderObserver.observe(el));
 };
 
-// Safety net: if a fast fling outruns the observer, mount any placeholder that
-// is close to the viewport. Time-throttled so it never runs more than ~8×/sec.
+// Safety net: if a fast fling outruns the observer, mount any placeholder
+// near the viewport. Time-throttled so it never runs more than ~16×/sec.
 let _lastNearbyMount = 0;
 const mountNearbyPlaceholders = () => {
   const now = Date.now();
-  if (now - _lastNearbyMount < 120) return;
+  if (now - _lastNearbyMount < 60) return;
   _lastNearbyMount = now;
   const placeholders = document.querySelectorAll("[data-section-placeholder]");
   if (!placeholders.length) return;
   const vh = window.innerHeight;
   for (const el of placeholders) {
     const rect = el.getBoundingClientRect();
-    if (rect.bottom > -vh * 2 && rect.top < vh * 3) {
+    if (rect.bottom > -vh * 3 && rect.top < vh * 6) {
       const index = Number(el.dataset.sectionPlaceholder);
       if (!Number.isNaN(index)) emit("mount-section", index);
     }
@@ -603,20 +1341,30 @@ const updateOnlineStatus = () => {
   isOffline.value = typeof navigator !== "undefined" && navigator.onLine === false;
 };
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    const storedMode = localStorage.getItem(READER_MODE_KEY);
+    if (storedMode === "read" || storedMode === "listen") readerMode.value = storedMode;
+  } catch {}
   lastScrollY = window.scrollY || 0;
   window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", updatePageGeometry);
   updateOnlineStatus();
   window.addEventListener("online", updateOnlineStatus);
   window.addEventListener("offline", updateOnlineStatus);
   observePlaceholders();
+  await nextTick();
+  updatePageGeometry();
+  buildPageMap();
 });
 
 onUnmounted(() => {
   window.removeEventListener("scroll", onScroll);
+  window.removeEventListener("resize", updatePageGeometry);
   window.removeEventListener("online", updateOnlineStatus);
   window.removeEventListener("offline", updateOnlineStatus);
   cancelLongPress();
+  _pageMapToken += 1;
   _placeholderObserver?.disconnect();
   if (_mountScrollRaf !== null) cancelAnimationFrame(_mountScrollRaf);
 });
@@ -647,6 +1395,15 @@ onUnmounted(() => {
   --mobile-reader-surface: var(--color-reader-dark-page);
 }
 
+/* "Book brown" — warm paper background, chosen from Display settings.
+   Declared after .dark so it wins in either theme. */
+.reader-mobile-page.sepia {
+  --mobile-reader-bg: #ecdfc8;
+  --mobile-reader-text: #43331f;
+  --mobile-reader-muted: #8a7454;
+  --mobile-reader-surface: #f6ecd9;
+}
+
 .reader-mobile-topbar {
   position: fixed;
   top: 0;
@@ -654,23 +1411,39 @@ onUnmounted(() => {
   left: 0;
   z-index: 1150;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 88px;
+  /* Symmetric side columns keep the Listen/Read toggle exactly centred even
+     though the right side holds two icons and the left only one. */
+  grid-template-columns: 88px minmax(0, 1fr) 88px;
   align-items: center;
   min-height: 52px;
   padding: env(safe-area-inset-top) 8px 0;
   background: var(--mobile-reader-bg);
 }
 
-.reader-mobile-topbar h1 {
-  overflow: hidden;
-  margin: 0;
+.reader-mode-toggle {
+  display: inline-flex;
+  justify-self: center;
+  padding: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-brand-primary) 14%, var(--mobile-reader-surface));
+}
+
+.reader-mode-toggle button {
+  min-width: 74px;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
   color: var(--mobile-reader-text);
-  font-size: 17px;
+  cursor: pointer;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.2;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.reader-mode-toggle button.active {
+  background: var(--color-brand-primary);
+  color: #fff;
 }
 
 .reader-top-actions {
@@ -694,6 +1467,331 @@ onUnmounted(() => {
 
 .reader-mobile-content {
   padding: calc(60px + env(safe-area-inset-top)) 20px 150px;
+}
+
+/* ── Listen mode ──────────────────────────────────────────────────────────
+   Fixed layer above the reading content (below the topbar controls). The
+   content stays mounted underneath so narration auto-follow and the section
+   observers keep the page indicator in sync. */
+.reader-listen-view {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  padding: calc(72px + env(safe-area-inset-top)) 24px 0;
+  background: var(--mobile-reader-bg);
+  color: var(--mobile-reader-text);
+  /* The panel is a player, not a scroll surface — don't pan the page behind. */
+  touch-action: none;
+}
+
+.listen-cover img {
+  display: block;
+  width: min(42vw, 168px);
+  border-radius: 10px;
+  box-shadow: var(--shadow-cover);
+}
+
+.listen-title {
+  margin: 16px 0 2px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.listen-byline {
+  margin: 0 0 20px;
+  color: var(--mobile-reader-muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.listen-progress {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  color: var(--mobile-reader-muted);
+  font-size: 11px;
+}
+
+.listen-progress span:last-child {
+  text-align: right;
+}
+
+.listen-progress input {
+  width: 100%;
+  height: 5px;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-brand-primary) var(--fill, 0%),
+    color-mix(in srgb, var(--mobile-reader-muted) 30%, transparent) var(--fill, 0%)
+  );
+  touch-action: pan-x;
+}
+
+.listen-progress input::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-brand-primary);
+}
+
+.listen-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 34px;
+  margin: 14px 0 8px;
+}
+
+.listen-controls button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--mobile-reader-text);
+  cursor: pointer;
+  font-size: 24px;
+}
+
+.listen-controls .listen-play {
+  font-size: 38px;
+}
+
+.listen-page-nav {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  margin: 4px 0 16px;
+}
+
+.listen-page-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mobile-reader-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.listen-page-step:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.listen-page-step.prev {
+  justify-self: start;
+}
+
+.listen-page-step.next {
+  justify-self: end;
+}
+
+.listen-page-step i {
+  font-size: 16px;
+}
+
+.listen-page-current {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.listen-text {
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+  /* Fade the last lines out instead of clipping them at the screen edge. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent 98%);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent 98%);
+}
+
+.listen-text-inner {
+  position: relative;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.58;
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  transition: transform 0.6s cubic-bezier(0.33, 1, 0.68, 1);
+  will-change: transform;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.listen-text-empty {
+  margin: 1.5rem 0 0;
+  color: var(--mobile-reader-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Soft blurred cover backdrop (Preferences → "Blurred cover in Listen mode").
+   Fades into the reader background so the animated text stays readable. */
+.listen-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.listen-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.35);
+  filter: blur(46px) saturate(1.2);
+  opacity: 0.45;
+}
+
+.listen-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--mobile-reader-bg) 35%, transparent),
+    var(--mobile-reader-bg) 82%
+  );
+}
+
+.reader-listen-view > :not(.listen-backdrop) {
+  position: relative;
+  z-index: 1;
+}
+
+/* The sentence being narrated is highlighted just like in Read mode. */
+.listen-chunk.active {
+  border-radius: 3px;
+  background: var(--color-reader-highlight, rgba(138, 43, 226, 0.18));
+  outline: 1px solid var(--color-reader-highlight-border, rgba(138, 43, 226, 0.35));
+}
+
+/* ── Display settings sheet ──────────────────────────────────────────────── */
+
+.reader-display-sheet {
+  max-height: 78vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.reader-display-sheet h2 {
+  text-align: center;
+}
+
+.display-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  padding: 4px 0;
+}
+
+.display-label {
+  color: var(--sheet-control-text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.seg-group {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--sheet-list-bg);
+}
+
+.seg-btn {
+  flex: 1;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--sheet-text);
+  cursor: pointer;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.seg-btn.active {
+  background: var(--sheet-option-active-bg);
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}
+
+.seg-sepia.active {
+  background: #ecdfc8;
+  color: #43331f;
+}
+
+.size-stepper {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--sheet-list-bg);
+  text-align: center;
+}
+
+.size-stepper button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--sheet-option-active-bg);
+  color: var(--sheet-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.size-stepper span {
+  color: var(--sheet-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.display-pdf-note {
+  margin: 0.5rem 0 1rem;
+  color: var(--sheet-control-text);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+/* Offscreen page-map measurer: participates in layout (visibility, not
+   display, keeps real geometry) but is invisible and untouchable. */
+.page-map-measurer {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .reader-mobile-content.is-pdf-reader {
@@ -740,18 +1838,46 @@ onUnmounted(() => {
    justified text with hyphenation, and clean spacing for every element. */
 .reader-mobile-text {
   color: var(--mobile-reader-text);
-  font-size: 17px;
-  line-height: 1.62;
+  font-size: var(--mr-font-size, 17px);
+  font-family: var(--mr-font-family, inherit);
+  font-weight: var(--mr-font-weight, 400);
+  line-height: var(--mr-line-height, 1.62);
   letter-spacing: 0.002em;
-  text-align: justify;
+  text-align: var(--mr-text-align, justify);
   text-justify: inter-word;
   hyphens: auto;
   -webkit-hyphens: auto;
   overflow-wrap: break-word;
+  word-break: break-word;
   /* Long-press opens "Read from here" instead of native text selection. */
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+
+/* Publisher inline styles survive sanitising — never let them push text past
+   the page edge (oversized margins/widths are the classic broken-EPUB case). */
+.reader-mobile-text :deep(p),
+.reader-mobile-text :deep(div),
+.reader-mobile-text :deep(h1),
+.reader-mobile-text :deep(h2),
+.reader-mobile-text :deep(h3),
+.reader-mobile-text :deep(h4),
+.reader-mobile-text :deep(h5),
+.reader-mobile-text :deep(h6),
+.reader-mobile-text :deep(section),
+.reader-mobile-text :deep(article) {
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: auto !important;
+}
+
+.reader-mobile-text :deep(span),
+.reader-mobile-text :deep(a),
+.reader-mobile-text :deep(em),
+.reader-mobile-text :deep(strong) {
+  white-space: normal !important;
 }
 
 .reader-mobile-text :deep(p) {

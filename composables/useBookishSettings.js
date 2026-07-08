@@ -22,6 +22,7 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   favouritesCardBackground: 'blur',// 'blur' | 'blank'
   favouritesCardLayout: 'grid',    // 'grid' | 'list'
   readerHighlight: true,           // highlight the section being read
+  listenCoverBlur: true,           // blurred cover backdrop in Listen mode
   showStreak: true,                // reading-streak pill in the top nav
   formatFilter: 'all',             // 'all' | 'pdf' | 'epub'
 })
@@ -133,6 +134,9 @@ export function normalizeBookishSettings(value) {
     readerHighlight: source.readerHighlight === undefined
       ? DEFAULT_BOOKISH_SETTINGS.readerHighlight
       : source.readerHighlight !== false,
+    listenCoverBlur: source.listenCoverBlur === undefined
+      ? DEFAULT_BOOKISH_SETTINGS.listenCoverBlur
+      : source.listenCoverBlur !== false,
     showStreak: source.showStreak === undefined
       ? DEFAULT_BOOKISH_SETTINGS.showStreak
       : source.showStreak !== false,

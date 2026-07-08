@@ -144,6 +144,30 @@ describe('mobile native app configuration', () => {
     }
   })
 
+  test('narration drives a native media session (notification + lock screen)', () => {
+    const javaPlugin = read('android/app/src/main/java/com/bookish/app/MediaSessionPlugin.java')
+    const mainActivity = read('android/app/src/main/java/com/bookish/app/MainActivity.java')
+    const manifest = read('android/app/src/main/AndroidManifest.xml')
+    const gradle = read('android/app/build.gradle')
+    const bridge = read('plugins/media-session.client.js')
+
+    // Native side: MediaSession + MediaStyle notification with transport controls.
+    expect(javaPlugin).toContain('name = "BookishMediaSession"')
+    expect(javaPlugin).toContain('MediaSessionCompat')
+    expect(javaPlugin).toContain('MediaStyle')
+    expect(javaPlugin).toContain('PlaybackStateCompat.ACTION_SEEK_TO')
+    expect(javaPlugin).toContain('notifyListeners("mediaAction"')
+    expect(mainActivity).toContain('registerPlugin(MediaSessionPlugin.class)')
+    expect(manifest).toContain('android.permission.POST_NOTIFICATIONS')
+    expect(gradle).toContain('androidx.media:media')
+
+    // Web side: TTS state is mirrored into the session, controls come back.
+    expect(bridge).toContain("registerPlugin('BookishMediaSession')")
+    expect(bridge).toContain("addListener('mediaAction'")
+    expect(bridge).toContain('requestNotificationPermission')
+    expect(bridge).toContain('isNativeCapacitorPlatform')
+  })
+
   test('native builds do not inject web-only analytics scripts', () => {
     const analyticsPlugin = read('plugins/vercel-analytics.client.js')
 

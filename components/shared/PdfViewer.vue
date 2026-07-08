@@ -318,6 +318,30 @@ const renderPdf = async () => {
   }
 }
 
+// The page under the reading anchor line (upper third of the viewport).
+// Deciding by "largest intersection in this observer batch" flip-flopped when
+// the zoom fit several whole pages on screen — a batch only contains pages
+// whose ratio CHANGED, so a barely-visible neighbour could beat the page
+// actually being read. A fixed anchor line is stable at any zoom.
+const pageAtAnchor = () => {
+  const anchorY = Math.min(window.innerHeight * 0.35, 320)
+  const candidates = _visiblePages.size ? [..._visiblePages] : [...pageWraps.keys()]
+  let best = 0
+  let bestDistance = Infinity
+  for (const pageNumber of candidates) {
+    const element = pageWraps.get(pageNumber)
+    if (!element) continue
+    const rect = element.getBoundingClientRect()
+    if (rect.top <= anchorY && rect.bottom > anchorY) return pageNumber
+    const distance = rect.top > anchorY ? rect.top - anchorY : anchorY - rect.bottom
+    if (distance < bestDistance) {
+      bestDistance = distance
+      best = pageNumber
+    }
+  }
+  return best
+}
+
 const setupPageObserver = () => {
   pageObserver?.disconnect()
   pageObserver = new IntersectionObserver((entries) => {
@@ -328,13 +352,10 @@ const setupPageObserver = () => {
       else _visiblePages.delete(pageNumber)
     }
 
-    const best = entries
-      .filter(entry => entry.isIntersecting)
-      .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
-    const bestPage = Number(best?.target?.dataset?.page)
-    if (bestPage) emit('page-change', bestPage)
+    const currentPage = pageAtAnchor()
+    if (currentPage) emit('page-change', currentPage)
 
-    const visible = _visiblePages.size ? [..._visiblePages] : (bestPage ? [bestPage] : [1])
+    const visible = _visiblePages.size ? [..._visiblePages] : (currentPage ? [currentPage] : [1])
     renderWindow(visible)
   }, {
     root: null,
@@ -377,8 +398,28 @@ const scrollToChunk = (chunkId, behavior = 'smooth') => {
 
 defineExpose({ getVisiblePage, scrollToPage, scrollToChunk })
 
-onMounted(renderPdf)
-onUnmounted(() => pageObserver?.disconnect())
+// Between observer threshold crossings (e.g. zoomed out with whole pages on
+// screen) the anchor can cross a page edge without any ratio change — follow
+// the scroll directly, rAF-throttled.
+let _anchorRaf = null
+const onViewerScroll = () => {
+  if (_anchorRaf !== null) return
+  _anchorRaf = requestAnimationFrame(() => {
+    _anchorRaf = null
+    const page = pageAtAnchor()
+    if (page) emit('page-change', page)
+  })
+}
+
+onMounted(() => {
+  renderPdf()
+  window.addEventListener('scroll', onViewerScroll, { passive: true })
+})
+onUnmounted(() => {
+  pageObserver?.disconnect()
+  window.removeEventListener('scroll', onViewerScroll)
+  if (_anchorRaf !== null) cancelAnimationFrame(_anchorRaf)
+})
 
 watch(() => props.src, renderPdf)
 watch(() => props.zoom, relayout)

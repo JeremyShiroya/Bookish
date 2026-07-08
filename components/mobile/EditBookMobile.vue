@@ -492,9 +492,11 @@ const handleCoverChange = (event) => {
   if (file) {
     closeCoverModal()
     const reader = new FileReader()
-    reader.onload = (e) => { 
-      coverPreview.value = e.target.result 
+    reader.onload = (e) => {
+      coverPreview.value = e.target.result
       editBook.value.cover = e.target.result
+      // An uploaded cover has no remote source to heal from.
+      editBook.value.coverSource = ''
     }
     reader.readAsDataURL(file)
   }
@@ -528,6 +530,9 @@ const searchBookCovers = async () => {
 }
 
 const selectBookCover = (imageUrl) => {
+  // The remote URL is the cover's source of truth for cache healing — keep it
+  // in step with the cover so a later cache sweep can't restore the old image.
+  editBook.value.coverSource = imageUrl
   // Close immediately so the user isn't waiting on the cache round-trip.
   closeCoverModal()
   editBook.value.cover = imageUrl
@@ -651,6 +656,7 @@ const selectMetadata = (result) => {
 
   if (result.cover && !(keepCurrentCover.value && (coverPreview.value || editBook.value.cover))) {
     editBook.value.cover = result.cover;
+    editBook.value.coverSource = result.cover;
     coverPreview.value = result.cover;
     cacheCoverImage(result.cover)
       .then((cached) => {

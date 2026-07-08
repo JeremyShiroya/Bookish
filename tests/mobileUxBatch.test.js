@@ -138,7 +138,7 @@ describe('mobile UX batch', () => {
 
   test('reader uses comfortable book typography and PDF long-press', () => {
     const reader = read('components/mobile/ReaderMobile.vue')
-    expect(reader).toMatch(/\.reader-mobile-text\s*\{[^}]*text-align:\s*justify/)
+    expect(reader).toMatch(/\.reader-mobile-text\s*\{[^}]*text-align:\s*var\(--mr-text-align, justify\)/)
     expect(reader).toMatch(/\.reader-mobile-text\s*\{[^}]*hyphens:\s*auto/)
     expect(reader).toMatch(/reader-mobile-pdf[\s\S]{0,140}onReadingTouchStart/)
 

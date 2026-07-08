@@ -131,16 +131,25 @@ export const useBooks = () => {
       onProgress?.({ current: i + 1, total, title: book.title });
       coverCacheInFlight.add(book.id);
       try {
-        // A cover that already lives on device: keep it if the file is really
-        // there; otherwise fall through to re-download or repair.
-        if (isLocalAssetCover(book.cover) && !remoteSourceFor(book)) {
+        // A cover that already renders offline is authoritative — coverSource
+        // is only a recovery pointer for a lost file, never an override. It can
+        // lag behind the cover (picking a new cover via web search updates the
+        // cover first), and re-caching it here is what used to revert a freshly
+        // chosen cover on the next app open.
+        if (typeof book.cover === 'string' && book.cover.startsWith('data:image/')
+          && !book.cover.startsWith('data:image/svg+xml')) {
+          continue;
+        }
+        if (isLocalAssetCover(book.cover)) {
           const name = coverAssetName(book.cover);
           if (name && await exists('covers', name)) continue;
-          // Source lost and the file is gone — blank it to a clean placeholder
-          // so it stops 404-ing and a metadata fetch can refill it.
-          await patchBookCover(book.id, { cover: coverPlaceholder(book.title), coverSource: '' });
-          repaired += 1;
-          continue;
+          if (!remoteSourceFor(book)) {
+            // Source lost and the file is gone — blank it to a clean placeholder
+            // so it stops 404-ing and a metadata fetch can refill it.
+            await patchBookCover(book.id, { cover: coverPlaceholder(book.title), coverSource: '' });
+            repaired += 1;
+            continue;
+          }
         }
 
         const source = remoteSourceFor(book);

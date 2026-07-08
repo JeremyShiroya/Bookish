@@ -25,6 +25,9 @@
         :sanitize-html="sanitizeHtml"
         :resolve-chunk-at-point="resolveChunkAtPoint"
         :prewarm-chunk="prewarmChunkAudio"
+        :readable-chunks="allReadableChunks"
+        :section-counts="epubSectionCounts"
+        :full-sections="chapterList"
         @back="router.back()"
         @open-toc="tocOpen = true"
         @page-change="handlePdfPageChange"
@@ -34,6 +37,8 @@
         @previous-chapter="goToAdjacentChapter(-1)"
         @next-chapter="goToAdjacentChapter(1)"
         @mount-section="mountSection"
+        @position-change="handleMobilePosition"
+        @go-to-section="goToSectionFromMobile"
       />
     </template>
 
@@ -242,6 +247,12 @@ import { isRenderableSection, buildReadableChunks, useTTS } from '~/composables/
 import { useBookStorage } from '~/composables/useBookStorage'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 import { sanitizeBookHtml } from '~/composables/useHtmlSanitizer'
+import {
+  buildTextIndex,
+  mapSectionChunks,
+  resolveRangePoint,
+  unwrapTtsSpans,
+} from '~/composables/useChunkSpans'
 import { getPrewarmedReaderContent } from '~/composables/useReaderPrewarm'
 import {
   extractPdfContentFromSource,
@@ -348,8 +359,15 @@ const epubStyle = computed(() => {
   return match?.[1] ?? ''
 })
 
+// Publisher EPUB CSS is desktop-only. On mobile it fought the reader's own
+// typography (absolute margins/widths pushed words off the page edge), so the
+// mobile readers use their display preferences instead.
+const isMobileViewport = ref(false)
+let _viewportQuery = null
+const _syncViewport = () => { isMobileViewport.value = Boolean(_viewportQuery?.matches) }
+
 useHead(() => ({
-  style: epubStyle.value
+  style: epubStyle.value && !isMobileViewport.value
     ? [{ key: 'epub-book-styles', innerHTML: epubStyle.value }]
     : [],
 }))
@@ -476,7 +494,9 @@ function _startIdleSectionMounting(startIdx) {
     const flags = mountedSections.value
 
     // Mount outward from the reading position: forward first, then backward.
-    for (let mounted = 0; mounted < 2; mounted += 1) {
+    // Four per idle slice — with the memoized sanitizer a mount is cheap, and
+    // the whole book needs to be ready before a fast fling can reach it.
+    for (let mounted = 0; mounted < 4; mounted += 1) {
       let next = -1
       for (let i = startIdx; i < flags.length; i += 1) {
         if (!flags[i]) { next = i; break }
@@ -496,9 +516,9 @@ function _startIdleSectionMounting(startIdx) {
 
   const schedule = () => {
     if (typeof requestIdleCallback === 'function') {
-      _mountIdleId = requestIdleCallback(step, { timeout: 800 })
+      _mountIdleId = requestIdleCallback(step, { timeout: 350 })
     } else {
-      _mountTimerId = setTimeout(step, 120)
+      _mountTimerId = setTimeout(step, 80)
     }
   }
 
@@ -622,9 +642,30 @@ function goToTocItem(item) {
   if (item.type === 'pdf') {
     pdfViewerRef.value?.scrollToPage(item.page)
   } else {
+    // Set the index directly — the mobile paged reader navigates from this
+    // prop; scroll readers additionally scroll the section into view.
+    currentChapterIdx.value = item.index
+    mountSection(item.index)
     scrollToChapter(item.index)
   }
   tocOpen.value = false
+}
+
+// Mobile paged reader position (section + page) — keep the chapter index and
+// saved progress in step without any scroll observation.
+function handleMobilePosition(position) {
+  const section = Number(position?.section)
+  if (!Number.isFinite(section)) return
+  if (section !== currentChapterIdx.value) currentChapterIdx.value = section
+}
+
+// Mobile Listen stepper (scroll mode) jumping to the section that owns a page.
+function goToSectionFromMobile(index) {
+  if (!chapterList.value.length) return
+  const target = Math.max(0, Math.min(chapterList.value.length - 1, Number(index) || 0))
+  currentChapterIdx.value = target
+  mountSection(target)
+  scrollToChapter(target)
 }
 
 function goToAdjacentChapter(delta) {
@@ -637,6 +678,10 @@ function goToAdjacentChapter(delta) {
 
   if (!chapterList.value.length) return
   const target = Math.max(0, Math.min(chapterList.value.length - 1, currentChapterIdx.value + delta))
+  // Set the index directly so chapter stepping works even when the scroll
+  // can't be observed (the mobile Listen layer covers the reading content).
+  currentChapterIdx.value = target
+  mountSection(target)
   scrollToChapter(target)
 }
 
@@ -870,20 +915,29 @@ function observeChapters() {
   if (_observer) _observer.disconnect()
   if (isPdfBook.value) return
 
-  _observer = new IntersectionObserver((entries) => {
-    let best = null
-    let bestRatio = 0
+  // Track the latest ratio of EVERY section, not just the entries in one
+  // callback batch — a batch only contains sections whose ratio crossed a
+  // threshold, so picking the best entry could crown a barely-visible
+  // neighbour while the truly dominant section (unchanged, ratio 1) was absent.
+  const ratios = new Map()
 
+  _observer = new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      if (entry.isIntersecting && entry.intersectionRatio > bestRatio) {
-        best = entry.target
-        bestRatio = entry.intersectionRatio
+      const index = Number(entry.target.id?.slice(3))
+      if (Number.isNaN(index)) continue
+      ratios.set(index, entry.isIntersecting ? entry.intersectionRatio : 0)
+    }
+
+    let best = -1
+    let bestRatio = 0
+    for (const [index, ratio] of ratios) {
+      if (ratio > bestRatio || (ratio === bestRatio && ratio > 0 && index < best)) {
+        best = index
+        bestRatio = ratio
       }
     }
 
-    if (!best?.id?.startsWith('ch-')) return
-    const index = Number(best.id.slice(3))
-    if (!Number.isNaN(index)) currentChapterIdx.value = index
+    if (best >= 0 && bestRatio > 0) currentChapterIdx.value = best
   }, { threshold: [0.1, 0.3, 0.5, 0.7] })
 
   chapterList.value.forEach((_, i) => {
@@ -924,8 +978,19 @@ function onKeydown(event) {
   }
 }
 
+// Memoized: the template calls this for EVERY mounted section on EVERY
+// re-render, and each progressive section mount re-renders the list — without
+// the cache that re-parsed the entire mounted book through the sanitizer's
+// DOM round-trip on every single mount (the mid-scroll freeze on mobile).
+let _sanitizeCache = new Map()
+
 function sanitizeHtml(html) {
-  return sanitizeBookHtml(html)
+  let clean = _sanitizeCache.get(html)
+  if (clean === undefined) {
+    clean = sanitizeBookHtml(html)
+    _sanitizeCache.set(html, clean)
+  }
+  return clean
 }
 
 let _observer = null
@@ -935,144 +1000,10 @@ let _ttsWordHighlight = null
 let _activeWordMap = null
 let _activeWordMapIdx = -1
 
-const normalizeForSearch = (value) => (value || '').replace(/\s+/g, ' ').trim()
-
-function decodeHtmlEntities(text) {
-  if (!import.meta.client || !text) return text || ''
-  if (!text.includes('&')) return text
-  const el = document.createElement('textarea')
-  // Protect raw "<" so the parser can't swallow following text as a tag
-  el.innerHTML = text.replace(/</g, '&lt;')
-  return el.value
-}
-
-function unwrapTtsSpans(container) {
-  container.querySelectorAll('span[data-tts-chunk]').forEach(span => {
-    const parent = span.parentNode
-    if (!parent) return
-    while (span.firstChild) parent.insertBefore(span.firstChild, span)
-    parent.removeChild(span)
-    parent.normalize()
-  })
-}
-
 function clearHtmlHighlight() {
   if (_activeEl) {
     _activeEl.classList.remove('tts-active')
     _activeEl = null
-  }
-}
-
-function buildTextIndex(container) {
-  const map = []
-  let text = ''
-
-  const appendSpace = (node, offset) => {
-    if (!text || text.endsWith(' ')) return
-    text += ' '
-    map.push({ node, offset: Math.min(offset, node.nodeValue.length), synthetic: true })
-  }
-
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    {
-      acceptNode(node) {
-        if (!node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT
-        if (node.parentElement?.closest('script, style')) return NodeFilter.FILTER_REJECT
-        return NodeFilter.FILTER_ACCEPT
-      },
-    }
-  )
-
-  let node
-  while ((node = walker.nextNode())) {
-    const value = node.nodeValue
-    for (let i = 0; i < value.length; i++) {
-      const ch = value[i]
-      const code = ch.charCodeAt(0)
-      // Soft hyphens / zero-width chars are stripped from chunk targets too
-      if (code === 0xAD || (code >= 0x200B && code <= 0x200D) || code === 0xFEFF) continue
-      if (/\s/.test(ch)) {
-        appendSpace(node, i)
-      } else {
-        text += ch
-        map.push({ node, offset: i, synthetic: false })
-      }
-    }
-    appendSpace(node, value.length)
-  }
-
-  return { text, map }
-}
-
-function resolveRangePoint(map, index, direction) {
-  let cursor = index
-  while (cursor >= 0 && cursor < map.length && map[cursor]?.synthetic) {
-    cursor += direction
-  }
-  return map[cursor] || null
-}
-
-// Wrap every chunk of ONE section in a <span data-tts-chunk> for highlighting.
-// Matching is scoped to the section element and chunks are matched in order,
-// so an identical sentence elsewhere can't steal the match. The whole sentence
-// is matched when possible (exact start AND end); otherwise a prefix locates
-// the start and a suffix pins the end, so length drift between the chunk text
-// and the rendered DOM never clips the first or last letters.
-function _mapSectionChunks(sectionEl, chunks, baseIdx) {
-  const { text, map } = buildTextIndex(sectionEl)
-  if (!map.length) return
-  const flatLower = text.toLowerCase()
-  const ranges = []
-  let searchFrom = 0
-
-  for (let i = 0; i < chunks.length; i++) {
-    const target = normalizeForSearch(decodeHtmlEntities(chunks[i])).toLowerCase()
-    if (!target) continue
-
-    let start = flatLower.indexOf(target, searchFrom)
-    let end
-    if (start !== -1) {
-      // Exact whole-sentence match: both ends are real DOM positions.
-      end = start + target.length - 1
-    } else {
-      const key = target.slice(0, Math.min(120, target.length))
-      start = flatLower.indexOf(key, searchFrom)
-      if (start === -1 && key.length > 48) start = flatLower.indexOf(key.slice(0, 48), searchFrom)
-      if (start === -1) continue
-      const suffix = target.slice(-Math.min(24, target.length))
-      const suffixFrom = start + Math.max(0, target.length - suffix.length - 12)
-      const suffixPos = flatLower.indexOf(suffix, suffixFrom)
-      end = suffixPos !== -1 && suffixPos >= start
-        ? suffixPos + suffix.length - 1
-        : start + target.length - 1
-    }
-    end = Math.min(end, map.length - 1)
-    ranges.push({ chunkIdx: baseIdx + i, start, end })
-    searchFrom = end + 1
-  }
-
-  // Apply in reverse so wrapping earlier ranges doesn't invalidate later offsets.
-  for (let i = ranges.length - 1; i >= 0; i--) {
-    const info = ranges[i]
-    const startPt = resolveRangePoint(map, info.start, 1)
-    const endPt = resolveRangePoint(map, info.end, -1)
-    if (!startPt || !endPt) continue
-
-    const range = document.createRange()
-    const endOffset = Math.min(endPt.node.nodeValue.length, endPt.offset + 1)
-    try {
-      range.setStart(startPt.node, startPt.offset)
-      range.setEnd(endPt.node, endOffset)
-      const span = document.createElement('span')
-      span.dataset.ttsChunk = String(info.chunkIdx)
-      span.appendChild(range.extractContents())
-      range.insertNode(span)
-      _chunkEls[info.chunkIdx] = span
-    } catch {
-      // Overlapping or detached range — skip this chunk's highlight.
-    }
   }
 }
 
@@ -1123,7 +1054,11 @@ function _buildChunkMap() {
     const count = sectionCounts[s] || 0
     if (count > 0) {
       const sectionEl = document.getElementById(`ch-${s}`)
-      if (sectionEl) _mapSectionChunks(sectionEl, chunks.slice(offset, offset + count), offset)
+      if (sectionEl) {
+        mapSectionChunks(sectionEl, chunks.slice(offset, offset + count), offset, (chunkIdx, span) => {
+          _chunkEls[chunkIdx] = span
+        })
+      }
     }
     offset += count
   }
@@ -1374,6 +1309,7 @@ function applyStoredReaderContent(stored) {
 async function loadBook(id) {
   readerReady.value = false
   restoredInitialPdfScroll.value = false
+  _sanitizeCache = new Map()
   const cached = books.value.find(b => String(b.id) === String(id))
   if (cached) {
     book.value = cached
@@ -1529,6 +1465,9 @@ onMounted(async () => {
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('resize', updateBookEdge)
   window.addEventListener('scroll', onReaderScroll, { passive: true })
+  _viewportQuery = window.matchMedia('(max-width: 768px)')
+  _syncViewport()
+  _viewportQuery.addEventListener('change', _syncViewport)
   await loadBook(route.params.id)
 })
 
@@ -1536,6 +1475,8 @@ onUnmounted(async () => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('resize', updateBookEdge)
   window.removeEventListener('scroll', onReaderScroll)
+  _viewportQuery?.removeEventListener('change', _syncViewport)
+  _viewportQuery = null
   if (_scrollRaf !== null) cancelAnimationFrame(_scrollRaf)
   if (_progressSaveTimer) clearTimeout(_progressSaveTimer)
   if (_observer) _observer.disconnect()

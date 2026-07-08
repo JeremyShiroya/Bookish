@@ -121,6 +121,23 @@
             <span class="knob"></span>
           </button>
         </div>
+
+        <div class="pref-row">
+          <div class="pref-copy">
+            <span class="pref-label">Blurred cover in Listen mode</span>
+            <span class="pref-hint">Soft blurred book cover behind the player.</span>
+          </div>
+          <button
+            type="button"
+            class="pref-toggle"
+            role="switch"
+            :aria-checked="settings.listenCoverBlur !== false"
+            :class="{ on: settings.listenCoverBlur !== false }"
+            @click="set('listenCoverBlur', settings.listenCoverBlur === false)"
+          >
+            <span class="knob"></span>
+          </button>
+        </div>
       </section>
 
       <!-- Interface -->
