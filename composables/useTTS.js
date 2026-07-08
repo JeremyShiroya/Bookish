@@ -634,6 +634,82 @@ export const useTTS = () => {
     _prewarmCache.clear()
   }
 
+  // ── Background keep-alive ──────────────────────────────────────────────────
+  //
+  // Narration is a chain of one-sentence <audio> elements. Between two chunks
+  // the page emits NO audio for a moment, and a backgrounded WebView that is
+  // not producing audio gets its timers throttled (and its process frozen) by
+  // Android — so the `onended` handler that starts the next sentence never ran
+  // and playback stalled at a sentence boundary while the UI still said
+  // "playing". A silent looping track plays for the whole narration session, so
+  // the media element chain is never empty and the audio session stays alive
+  // across chunk boundaries.
+  let _keepAlive = null
+  let _keepAliveUrl = null
+
+  // The keep-alive track is the first stream to open the shared audio output, so
+  // its format decides the output format: an 8kHz mono track forced the device
+  // into narrowband and resampled the narration down with it — the voices came
+  // out boxy, like a phone call. Match ordinary device output (48kHz stereo) so
+  // nothing about the speech is renegotiated or resampled.
+  const KEEPALIVE_SAMPLE_RATE = 48000
+  const KEEPALIVE_CHANNELS = 2
+
+  const _silentLoopUrl = () => {
+    if (_keepAliveUrl) return _keepAliveUrl
+    // 0.5s of 48kHz 16-bit stereo silence — a real WAV, built at runtime.
+    const frames = KEEPALIVE_SAMPLE_RATE / 2
+    const bytesPerFrame = KEEPALIVE_CHANNELS * 2
+    const dataBytes = frames * bytesPerFrame
+    const buffer = new ArrayBuffer(44 + dataBytes)
+    const view = new DataView(buffer)
+    const ascii = (offset, text) => {
+      for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i))
+    }
+    ascii(0, 'RIFF')
+    view.setUint32(4, 36 + dataBytes, true)
+    ascii(8, 'WAVEfmt ')
+    view.setUint32(16, 16, true)                                  // fmt chunk size
+    view.setUint16(20, 1, true)                                   // PCM
+    view.setUint16(22, KEEPALIVE_CHANNELS, true)                  // stereo
+    view.setUint32(24, KEEPALIVE_SAMPLE_RATE, true)
+    view.setUint32(28, KEEPALIVE_SAMPLE_RATE * bytesPerFrame, true) // byte rate
+    view.setUint16(32, bytesPerFrame, true)                       // block align
+    view.setUint16(34, 16, true)                                  // bits per sample
+    ascii(36, 'data')
+    view.setUint32(40, dataBytes, true)
+    // Samples stay zero — the buffer is already zero-filled.
+    _keepAliveUrl = URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }))
+    return _keepAliveUrl
+  }
+
+  const _startKeepAlive = () => {
+    if (!import.meta.client || _keepAlive) return
+    try {
+      const audio = new Audio(_silentLoopUrl())
+      audio.loop = true
+      // The samples are pure silence, so nothing is ever heard. Keep the gain
+      // NON-zero all the same: a muted / zero-volume element can be treated as
+      // "not producing audio", which would let the output stream close between
+      // sentences — the very stall this track exists to prevent.
+      audio.volume = 0.001
+      _keepAlive = audio
+      audio.play().catch(() => {
+        // Autoplay blocked (no gesture yet) — narration itself still plays.
+        _keepAlive = null
+      })
+    } catch {
+      _keepAlive = null
+    }
+  }
+
+  const _stopKeepAlive = () => {
+    if (!_keepAlive) return
+    _keepAlive.pause()
+    _keepAlive.src = ''
+    _keepAlive = null
+  }
+
   const _cancelAudio = () => {
     if (_currentAudio) {
       _currentAudio.onended = null
@@ -731,7 +807,14 @@ export const useTTS = () => {
     if (found !== -1) ttsWordIdx.value = found
   }
 
-  const _speakNextEdge = async () => {
+  // A chunk that fails to synthesize is retried before narration gives up.
+  // Backgrounded WebViews get throttled sockets, so a failure there usually
+  // means "try again in a moment", not "the endpoint is gone" — bailing out
+  // used to silently end the book, or swap the narrator to the device voice.
+  const CHUNK_RETRY_LIMIT = 4
+  const CHUNK_RETRY_DELAY_MS = 1200
+
+  const _speakNextEdge = async (retryCount = 0) => {
     // Capture generation at call time — if _cancelAudio() fires mid-await,
     // the generation increments and we know to abort.
     const myGen = _prefetchGeneration
@@ -740,6 +823,7 @@ export const useTTS = () => {
       ttsStatus.value = 'idle'
       ttsProgress.value = 100
       ttsCurrentChunk.value = ''
+      _stopKeepAlive()
       _persistSession()
       return
     }
@@ -779,11 +863,24 @@ export const useTTS = () => {
     if (_chunkIdx !== requestedChunkIdx || _chunks[requestedChunkIdx] !== requestedChunkText) return
 
     if (!chunkData || (!chunkData.audio && !chunkData.native)) {
+      // Retry this same sentence with backoff before declaring failure, so a
+      // throttled socket in the background can't end the book (or force a
+      // narrator-voice switch) on one bad fetch.
+      if (retryCount < CHUNK_RETRY_LIMIT) {
+        setTimeout(() => {
+          if (_prefetchGeneration !== myGen || ttsStatus.value !== 'playing') return
+          if (_chunkIdx !== requestedChunkIdx) return
+          _speakNextEdge(retryCount + 1)
+        }, CHUNK_RETRY_DELAY_MS * (retryCount + 1))
+        return
+      }
+
       const { addToast } = useToast()
       addToast('TTS failed — check your connection.', 'error')
       ttsPlayingChunkIdx.value = -1
       ttsPlayingChunkText.value = ''
       ttsStatus.value = 'idle'
+      _stopKeepAlive()
       return
     }
 
@@ -849,6 +946,7 @@ export const useTTS = () => {
       const { addToast } = useToast()
       addToast('TTS failed — check your connection.', 'error')
       ttsStatus.value = 'idle'
+      _stopKeepAlive()
     }
 
     const playGen = _prefetchGeneration
@@ -860,12 +958,14 @@ export const useTTS = () => {
         ttsPlayingChunkIdx.value = -1
         ttsPlayingChunkText.value = ''
         ttsStatus.value = 'idle'
+        _stopKeepAlive()
       }
     })
   }
 
   const _stopInternal = () => {
     _cancelAudio()
+    _stopKeepAlive()
     _clearAudioCache()
     _chunks = []
     _chunkIdx = 0
@@ -956,6 +1056,7 @@ export const useTTS = () => {
     }
 
     ttsStatus.value = 'playing'
+    _startKeepAlive()
     _speakNextEdge()
   }
 
@@ -963,12 +1064,14 @@ export const useTTS = () => {
     if (ttsStatus.value !== 'playing') return
     ttsStatus.value = 'paused'
     _currentAudio?.pause()
+    _stopKeepAlive()
     _persistSession()
   }
 
   const resume = () => {
     if (ttsStatus.value !== 'paused') return
     ttsStatus.value = 'playing'
+    _startKeepAlive()
     if (_currentAudio) {
       _currentAudio.play().then(() => {
         _startWordLoop(_currentBoundaries)

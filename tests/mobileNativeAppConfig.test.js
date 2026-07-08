@@ -168,6 +168,35 @@ describe('mobile native app configuration', () => {
     expect(bridge).toContain('isNativeCapacitorPlatform')
   })
 
+  test('narration survives leaving the app (foreground service + audio keep-alive)', () => {
+    const service = read('android/app/src/main/java/com/bookish/app/NarrationService.java')
+    const javaPlugin = read('android/app/src/main/java/com/bookish/app/MediaSessionPlugin.java')
+    const manifest = read('android/app/src/main/AndroidManifest.xml')
+    const tts = read('composables/useTTS.js')
+
+    // A mediaPlayback foreground service stops Android freezing the process
+    // (and the WebView that drives the audio) once the app leaves the screen.
+    expect(service).toContain('extends Service')
+    expect(service).toContain('startForeground')
+    expect(service).toContain('FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK')
+    expect(manifest).toContain('android:name=".NarrationService"')
+    expect(manifest).toContain('android:foregroundServiceType="mediaPlayback"')
+    expect(manifest).toContain('android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK')
+    // Android 12+ rejects background FGS starts — only start on the transition.
+    expect(javaPlugin).toContain('if (serviceRunning)')
+
+    // Narration is a chain of per-sentence <audio> elements; a silent looping
+    // track keeps the page audible ACROSS chunk boundaries, so a backgrounded
+    // WebView is never throttled at exactly the moment it must start the next
+    // sentence (playback used to stall while the UI still said "playing").
+    expect(tts).toContain('_startKeepAlive')
+    expect(tts).toContain('_stopKeepAlive')
+    expect(tts).toContain('audio.loop = true')
+
+    // A failed chunk is retried rather than ending the book / switching voice.
+    expect(tts).toContain('CHUNK_RETRY_LIMIT')
+  })
+
   test('native builds do not inject web-only analytics scripts', () => {
     const analyticsPlugin = read('plugins/vercel-analytics.client.js')
 

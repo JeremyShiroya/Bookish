@@ -21,6 +21,12 @@
             </intent-filter>
         </activity>
 
+        <!-- Keeps narration alive (and the WebView unfrozen) outside the app. -->
+        <service
+            android:name=".NarrationService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -35,6 +41,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Narration media notification (Android 13+ requires runtime grant). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Narration keeps playing while the app is in the background. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- Auto-import of book documents from device storage (ReadERA-style).
          Android 11+ needs All-files access; older versions use the legacy
          read permission. -->

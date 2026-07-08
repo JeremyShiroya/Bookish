@@ -6,6 +6,7 @@
       replaceBottomNav: dockReplacingBottomNav,
       sepia: prefs.background === 'sepia',
       'is-paged': usePagedReader,
+      'listen-blur': readerMode === 'listen' && listenBlurEnabled,
     }]"
     :style="readerStyleVars"
   >
@@ -60,10 +61,15 @@
       </div>
     </header>
 
-    <div v-if="readerMode === 'listen'" class="reader-listen-view">
+    <div
+      v-if="readerMode === 'listen'"
+      class="reader-listen-view"
+      :class="{ 'bg-blur': listenBlurEnabled }"
+    >
       <template v-if="book">
-        <div v-if="listenBlurEnabled" class="listen-backdrop" aria-hidden="true">
+        <div v-if="listenBlurEnabled" class="listen-bg" aria-hidden="true">
           <img :src="book.cover" alt="" @error="onCoverError($event, book.title)" />
+          <div class="listen-bg-overlay"></div>
         </div>
         <div class="listen-cover">
           <img
@@ -1649,9 +1655,11 @@ onUnmounted(() => {
   text-align: center;
 }
 
-/* Soft blurred cover backdrop (Preferences → "Blurred cover in Listen mode").
-   Fades into the reader background so the animated text stays readable. */
-.listen-backdrop {
+/* Blurred cover background — the exact blurred cover-image technique the
+   series cards use (SeriesCollageCard `.card-bg`): same blur, saturation,
+   scale and `--gradient-image-card-overlay`, with the same white-on-image
+   text treatment. Toggled in Preferences → "Blurred cover in Listen mode". */
+.listen-bg {
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -1659,29 +1667,89 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-.listen-backdrop img {
+.listen-bg img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  filter: blur(25px) saturate(150%);
   transform: scale(1.35);
-  filter: blur(46px) saturate(1.2);
-  opacity: 0.45;
 }
 
-.listen-backdrop::after {
-  content: "";
+.listen-bg-overlay {
   position: absolute;
   inset: 0;
+  z-index: 1;
+  background: var(--gradient-image-card-overlay);
+}
+
+.reader-listen-view > :not(.listen-bg) {
+  position: relative;
+  z-index: 1;
+}
+
+/* On a blur background the player sits over imagery — go white with a shadow,
+   exactly like the cards' `.bg-blur` text. */
+.reader-listen-view.bg-blur .listen-title {
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+
+.reader-listen-view.bg-blur .listen-byline,
+.reader-listen-view.bg-blur .listen-progress,
+.reader-listen-view.bg-blur .listen-page-step,
+.reader-listen-view.bg-blur .listen-text-empty {
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.reader-listen-view.bg-blur .listen-page-current,
+.reader-listen-view.bg-blur .listen-controls button,
+.reader-listen-view.bg-blur .listen-text-inner {
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+
+.reader-listen-view.bg-blur .listen-progress input {
   background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--mobile-reader-bg) 35%, transparent),
-    var(--mobile-reader-bg) 82%
+    to right,
+    #fff var(--fill, 0%),
+    rgba(255, 255, 255, 0.3) var(--fill, 0%)
   );
 }
 
-.reader-listen-view > :not(.listen-backdrop) {
-  position: relative;
-  z-index: 1;
+.reader-listen-view.bg-blur .listen-progress input::-webkit-slider-thumb {
+  background: #fff;
+}
+
+/* The narrated sentence stays legible over the image. */
+.reader-listen-view.bg-blur .listen-chunk.active {
+  background: rgba(255, 255, 255, 0.22);
+  outline-color: rgba(255, 255, 255, 0.5);
+}
+
+/* The fixed topbar paints above the blurred backdrop — let the image show
+   through it, and lift its controls onto the imagery like the card text. */
+.reader-mobile-page.listen-blur .reader-mobile-topbar {
+  background: transparent;
+}
+
+.reader-mobile-page.listen-blur .reader-nav-btn {
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+
+.reader-mobile-page.listen-blur .reader-mode-toggle {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.reader-mobile-page.listen-blur .reader-mode-toggle button {
+  color: #fff;
+}
+
+.reader-mobile-page.listen-blur .reader-mode-toggle button.active {
+  background: var(--color-brand-primary);
+  color: #fff;
 }
 
 /* The sentence being narrated is highlighted just like in Read mode. */
