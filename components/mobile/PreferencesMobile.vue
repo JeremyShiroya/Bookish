@@ -7,27 +7,7 @@
       <section class="pref-group">
         <h2 class="pref-group-title">Series cards</h2>
 
-        <div class="pref-block">
-          <div class="pref-copy">
-            <span class="pref-label">Background</span>
-            <span class="pref-hint">Plain surface, or a blurred cover image.</span>
-          </div>
-          <div class="option-grid">
-            <button
-              v-for="opt in backgroundOptions"
-              :key="opt.value"
-              type="button"
-              class="option"
-              :class="{ active: settings.seriesCardBackground === opt.value }"
-              @click="set('seriesCardBackground', opt.value)"
-            >
-              <span class="preview">
-                <SeriesPreview layout="fan" :background="opt.value" />
-              </span>
-              <span class="option-label">{{ opt.label }}<i v-if="settings.seriesCardBackground === opt.value" class="ri-check-line"></i></span>
-            </button>
-          </div>
-        </div>
+        <!--LAYOUT-->
 
         <div class="pref-block">
           <div class="pref-copy">
@@ -50,12 +30,61 @@
             </button>
           </div>
         </div>
+
+        <!--BACKGROUND-->
+
+        <div class="pref-block">
+          <div class="pref-copy">
+            <span class="pref-label">Background</span>
+            <span class="pref-hint">Plain surface, or a blurred cover image.</span>
+          </div>
+          <div class="option-grid">
+            <button
+              v-for="opt in backgroundOptions"
+              :key="opt.value"
+              type="button"
+              class="option"
+              :class="{ active: settings.seriesCardBackground === opt.value }"
+              @click="set('seriesCardBackground', opt.value)"
+            >
+              <span class="preview">
+                <SeriesPreview layout="fan" :background="opt.value" />
+              </span>
+              <span class="option-label">{{ opt.label }}<i v-if="settings.seriesCardBackground === opt.value" class="ri-check-line"></i></span>
+            </button>
+          </div>
+        </div>
       </section>
 
-      <!-- Playlist cards (the Favourites grid/list choice now lives in that
-           page's own controls row, next to its filter). -->
+      <!-- Playlist cards — the same card and the same options as Series cards. -->
       <section class="pref-group">
         <h2 class="pref-group-title">Playlist cards</h2>
+
+        <!--LAYOUT-->
+
+        <div class="pref-block">
+          <div class="pref-copy">
+            <span class="pref-label">Layout</span>
+            <span class="pref-hint">Fanned covers, or the playlist-style card.</span>
+          </div>
+          <div class="option-grid">
+            <button
+              v-for="opt in seriesLayoutOptions"
+              :key="opt.value"
+              type="button"
+              class="option"
+              :class="{ active: settings.playlistCardLayout === opt.value }"
+              @click="set('playlistCardLayout', opt.value)"
+            >
+              <span class="preview">
+                <SeriesPreview :layout="opt.value" :background="settings.playlistCardBackground" />
+              </span>
+              <span class="option-label">{{ opt.label }}<i v-if="settings.playlistCardLayout === opt.value" class="ri-check-line"></i></span>
+            </button>
+          </div>
+        </div>
+        
+        <!--BACKGROUND-->
 
         <div class="pref-block">
           <div class="pref-copy">
@@ -72,34 +101,13 @@
               @click="set('playlistCardBackground', opt.value)"
             >
               <span class="preview">
-                <SeriesPreview layout="cover" :background="opt.value" />
+                <SeriesPreview layout="fan" :background="opt.value" />
               </span>
               <span class="option-label">{{ opt.label }}<i v-if="settings.playlistCardBackground === opt.value" class="ri-check-line"></i></span>
             </button>
           </div>
         </div>
 
-        <div class="pref-block">
-          <div class="pref-copy">
-            <span class="pref-label">Layout</span>
-            <span class="pref-hint">Angled covers, or a fanned stack.</span>
-          </div>
-          <div class="option-grid">
-            <button
-              v-for="opt in playlistLayoutOptions"
-              :key="opt.value"
-              type="button"
-              class="option"
-              :class="{ active: settings.playlistCardLayout === opt.value }"
-              @click="set('playlistCardLayout', opt.value)"
-            >
-              <span class="preview">
-                <SeriesPreview :layout="opt.value" :background="settings.playlistCardBackground" />
-              </span>
-              <span class="option-label">{{ opt.label }}<i v-if="settings.playlistCardLayout === opt.value" class="ri-check-line"></i></span>
-            </button>
-          </div>
-        </div>
       </section>
 
       <!-- Reading — same visual-example treatment as the card sections above -->
@@ -218,10 +226,6 @@ const backgroundOptions = [
 const seriesLayoutOptions = [
   { value: 'fan', label: 'Fanned' },
   { value: 'cover', label: 'Playlist style' },
-]
-const playlistLayoutOptions = [
-  { value: 'cover', label: 'Angled covers' },
-  { value: 'fan', label: 'Fanned' },
 ]
 // Reading options are booleans, but they're presented as picture choices like
 // the card sections rather than as bare switches.

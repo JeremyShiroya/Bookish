@@ -32,9 +32,9 @@
         </li>
         <li v-if="removesDeviceFile" class="danger">
           <i class="ri-smartphone-line"></i>
-          <span>
+          <span class="effect-copy">
             The <strong>{{ formatLabel }} file on your device</strong>
-            <em v-if="book.deviceImportPath">{{ book.deviceImportPath }}</em>
+            <em v-if="book.deviceImportPath" :title="book.deviceImportPath">{{ book.deviceImportPath }}</em>
           </span>
         </li>
         <li v-else>
@@ -190,6 +190,13 @@ const confirmDelete = () => emit('confirm')
   line-height: 1.45;
 }
 
+/* The text column must be allowed to shrink below its intrinsic width, or the
+   long device path can't wrap and breaks out of the sheet. */
+.effect-copy {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .delete-effects i {
   flex: 0 0 auto;
   margin-top: 1px;
@@ -204,12 +211,14 @@ const confirmDelete = () => emit('confirm')
 
 .delete-effects em {
   display: block;
-  overflow: hidden;
+  margin-top: 2px;
   color: var(--color-text-muted);
   font-size: 0.74rem;
   font-style: normal;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* A file path has no spaces to break on — allow mid-string wrapping so it
+     stays inside the sheet instead of overflowing. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .delete-hint {

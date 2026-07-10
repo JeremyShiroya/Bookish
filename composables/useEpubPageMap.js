@@ -8,7 +8,9 @@
 // page numbers instantly.
 
 export const EPUB_PAGE_MAP_PREFIX = 'bookish:page-map:'
-const PAGE_MAP_VERSION = 1
+// v2 adds per-section scroll heights (used by the scroll reader to reserve
+// exact placeholder space, so a fast fling never lands on an un-sized gap).
+const PAGE_MAP_VERSION = 2
 const MAX_CACHED_MAPS = 12
 
 export function pageMapCacheKey(bookId, { width, height, layoutHash, sectionCount }) {
@@ -21,7 +23,11 @@ export function readPageMapCache(key, storage = globalThis.localStorage) {
     const parsed = JSON.parse(storage.getItem(key) || 'null')
     if (parsed?.version !== PAGE_MAP_VERSION) return null
     if (!Array.isArray(parsed.counts) || !Array.isArray(parsed.chunkPages)) return null
-    return { counts: parsed.counts, chunkPages: parsed.chunkPages }
+    return {
+      counts: parsed.counts,
+      chunkPages: parsed.chunkPages,
+      heights: Array.isArray(parsed.heights) ? parsed.heights : null,
+    }
   } catch {
     return null
   }
@@ -36,6 +42,7 @@ export function writePageMapCache(key, map, storage = globalThis.localStorage) {
       savedAt: Date.now(),
       counts: map.counts,
       chunkPages: map.chunkPages,
+      heights: map.heights || null,
     }))
   } catch {
     // Quota exceeded just means the map is recomputed next open.

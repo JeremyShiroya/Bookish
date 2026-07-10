@@ -42,7 +42,11 @@
       </div>
 
       <div class="reader-top-actions">
+        <!-- The headphone icon opens the audio dock. In Listen mode the whole
+             player (speed, narrator, seek) is already on screen, so it's
+             redundant there and hidden. -->
         <button
+          v-if="readerMode !== 'listen'"
           type="button"
           class="reader-nav-btn"
           aria-label="Audio and voice options"
@@ -96,7 +100,15 @@
         </div>
 
         <div class="listen-controls">
-          <button type="button" aria-label="Back 10 seconds" @click="skipSeconds(-10)">
+          <button
+            type="button"
+            class="listen-aux"
+            aria-label="Playback speed"
+            @click="cycleSpeed"
+          >
+            {{ speedLabel }}
+          </button>
+          <button type="button" class="listen-skip" aria-label="Back 10 seconds" @click="skipSeconds(-10)">
             <i class="ri-replay-10-line"></i>
           </button>
           <button
@@ -107,8 +119,16 @@
           >
             <i :class="isPlaying ? 'ri-pause-fill' : 'ri-play-fill'"></i>
           </button>
-          <button type="button" aria-label="Forward 10 seconds" @click="skipSeconds(10)">
+          <button type="button" class="listen-skip" aria-label="Forward 10 seconds" @click="skipSeconds(10)">
             <i class="ri-forward-10-line"></i>
+          </button>
+          <button
+            type="button"
+            class="listen-aux"
+            aria-label="Choose narrator"
+            @click="narratorOpen = true"
+          >
+            <i class="ri-speak-line"></i>
           </button>
         </div>
 
@@ -245,7 +265,7 @@
               v-else
               class="reader-section-placeholder"
               :data-section-placeholder="index"
-              :style="{ height: `${chapter.estHeight || 600}px` }"
+              :style="{ height: `${placeholderHeight(index, chapter)}px` }"
             ></div>
           </section>
 
@@ -288,7 +308,8 @@
         <button
           type="button"
           class="chapter-pill-title"
-          @click="$emit('open-toc')"
+          aria-label="Table of contents"
+          @click="tocModalOpen = true"
         >
           {{ dockLabel }}
         </button>
@@ -554,18 +575,104 @@
       </div>
     </Teleport>
 
+    <!-- Narrator picker (opened from the Listen controls) -->
+    <Teleport to="body">
+      <div v-if="narratorOpen" class="reader-media-layer">
+        <button
+          class="reader-media-backdrop"
+          type="button"
+          aria-label="Close narrator picker"
+          @click="narratorOpen = false"
+        ></button>
+        <section
+          class="reader-media-sheet reader-narrator-sheet"
+          :class="readerTheme"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Choose narrator"
+        >
+          <div class="sheet-grabber"></div>
+          <h2>Narrator</h2>
+
+          <div class="voice-list" role="listbox" aria-label="Narrator voices">
+            <button
+              v-for="voice in displayVoices"
+              :key="voice.id"
+              type="button"
+              class="voice-option"
+              :class="{ active: voice.id === activeVoiceId }"
+              role="option"
+              :aria-selected="voice.id === activeVoiceId"
+              @click="chooseNarrator(voice.id)"
+            >
+              <span>{{ voice.name }}</span>
+              <i v-if="voice.id === activeVoiceId" class="ri-check-line"></i>
+            </button>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+
+    <!-- Table of contents: tap the chapter pill to jump anywhere in the book. -->
+    <Teleport to="body">
+      <div v-if="tocModalOpen" class="reader-media-layer">
+        <button
+          class="reader-media-backdrop"
+          type="button"
+          aria-label="Close contents"
+          @click="tocModalOpen = false"
+        ></button>
+        <section
+          class="reader-media-sheet reader-toc-sheet"
+          :class="readerTheme"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Table of contents"
+        >
+          <div class="sheet-grabber"></div>
+          <h2>Contents</h2>
+
+          <div v-if="tocItems.length" class="toc-list" role="listbox" aria-label="Chapters">
+            <button
+              v-for="(item, i) in tocItems"
+              :key="`${item.type || 'chapter'}-${item.page ?? item.index}-${i}`"
+              type="button"
+              class="toc-item"
+              :class="{ active: isTocItemActive(item) }"
+              role="option"
+              :aria-selected="isTocItemActive(item)"
+              @click="chooseTocItem(item)"
+            >
+              <span class="toc-item-title">{{ item.title }}</span>
+              <i v-if="isTocItemActive(item)" class="ri-check-line"></i>
+            </button>
+          </div>
+          <p v-else class="toc-empty">This book has no table of contents.</p>
+        </section>
+      </div>
+    </Teleport>
+
     <!-- Offscreen page-map measurer: lays out one section at a time with the
          exact reader geometry so global page numbers match the visible pages. -->
     <div v-if="!isPdfBook" class="page-map-measurer" aria-hidden="true">
       <div ref="measureHostRef" class="paged-viewport">
         <div ref="measureContentRef" class="paged-content paged-text" :style="measureStyle"></div>
       </div>
+      <!-- Single-column measurer for the SCROLL reader: gives each section its
+           real rendered height so placeholders reserve exact space and a fast
+           fling can't reveal an un-sized gap. -->
+      <div
+        ref="heightMeasureRef"
+        class="scroll-height-measurer reader-mobile-text epub-content"
+        :style="heightMeasureStyle"
+      ></div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { onCoverError } from "~/composables/useCoverFallback";
 import { firstChunkForPage, pageForChunk } from "~/composables/usePdfManifest";
 import PdfViewer from "~/components/shared/PdfViewer.vue";
@@ -626,6 +733,9 @@ const props = defineProps({
   // Complete section list ({ title, html }) for the paged renderer and the
   // page-map measurer — unlike chapterList, never windowed to placeholders.
   fullSections: { type: Array, default: () => [] },
+  // Table-of-contents entries for the jump modal. EPUB: { title, index }.
+  // PDF: { title, page, type: 'pdf' }.
+  tocItems: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits([
@@ -640,7 +750,10 @@ const emit = defineEmits([
   "mount-section",
   "position-change",
   "go-to-section",
+  "jump-to-toc",
 ]);
+
+const route = useRoute();
 
 const {
   ttsBook,
@@ -649,6 +762,8 @@ const {
   ttsSpeed,
   ttsVoices,
   ttsVoiceId,
+  ttsNativeVoices,
+  ttsNativeVoiceIdx,
   ttsPlayingChunkIdx,
   elapsedTime,
   totalTime,
@@ -659,6 +774,8 @@ const {
   seekToChunk,
   setSpeed,
   setVoice,
+  loadDeviceVoices,
+  setNativeVoice,
 } = useTTS();
 
 const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
@@ -666,6 +783,30 @@ const SPEED_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
 const mediaOpen = ref(false);
 const displayOpen = ref(false);
 const voicePickerOpen = ref(false);
+const narratorOpen = ref(false);
+const tocModalOpen = ref(false);
+
+// ── Table of contents ───────────────────────────────────────────────────────
+// The active entry is the last chapter/page at or before the reading position.
+const activeTocChapter = computed(() => {
+  let active = -1;
+  for (const item of props.tocItems) {
+    if (item.type === "pdf") continue;
+    if (Number(item.index) <= props.currentChapterIdx) active = Number(item.index);
+    else break;
+  }
+  return active;
+});
+
+const isTocItemActive = (item) => {
+  if (item.type === "pdf") return props.currentPdfPage === item.page;
+  return Number(item.index) === activeTocChapter.value;
+};
+
+const chooseTocItem = (item) => {
+  tocModalOpen.value = false;
+  emit("jump-to-toc", item);
+};
 const replaceBottomNav = ref(false);
 const isOffline = ref(false);
 
@@ -722,6 +863,13 @@ watch(() => props.currentChapterIdx, (idx) => {
 
 const measureHostRef = ref(null);
 const measureContentRef = ref(null);
+const heightMeasureRef = ref(null);
+
+// The scroll reader lays text out at the full content width (no columns), so the
+// height measurer matches that width and the reader's typography.
+const heightMeasureStyle = computed(() => ({
+  width: `${pageGeometry.value.width}px`,
+}));
 const pageGeometry = ref({ width: 320, height: 480, gap: 40 });
 
 const measureStyle = computed(() => ({
@@ -778,9 +926,11 @@ const buildPageMap = async () => {
   }
 
   const el = measureContentRef.value;
+  const heightEl = heightMeasureRef.value;
   if (!el) return;
 
   const counts = [];
+  const heights = new Array(sections.length).fill(0);
   const chunkPages = new Array((props.readableChunks || []).length).fill(null);
   const stride = width + gap;
   let base = 0;
@@ -789,7 +939,8 @@ const buildPageMap = async () => {
     await _idleSlice();
     if (token !== _pageMapToken) return;
 
-    el.innerHTML = props.sanitizeHtml(sections[index]?.html || "");
+    const html = props.sanitizeHtml(sections[index]?.html || "");
+    el.innerHTML = html;
     const chunkBase = sectionStartChunkLocal(index);
     const count = (props.sectionCounts || [])[index] || 0;
     const spans = new Map();
@@ -811,13 +962,21 @@ const buildPageMap = async () => {
     }
     counts.push(pagesInSection);
     base += pagesInSection;
-    // Publish progress so page numbers appear as soon as the reading position
-    // has been measured, not only when the whole book is done.
-    pageMap.value = { counts: counts.slice(), chunkPages };
+
+    // Real single-column height for the scroll reader's placeholder.
+    if (heightEl) {
+      heightEl.innerHTML = html;
+      heights[index] = Math.max(120, Math.round(heightEl.offsetHeight));
+    }
+
+    // Publish progress so page numbers (and reserved heights) appear as soon as
+    // the reading position has been measured, not only when the book is done.
+    pageMap.value = { counts: counts.slice(), chunkPages, heights: heights.slice() };
   }
 
   el.innerHTML = "";
-  pageMap.value = { counts, chunkPages };
+  if (heightEl) heightEl.innerHTML = "";
+  pageMap.value = { counts, chunkPages, heights };
   writePageMapCache(key, pageMap.value);
 };
 
@@ -837,6 +996,16 @@ const pageMapTotal = computed(() => {
   if (!counts || counts.length < (props.fullSections || []).length) return null;
   return totalPagesInMap(counts);
 });
+
+// Scroll-mode placeholder height: the section's REAL measured height once the
+// measurer has reached it, falling back to the parent's text-length estimate.
+// Exact heights keep the scroll position stable (no jump on mount) and let the
+// eager mounter target the right sections during a fast fling.
+const placeholderHeight = (index, chapter) => {
+  const measured = pageMap.value?.heights?.[index];
+  if (Number.isFinite(measured) && measured > 0) return measured;
+  return chapter?.estHeight || 600;
+};
 
 const pagedGlobalPage = computed(() => {
   if (!usePagedReader.value) return null;
@@ -867,12 +1036,33 @@ const dockLabel = computed(() => {
 });
 
 // On the native app, an offline device can't reach Edge cloud voices — narration
-// falls back to the phone's built-in voice. Surface that in the picker instead of
-// dangling Edge voice names the device can't actually use.
-const OFFLINE_VOICE = { id: "__offline_device__", name: "Offline voice" };
+// falls back to the phone's built-in voices. When offline the picker therefore
+// lists the REAL device narrators (from the OS TTS engine), not Edge models the
+// device can't reach.
+const OFFLINE_VOICE = { id: "__offline_device__", name: "Device voice (auto)" };
 const useOfflineVoice = computed(() => isNativeCapacitorPlatform() && isOffline.value);
-const displayVoices = computed(() => (useOfflineVoice.value ? [OFFLINE_VOICE] : ttsVoices.value));
-const activeVoiceId = computed(() => (useOfflineVoice.value ? OFFLINE_VOICE.id : ttsVoiceId.value));
+
+// Device voices as picker options: id "native:<index>" into ttsNativeVoices.
+// Deduped by name, with a language hint, and an "auto" entry that lets the OS
+// choose per language.
+const deviceVoiceOptions = computed(() => {
+  const seen = new Set();
+  const options = [{ id: "native:-1", name: OFFLINE_VOICE.name }];
+  (ttsNativeVoices.value || []).forEach((voice, index) => {
+    const label = String(voice?.name || voice?.lang || `Voice ${index + 1}`).trim();
+    const lang = String(voice?.lang || "").replace("_", "-");
+    const name = lang && !label.toLowerCase().includes(lang.toLowerCase()) ? `${label} · ${lang}` : label;
+    if (seen.has(name)) return;
+    seen.add(name);
+    options.push({ id: `native:${index}`, name });
+  });
+  return options;
+});
+
+const displayVoices = computed(() => (useOfflineVoice.value ? deviceVoiceOptions.value : ttsVoices.value));
+const activeVoiceId = computed(() =>
+  useOfflineVoice.value ? `native:${ttsNativeVoiceIdx.value}` : ttsVoiceId.value,
+);
 let lastScrollY = 0;
 let downTravel = 0;
 let upTravel = 0;
@@ -896,10 +1086,22 @@ const chapterLabel = computed(() => {
 });
 
 const currentVoiceName = computed(() => {
-  if (useOfflineVoice.value) return OFFLINE_VOICE.name;
+  if (useOfflineVoice.value) {
+    return deviceVoiceOptions.value.find((v) => v.id === activeVoiceId.value)?.name || OFFLINE_VOICE.name;
+  }
   const voice = ttsVoices.value.find((item) => item.id === ttsVoiceId.value);
   return voice ? voice.name : "Switch narrator";
 });
+
+// Route a picker choice to the right setter: a "native:N" id selects a device
+// voice; anything else is an Edge voice.
+const applyVoiceChoice = (voiceId) => {
+  if (typeof voiceId === "string" && voiceId.startsWith("native:")) {
+    setNativeVoice(Number(voiceId.slice(7)));
+  } else {
+    setVoice(voiceId);
+  }
+};
 
 const speedLabel = computed(() => `${ttsSpeed.value}x`);
 
@@ -1131,6 +1333,13 @@ const stepListenPage = (delta) => {
   if (chunk >= 0) emit("go-to-section", sectionForChunkLocal(chunk));
 };
 
+// Narrator picker opened from the Listen controls (mirrors the media sheet's
+// voice list, so it uses the same offline-aware voice state and setter).
+const chooseNarrator = (voiceId) => {
+  applyVoiceChoice(voiceId);
+  narratorOpen.value = false;
+};
+
 // Slide the text so the sentence being narrated sits at the top of the panel.
 let listenChunkEls = [];
 const listenTextOffset = ref(0);
@@ -1157,9 +1366,7 @@ watch(listenChunks, () => {
 });
 
 const chooseVoice = (voiceId) => {
-  // The offline entry is informational — keep the underlying Edge selection so it
-  // resumes when the device is back online.
-  if (voiceId !== OFFLINE_VOICE.id) setVoice(voiceId);
+  applyVoiceChoice(voiceId);
   voicePickerOpen.value = false;
 };
 
@@ -1171,6 +1378,17 @@ const cycleSpeed = () => {
 
 watch(mediaOpen, (open) => {
   if (!open) voicePickerOpen.value = false;
+  else if (useOfflineVoice.value) loadDeviceVoices();
+});
+
+// Make sure the device-voice list is loaded whenever a narrator picker opens
+// offline, and as soon as the device goes offline while the reader is open.
+watch([narratorOpen, voicePickerOpen], ([narrator, picker]) => {
+  if ((narrator || picker) && useOfflineVoice.value) loadDeviceVoices();
+});
+
+watch(useOfflineVoice, (offline) => {
+  if (offline) loadDeviceVoices();
 });
 
 // ── Long-press "Read from here" ────────────────────────────────────────────
@@ -1274,24 +1492,24 @@ const observePlaceholders = async () => {
       if (!Number.isNaN(index)) emit("mount-section", index);
       _placeholderObserver?.unobserve(entry.target);
     }
-  }, { rootMargin: "6000px 0px" });
+  }, { rootMargin: "8000px 0px" });
 
   placeholders.forEach((el) => _placeholderObserver.observe(el));
 };
 
 // Safety net: if a fast fling outruns the observer, mount any placeholder
 // near the viewport. Time-throttled so it never runs more than ~16×/sec.
-let _lastNearbyMount = 0;
+// Mount any placeholder near the viewport. Exact measured heights keep the
+// document correctly sized, so a generous window (4 screens back, 10 ahead)
+// mounts sections well before a fast fling reaches them. Mounts are memoized,
+// so an over-wide window is cheap. rAF-driven, so no extra throttle is needed.
 const mountNearbyPlaceholders = () => {
-  const now = Date.now();
-  if (now - _lastNearbyMount < 60) return;
-  _lastNearbyMount = now;
   const placeholders = document.querySelectorAll("[data-section-placeholder]");
   if (!placeholders.length) return;
   const vh = window.innerHeight;
   for (const el of placeholders) {
     const rect = el.getBoundingClientRect();
-    if (rect.bottom > -vh * 3 && rect.top < vh * 6) {
+    if (rect.bottom > -vh * 4 && rect.top < vh * 10) {
       const index = Number(el.dataset.sectionPlaceholder);
       if (!Number.isNaN(index)) emit("mount-section", index);
     }
@@ -1353,10 +1571,17 @@ const updateOnlineStatus = () => {
 };
 
 onMounted(async () => {
-  try {
-    const storedMode = localStorage.getItem(READER_MODE_KEY);
-    if (storedMode === "read" || storedMode === "listen") readerMode.value = storedMode;
-  } catch {}
+  // An explicit ?mode= (from the Read/Listen buttons or the mini player) wins;
+  // otherwise fall back to the last mode the reader was left in.
+  const queryMode = route.query?.mode;
+  if (queryMode === "read" || queryMode === "listen") {
+    setReaderMode(queryMode);
+  } else {
+    try {
+      const storedMode = localStorage.getItem(READER_MODE_KEY);
+      if (storedMode === "read" || storedMode === "listen") readerMode.value = storedMode;
+    } catch {}
+  }
   lastScrollY = window.scrollY || 0;
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", updatePageGeometry);
@@ -1573,7 +1798,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 34px;
+  gap: 16px;
   margin: 14px 0 8px;
 }
 
@@ -1590,8 +1815,25 @@ onUnmounted(() => {
   font-size: 24px;
 }
 
+.listen-controls .listen-skip {
+  font-size: 26px;
+}
+
 .listen-controls .listen-play {
   font-size: 38px;
+}
+
+/* Speed + narrator: secondary controls on the outer edges. */
+.listen-controls .listen-aux {
+  width: 40px;
+  height: 40px;
+  color: var(--mobile-reader-muted);
+  font-size: 20px;
+}
+
+.listen-controls .listen-aux:first-child {
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .listen-page-nav {
@@ -1881,6 +2123,18 @@ onUnmounted(() => {
 .page-map-measurer {
   position: fixed;
   inset: 0;
+  z-index: -1;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Offscreen single-column height measurer for the scroll reader. Free-flowing
+   height (no fixed inset) so offsetHeight equals the section's real rendered
+   height at the reader's content width. */
+.scroll-height-measurer {
+  position: fixed;
+  top: 0;
+  left: 0;
   z-index: -1;
   visibility: hidden;
   pointer-events: none;
@@ -2387,6 +2641,83 @@ onUnmounted(() => {
   margin: 0 0 28px;
   font-size: 18px;
   font-weight: 500 !important;
+}
+
+/* Narrator picker (opened from the Listen controls) is a compact voice list. */
+.reader-narrator-sheet {
+  min-height: 0;
+}
+
+.reader-narrator-sheet h2 {
+  margin: 0 0 14px;
+}
+
+.reader-narrator-sheet .voice-list {
+  max-height: 46vh;
+}
+
+/* Table-of-contents sheet — a scrollable chapter list. */
+.reader-toc-sheet {
+  min-height: 0;
+  text-align: left;
+}
+
+.reader-toc-sheet h2 {
+  margin: 0 0 12px;
+  text-align: center;
+}
+
+.toc-list {
+  display: grid;
+  gap: 2px;
+  max-height: 60vh;
+  margin: 0 auto;
+  padding: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  border-radius: 10px;
+  background: var(--sheet-list-bg);
+}
+
+.toc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sheet-text);
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+}
+
+.toc-item.active {
+  background: var(--sheet-option-active-bg);
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}
+
+.toc-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-item i {
+  flex: 0 0 auto;
+  font-size: 16px;
+}
+
+.toc-empty {
+  margin: 1rem 0;
+  color: var(--sheet-control-text);
+  font-size: 14px;
+  text-align: center;
 }
 
 .narrator-btn {

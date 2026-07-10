@@ -116,11 +116,11 @@ const onCoverError = (event) => {
   event.target.src = fallbackCover.value
 }
 
-// Jump into the reader — narration keeps playing, and the reader scrolls to
-// the sentence being read.
+// Jump into the reader's Listen mode — narration keeps playing and the player
+// is right there, following the sentence being read.
 const openReader = () => {
   if (!ttsBook.value?.id) return
-  router.push(`/reader/${ttsBook.value.id}`)
+  router.push(`/reader/${ttsBook.value.id}?mode=listen`)
 }
 
 // ── Swipe to close ──────────────────────────────────────────────────────────

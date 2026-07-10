@@ -7,72 +7,18 @@
       <MobileSkeleton page="playlists" :count="4" />
     </div>
 
-    <div v-else-if="playlistsWithBooks.length > 0" class="playlists-grid">
-      <div
+    <!-- Playlists render through the SAME card as series (SeriesCollageCard),
+         so they stay identical in styling and honour the playlist-card
+         Preferences. Long-press / right-click opens the edit menu. -->
+    <div v-else-if="playlistsWithBooks.length > 0" class="series-grid">
+      <SeriesCollageCard
         v-for="playlist in playlistsWithBooks"
         :key="playlist.id"
-        class="playlist-card"
-        :class="[`l-${playlistLayout}`, { 'bg-blur': playlistBackground === 'blur' }]"
-        @click="openPlaylist(playlist)"
-        @contextmenu.prevent.stop="openContextMenu($event, playlist)"
-      >
-        <!-- Blurred cover background (Preferences → Playlist cards) -->
-        <template v-if="playlistBackground === 'blur'">
-          <div
-            class="card-bg"
-            :style="{ backgroundImage: playlist.previewBooks[0] ? `url(${resolveBookCover(playlist.previewBooks[0])})` : 'none' }"
-          ></div>
-          <div class="card-bg-overlay"></div>
-        </template>
-
-        <!-- Playlist name — top left -->
-        <span class="card-name">{{ playlist.name }}</span>
-
-        <!-- 'cover': up to 2 angled covers, bottom right.
-             'fan':   up to 3 fanned covers, bottom centre (like series cards). -->
-        <div v-if="playlistLayout === 'fan'" class="card-fan">
-          <img
-            v-for="(previewBook, index) in playlist.previewBooks.slice(0, 3)"
-            :key="previewBook.id"
-            class="fan-cover"
-            :class="`fan-cover--${index}`"
-            :src="resolveBookCover(previewBook)"
-            :alt="previewBook.title"
-            @error="(e) => coverFallback(e, previewBook.title)"
-          />
-        </div>
-
-        <div v-else class="card-covers">
-          <img
-            v-if="playlist.previewBooks[1]"
-            class="card-cover card-cover--back"
-            :src="resolveBookCover(playlist.previewBooks[1])"
-            :alt="playlist.previewBooks[1].title"
-            @error="(e) => coverFallback(e, playlist.previewBooks[1].title)"
-          />
-          <img
-            v-if="playlist.previewBooks[0]"
-            class="card-cover card-cover--front"
-            :src="resolveBookCover(playlist.previewBooks[0])"
-            :alt="playlist.previewBooks[0].title"
-            @error="(e) => coverFallback(e, playlist.previewBooks[0].title)"
-          />
-        </div>
-
-        <!-- Book count badge — expands on hover -->
-        <div class="card-badge">
-          <i class="ri-book-shelf-line"></i>
-          <span>{{ playlist.bookCount }} {{ playlist.bookCount === 1 ? 'book' : 'books' }}</span>
-          <span class="badge-details">
-            <span class="badge-sep">·</span>
-            <span>{{ playlist.unreadCount }} unread</span>
-            <span class="badge-sep">·</span>
-            <span>{{ playlist.readingCount }} reading</span>
-            <span class="badge-sep">·</span>
-            <span>{{ playlist.readCount }} read</span>
-          </span>
-        </div>
-      </div>
+        variant="playlist"
+        :series="playlist"
+        @open="openPlaylist(playlist)"
+        @contextmenu="(e) => openContextMenu(e, playlist)"
+      />
     </div>
 
     <div
@@ -122,18 +68,15 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
-import { useBookishSettings } from "~/composables/useBookishSettings";
 import { useToast } from "~/composables/useToast";
 import EmptyState from "../shared/EmptyState.vue";
 import PlaylistEditModal from "../shared/PlaylistEditModal.vue";
+import SeriesCollageCard from "../shared/SeriesCollageCard.vue";
 import MobileBottomNav from "./MobileBottomNav.vue";
 import MobileSkeleton from "./MobileSkeleton.vue";
 import MobileTopNav from "./MobileTopNav.vue";
 
 const { collections, books, updatePlaylist, deletePlaylist, loading, initialized } = useBooks();
-const { settings } = useBookishSettings();
-const playlistLayout = computed(() => settings.value.playlistCardLayout || "cover");
-const playlistBackground = computed(() => settings.value.playlistCardBackground || "blur");
 const showSkeleton = computed(() => loading.value && !initialized.value);
 const { addToast } = useToast();
 const router = useRouter();
@@ -221,132 +164,32 @@ const playlistsWithBooks = computed(() => {
     return {
       ...playlist,
       bookCount: bookIds.length,
+      // `books` is what SeriesCollageCard reads for its cover stack; a playlist
+      // supplies its first few books here.
+      books: previewBooks,
       previewBooks,
-      unreadCount:  allBooks.filter(b => !b.status || b.status === 'Unread').length,
-      readingCount: allBooks.filter(b => b.status === 'Reading').length,
-      readCount:    allBooks.filter(b => b.status === 'Read').length,
     };
   });
 });
-
-const generateCoverPlaceholder = (title) => {
-  const colors = getThemeCssVars([
-    { name: "--color-book-cover-placeholder-one",   fallback: "#8A2BE2" },
-    { name: "--color-book-cover-placeholder-two",   fallback: "#6A0DAD" },
-    { name: "--color-book-cover-placeholder-three", fallback: "#2f7d62" },
-    { name: "--color-book-cover-placeholder-four",  fallback: "#b45309" },
-  ]);
-  const safeTitle = String(title || "Book");
-  const hash = [...safeTitle].reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const color = colors[hash % colors.length];
-  const initial = safeTitle.trim()[0]?.toUpperCase() || "?";
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280"><rect width="200" height="280" fill="${color}"/><text x="100" y="145" font-family="serif" font-size="96" fill="rgba(255,255,255,0.48)" text-anchor="middle" dominant-baseline="middle">${initial}</text></svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
-};
-
-const resolveBookCover = (book) => book.cover || generateCoverPlaceholder(book.title);
-
-const coverFallback = (event, title) => {
-  event.target.src = generateCoverPlaceholder(title);
-};
 </script>
 
 <style scoped>
+/* Playlists mirror the Series page: identical container, grid, and (via
+   SeriesCollageCard) card. Only the context menu + edit affordances are extra. */
 .playlists-container {
   margin: 0 auto;
   padding-top: calc(4.85rem + env(safe-area-inset-top));
   padding-bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
 }
 
-
-
-
-
 .playlists-loading {
   padding: 0.5rem 0;
 }
 
-/* ── Grid ────────────────────────────────────────────────────── */
-
-.playlists-grid {
+.series-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-}
-
-/* ── Card ────────────────────────────────────────────────────── */
-
-.playlist-card {
-  position: relative;
-  aspect-ratio: 3 / 2;
-  border-radius: 16px;
-  overflow: hidden;
-  cursor: pointer;
-  background: #0f0a1a;
-  transition: transform 0.2s ease;
-  user-select: none;
-}
-
-.playlist-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  background: transparent;
-  transition: background 0.2s ease;
-  pointer-events: none;
-}
-
-.playlist-card:hover::after {
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.playlist-card:hover {
-  transform: scale(1.03);
-}
-
-/* "Blank" background: a plain surface card instead of the blurred cover, so the
-   name and count need the normal text colours rather than white-on-image. */
-.playlist-card:not(.bg-blur) {
-  background: #e8e8f1;
-}
-
-:root[data-theme='dark'] .playlist-card:not(.bg-blur) {
-  background: var(--color-surface-primary);
-}
-
-.playlist-card:not(.bg-blur) .card-name {
-  color: var(--color-text-primary);
-  text-shadow: none;
-}
-
-/* ── 'fan' layout — fanned covers, bottom centre (matches the series card) ─── */
-.card-fan {
-  position: absolute;
-  bottom: -14px;
-  left: 50%;
-  z-index: 3;
-  transform: translateX(-50%);
-}
-
-.fan-cover {
-  position: absolute;
-  bottom: 0;
-  width: 74px;
-  height: 112px;
-  border-radius: 5px;
-  object-fit: cover;
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.34);
-  transform-origin: bottom center;
-}
-
-.fan-cover--0 { left: -37px; z-index: 3; }
-.fan-cover--1 { left: -96px; z-index: 2; transform: rotate(-11deg); }
-.fan-cover--2 { left: 22px; z-index: 2; transform: rotate(11deg); }
-
-/* In the fan layout the name sits across the top, not beside the covers. */
-.playlist-card.l-fan .card-name {
-  right: 1rem;
+  gap: 1.25rem;
 }
 
 .playlist-context-menu {
@@ -390,148 +233,16 @@ const coverFallback = (event, title) => {
   background: var(--color-status-danger-soft);
 }
 
-/* ── Blurred background ──────────────────────────────────────── */
-
-/* Same blurred cover-image formula as the series card (the reference). */
-.card-bg {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center;
-  filter: blur(25px) saturate(150%);
-  transform: scale(1.35);
-  z-index: 0;
-}
-
-.card-bg-overlay {
-  position: absolute;
-  inset: 0;
-  background: var(--gradient-image-card-overlay);
-  z-index: 1;
-}
-
-/* ── Name ────────────────────────────────────────────────────── */
-
-.card-name {
-  position: absolute;
-  top: 2.2rem;
-  left: 1rem;
-  right: 50%;
-  z-index: 3;
-  font-size: 1.15rem;
-  font-weight: 600 !important;
-  color: #ffffff;
-  line-height: 1.25;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
-  word-break: break-word;
-  hyphens: auto;
-}
-
-/* ── Covers ──────────────────────────────────────────────────── */
-
-.card-covers {
-  position: absolute;
-  bottom: -8px;
-  right: -4px;
-  width: 55%;
-  height: 95%;
-  pointer-events: none;
-  z-index: 3;
-}
-
-.card-cover {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  height: 90%;
-  aspect-ratio: 2 / 3;
-  border-radius: 5px;
-  object-fit: cover;
-  box-shadow: -4px 4px 20px rgba(0, 0, 0, 0.45);
-}
-
-.card-cover--front {
-  right: 14%;
-  transform: rotate(15deg);
-  z-index: 2;
-}
-
-.card-cover--back {
-  right: -2%;
-  transform: rotate(28deg);
-  z-index: 1;
-  opacity: 0.85;
-}
-
-/* ── Badge ───────────────────────────────────────────────────── */
-
-.card-badge {
-  position: absolute;
-  bottom: 10px;
-  left: 12px;
-  z-index: 4;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.22rem 0.65rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 0.7rem;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  transition: background 0.25s ease, border-color 0.25s ease;
-}
-
-.card-badge i {
-  font-size: 0.8rem;
-  flex-shrink: 0;
-}
-
-.badge-details {
-  max-width: 0;
-  overflow: hidden;
-  opacity: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  transition:
-    max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 0.25s ease;
-}
-
-.badge-sep {
-  opacity: 0.45;
-}
-
-.playlist-card:hover .card-badge {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.32);
-}
-
-.playlist-card:hover .badge-details {
-  max-width: 220px;
-  opacity: 1;
-}
-
-/* ── Empty state ─────────────────────────────────────────────── */
-
 .add-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
+  border-radius: 10px;
   background: var(--gradient-brand-primary);
   color: var(--color-text-on-brand);
-  border-radius: 10px;
   font-size: 0.875rem;
   font-weight: 500;
-  border: none;
-  cursor: pointer;
   text-decoration: none;
   transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -541,35 +252,11 @@ const coverFallback = (event, title) => {
   box-shadow: var(--shadow-brand-button-hover);
 }
 
-
-
-  .playlists-grid {
+@media (max-width: 640px) {
+  .series-grid {
     grid-template-columns: 1fr;
     gap: 16px;
     padding: 0 var(--mobile-page-padding-inline);
-  }
-
-  .playlist-card {
-    border-radius: var(--mobile-card-radius);
-  }
-
-  .card-name {
-    top: 20px;
-    left: 16px;
-    right: 48%;
-    font-size: var(--mobile-body-size);
-    line-height: 1.25;
-  }
-
-  .card-badge {
-    bottom: 12px;
-    left: 16px;
-    padding: 6px 10px;
-    font-size: var(--mobile-caption-size);
-  }
-
-  .card-badge i {
-    font-size: 16px;
   }
 
   .add-btn {
@@ -577,5 +264,5 @@ const coverFallback = (event, title) => {
     border-radius: var(--mobile-control-radius);
     font-size: var(--mobile-subtext-size);
   }
-
+}
 </style>

@@ -59,10 +59,14 @@ describe('useEpubPageMap numbering', () => {
       removeItem: (key) => backing.delete(key),
     }
     const key = pageMapCacheKey('book-1', { width: 320, height: 480, layoutHash: 'a', sectionCount: 3 })
-    const map = { counts, chunkPages: [0, 1, 2] }
+    // v2 carries per-section scroll heights alongside the page counts.
+    const map = { counts, chunkPages: [0, 1, 2], heights: [900, 1500, 600] }
     writePageMapCache(key, map, storage)
     expect(readPageMapCache(key, storage)).toEqual(map)
     storage.setItem(key, '{"version":99}')
+    expect(readPageMapCache(key, storage)).toBe(null)
+    // An older v1 entry (no heights) is rejected, forcing a fresh measure.
+    storage.setItem(key, '{"version":1,"counts":[1],"chunkPages":[0]}')
     expect(readPageMapCache(key, storage)).toBe(null)
   })
 })

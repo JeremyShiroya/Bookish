@@ -4,6 +4,7 @@
     :class="[`layout-${layout}`, `bg-${background}`]"
     type="button"
     @click="$emit('open', series)"
+    @contextmenu.prevent="$emit('contextmenu', $event)"
   >
     <!-- Optional blurred cover-image background. Uses a real <img> (the same
          technique as the series-detail hero backdrop) rather than a CSS
@@ -41,7 +42,7 @@
 
       <span class="pl-badge">
         <i class="ri-book-shelf-line"></i>
-        {{ collectedCount }}/{{ totalCount }} Books
+        {{ countLabel }}
       </span>
     </template>
 
@@ -49,7 +50,7 @@
     <template v-else>
       <span class="series-meta">
         <span class="series-name">{{ series.name }}</span>
-        <span class="series-count">{{ collectedCount }}/{{ totalCount }} Books</span>
+        <span class="series-count">{{ countLabel }}</span>
       </span>
 
       <span class="series-fan" aria-hidden="true">
@@ -77,13 +78,22 @@ import { onCoverError } from "~/composables/useCoverFallback";
 
 const props = defineProps({
   series: { type: Object, required: true },
+  // 'series' reads the series-card preferences; 'playlist' reads the (identical)
+  // playlist-card preferences and shows a plain book count. The card is
+  // otherwise the same, so series and playlists stay visually in lockstep.
+  variant: { type: String, default: "series" },
 });
 
-defineEmits(["open"]);
+defineEmits(["open", "contextmenu"]);
 
 const { settings } = useBookishSettings();
-const layout = computed(() => settings.value.seriesCardLayout || "fan");
-const background = computed(() => settings.value.seriesCardBackground || "blank");
+const isPlaylist = computed(() => props.variant === "playlist");
+const layout = computed(() =>
+  (isPlaylist.value ? settings.value.playlistCardLayout : settings.value.seriesCardLayout) || "fan",
+);
+const background = computed(() =>
+  (isPlaylist.value ? settings.value.playlistCardBackground : settings.value.seriesCardBackground) || "blank",
+);
 
 const bookCount = computed(() => props.series.books?.length || 0);
 
@@ -104,8 +114,36 @@ const totalCount = computed(() =>
 
 const collectedCount = computed(() => Math.min(bookCount.value, totalCount.value));
 
+// Series know their total ("2/6 Books"); a playlist is just a bag of books, so
+// it shows a plain count driven by the playlist's real size.
+const countLabel = computed(() => {
+  if (isPlaylist.value) {
+    const count = Number(props.series.bookCount ?? bookCount.value) || 0;
+    return `${count} ${count === 1 ? "Book" : "Books"}`;
+  }
+  return `${collectedCount.value}/${totalCount.value} Books`;
+});
+
+// Order the books by series installment INSIDE the card, so the fan order and
+// the blurred-cover background (coverStack[0]) are identical everywhere. Home
+// passed the raw series order while the Series page pre-sorted, so the same
+// series showed a different first cover — and therefore a different background
+// — on the two pages.
+const orderedBooks = computed(() => {
+  const books = [...(props.series.books || [])];
+  return books.sort((a, b) => {
+    const ai = Number(a?.seriesInstallment);
+    const bi = Number(b?.seriesInstallment);
+    const aHas = Number.isFinite(ai);
+    const bHas = Number.isFinite(bi);
+    if (aHas && bHas && ai !== bi) return ai - bi;
+    if (aHas !== bHas) return aHas ? -1 : 1;            // numbered first
+    return String(a?.title || "").localeCompare(String(b?.title || ""));
+  });
+});
+
 const coverStack = computed(() =>
-  (props.series.books || [])
+  orderedBooks.value
     .filter((book) => book.cover)
     .slice(0, 4)
     .map((book) => book.cover)

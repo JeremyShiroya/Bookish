@@ -28,6 +28,7 @@
         :readable-chunks="allReadableChunks"
         :section-counts="epubSectionCounts"
         :full-sections="chapterList"
+        :toc-items="displayTocItems"
         @back="router.back()"
         @open-toc="tocOpen = true"
         @page-change="handlePdfPageChange"
@@ -39,6 +40,7 @@
         @mount-section="mountSection"
         @position-change="handleMobilePosition"
         @go-to-section="goToSectionFromMobile"
+        @jump-to-toc="goToTocItem"
       />
     </template>
 

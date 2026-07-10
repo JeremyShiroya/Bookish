@@ -164,19 +164,21 @@ const handleCoverError = (event) => {
   event.target.src = generateCoverPlaceholder(book.value?.title ?? "");
 };
 
+// "Read" opens the reader in read mode.
 const openReader = () => {
   if (!book.value) return;
   prewarmReaderContent(book.value.id);
-  router.push(`/reader/${book.value.id}`);
+  router.push(`/reader/${book.value.id}?mode=read`);
 };
 
+// "Listen" starts narration (if not already) and opens the reader in listen
+// mode, so the player is right there instead of only the mini bar.
 const handleListen = () => {
   if (!book.value) return;
-  if (ttsBook.value?.id === book.value.id && ttsStatus.value !== "idle") {
-    toggleTTS();
-    return;
-  }
-  playTTS(book.value);
+  const alreadyNarrating = ttsBook.value?.id === book.value.id && ttsStatus.value !== "idle";
+  if (!alreadyNarrating) playTTS(book.value);
+  prewarmReaderContent(book.value.id);
+  router.push(`/reader/${book.value.id}?mode=listen`);
 };
 
 watch(

@@ -535,6 +535,11 @@ export const useTTS = () => {
   const ttsVolume       = useState('tts:volume',       () => settings.value.ttsVolume)
   const ttsVoiceId      = useState('tts:voice',        () => normalizeAvailableVoice(settings.value.ttsVoice))
   const ttsVoices       = useState('tts:voices',       () => EDGE_VOICES)
+  // The phone's built-in TTS voices (offline). Loaded on demand so the narrator
+  // picker can offer real device voices when Edge is unavailable.
+  const ttsNativeVoices = useState('tts:nativeVoices', () => [])
+  // Index into ttsNativeVoices the user explicitly chose (-1 = auto-map).
+  const ttsNativeVoiceIdx = useState('tts:nativeVoiceIdx', () => -1)
   const ttsCurrentChunk = useState('tts:currentChunk', () => '')
   const ttsPlayingChunkIdx = useState('tts:playingChunkIdx', () => -1)
   const ttsPlayingChunkText = useState('tts:playingChunkText', () => '')
@@ -892,12 +897,15 @@ export const useTTS = () => {
       // Re-check generation: loading device voices can await on first use.
       if (_prefetchGeneration !== myGen || ttsStatus.value !== 'playing') return
       if (_chunkIdx !== requestedChunkIdx || _chunks[requestedChunkIdx] !== requestedChunkText) return
+      // Keep the exposed device-voice list fresh for the narrator picker.
+      if (voices.length && voices.length !== ttsNativeVoices.value.length) ttsNativeVoices.value = voices
       audio = createNativeSpeechAudio({
         text: chunkData.nativeText ?? requestedChunkText,
         voice: chunkData.nativeVoice ?? normalizeAvailableVoice(ttsVoiceId.value),
         speed: ttsSpeed.value,
         volume: ttsVolume.value,
         voices,
+        nativeVoiceIndex: ttsNativeVoiceIdx.value,
       })
       chunkData.boundaries = []
     } else {
@@ -1131,8 +1139,9 @@ export const useTTS = () => {
   const setVoice = (voiceId) => {
     const nextSettings = updateSettings({ ttsVoice: normalizeAvailableVoice(voiceId) })
     ttsVoiceId.value = nextSettings.ttsVoice
-    // Explicitly choosing a voice is a natural point to retry cloud synthesis
-    // if we'd fallen back to the device voice earlier in the session.
+    // Choosing an Edge voice implies the user wants cloud narration — clear any
+    // explicit device-voice override and retry Edge.
+    ttsNativeVoiceIdx.value = -1
     resetMobileTtsDriver()
     _clearAudioCache()
     _persistSession()
@@ -1141,6 +1150,30 @@ export const useTTS = () => {
       _speakNextEdge()
     } else if (ttsStatus.value === 'paused') {
       // Discard paused audio so resume() re-fetches with the new voice
+      _cancelAudio()
+    }
+  }
+
+  // Populate ttsNativeVoices with the phone's built-in TTS voices, so the
+  // narrator picker can list real device voices when offline.
+  const loadDeviceVoices = async () => {
+    if (!import.meta.client) return []
+    const voices = await loadNativeVoices()
+    if (Array.isArray(voices) && voices.length) ttsNativeVoices.value = voices
+    return ttsNativeVoices.value
+  }
+
+  // Pick a specific device voice by its index in ttsNativeVoices (the offline
+  // narrator picker). Re-speaks the current chunk with it.
+  const setNativeVoice = (index) => {
+    const idx = Number(index)
+    ttsNativeVoiceIdx.value = Number.isInteger(idx) && idx >= 0 ? idx : -1
+    _clearAudioCache()
+    _persistSession()
+    if (ttsStatus.value === 'playing') {
+      _cancelAudio()
+      _speakNextEdge()
+    } else if (ttsStatus.value === 'paused') {
       _cancelAudio()
     }
   }
@@ -1273,11 +1306,13 @@ export const useTTS = () => {
     ttsBook, ttsStatus, ttsProgress, ttsChunkIdx, ttsTotalChunks,
     ttsElapsedSeconds, ttsTotalSeconds,
     ttsSpeed, ttsVolume, ttsVoiceId, ttsVoices, ttsCurrentChunk,
+    ttsNativeVoices, ttsNativeVoiceIdx,
     ttsPlayingChunkIdx, ttsPlayingChunkText,
     ttsWordIdx, ttsBoundaries, ttsChapterBoundaries,
     elapsedTime, totalTime,
     play, pause, resume, togglePlay, stop, restart, restoreLastSession,
     setSpeed, setVolume, setVoice, seekToProgress, skipChunks, skipSeconds, seekToChunk,
+    loadDeviceVoices, setNativeVoice,
     setChapterBoundaries, prewarmText,
   }
 }

@@ -21,8 +21,8 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   seriesCardLayout: 'fan',         // 'fan' (books centered) | 'cover'
   favouritesCardBackground: 'blur',// 'blur' | 'blank'
   favouritesCardLayout: 'grid',    // 'grid' | 'list' (set from the Favourites controls row)
-  playlistCardBackground: 'blur',  // 'blur' | 'blank'
-  playlistCardLayout: 'cover',     // 'cover' (angled covers) | 'fan' (fanned covers)
+  playlistCardBackground: 'blank', // 'blur' | 'blank' — matches series default
+  playlistCardLayout: 'fan',       // 'fan' | 'cover' — matches series default
   readerHighlight: true,           // highlight the section being read
   listenCoverBlur: true,           // blurred cover backdrop in Listen mode
   showStreak: true,                // reading-streak pill in the top nav

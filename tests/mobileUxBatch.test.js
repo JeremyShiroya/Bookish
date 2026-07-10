@@ -48,7 +48,8 @@ describe('mobile UX batch', () => {
     const bar = read('components/mobile/MobilePlayingBar.vue')
     // Whitelisted to the main tab roots — hidden on detail/settings/reader pages.
     expect(bar).toContain('NAV_ROUTES.has(route.path)')
-    expect(bar).toContain('router.push(`/reader/${ttsBook.value.id}`)')
+    // Tapping the mini bar opens the reader's Listen mode.
+    expect(bar).toContain('router.push(`/reader/${ttsBook.value.id}?mode=listen`)')
     expect(bar).toContain('bar-progress-fill')
     // Swipe-to-close.
     expect(bar).toContain('onTouchEnd')
@@ -408,8 +409,105 @@ describe('mobile UX batch', () => {
     const playlist = read('components/shared/AddToPlaylistModal.vue')
     expect(playlist).toContain('playlist-sheet')
     expect(playlist).toMatch(/align-items:\s*flex-end/)
-    // Multi-select, and playlists already holding the book stay visible.
-    expect(playlist).toContain('selectedIds')
+    // One tap on a playlist row adds the book and closes — no second confirm.
+    expect(playlist).toContain('addToPlaylist')
+    expect(playlist).toContain("@click=\"addToPlaylist(playlist)\"")
+    expect(playlist).not.toContain('save-button')
+    // Playlists already holding the book stay visible, marked "Added".
     expect(playlist).toContain('alreadyHas')
+  })
+
+  test('delete modal keeps the device path inside the sheet', () => {
+    const del = read('components/shared/DeleteConfirmModal.vue')
+    // The path column must be allowed to shrink and the path must wrap.
+    expect(del).toMatch(/\.effect-copy\s*\{[^}]*min-width:\s*0/)
+    expect(del).toMatch(/\.delete-effects em\s*\{[^}]*overflow-wrap:\s*anywhere/)
+    expect(del).not.toMatch(/\.delete-effects em\s*\{[^}]*white-space:\s*nowrap/)
+  })
+
+  test('series card orders books by installment so home and series pages agree', () => {
+    const card = read('components/shared/SeriesCollageCard.vue')
+    // coverStack (which drives both the fan order AND the blur background) is
+    // derived from an installment-sorted list inside the card, so the same
+    // series can't show a different first cover on Home vs the Series page.
+    expect(card).toContain('orderedBooks')
+    expect(card).toMatch(/coverStack = computed\(\(\) =>\s*\n?\s*orderedBooks\.value/)
+    expect(card).toContain('seriesInstallment')
+  })
+
+  test('playlists render through the shared series card component', () => {
+    const playlists = read('components/mobile/PlaylistsMobile.vue')
+    // Playlists ARE series cards now — same component, playlist variant — so the
+    // box can never drift from the series card. No bespoke playlist-card CSS.
+    expect(playlists).toContain('SeriesCollageCard')
+    expect(playlists).toContain('variant="playlist"')
+    expect(playlists).not.toContain('.playlist-card {')
+
+    const card = read('components/shared/SeriesCollageCard.vue')
+    expect(card).toContain("variant: { type: String")
+    expect(card).toContain('playlistCardLayout')
+    expect(card).toContain('playlistCardBackground')
+  })
+
+  test('listen mode hides the headphone icon and exposes speed + narrator', () => {
+    const reader = read('components/mobile/ReaderMobile.vue')
+    // Headphone (audio dock) is redundant when the player is already on screen.
+    expect(reader).toContain('v-if="readerMode !== \'listen\'"')
+    // Speed + narrator live in the listen controls; narrator opens a picker.
+    expect(reader).toContain('listen-aux')
+    expect(reader).toContain('narratorOpen = true')
+    expect(reader).toContain('reader-narrator-sheet')
+    expect(reader).toContain('chooseNarrator')
+  })
+
+  test('reader honours an explicit ?mode= entry point', () => {
+    const reader = read('components/mobile/ReaderMobile.vue')
+    expect(reader).toContain('route.query?.mode')
+    expect(reader).toContain('setReaderMode(queryMode)')
+    // The reader page forwards TOC entries for the jump modal.
+    const readerPage = read('pages/reader/[id].vue')
+    expect(readerPage).toContain(':toc-items="displayTocItems"')
+    expect(readerPage).toContain('@jump-to-toc="goToTocItem"')
+  })
+
+  test('chapter pill opens a TOC modal that jumps through the book', () => {
+    const reader = read('components/mobile/ReaderMobile.vue')
+    // The pill opens the modal instead of a no-op event.
+    expect(reader).toMatch(/class="chapter-pill-title"[\s\S]*?@click="tocModalOpen = true"/)
+    expect(reader).toContain('reader-toc-sheet')
+    expect(reader).toContain('chooseTocItem')
+    expect(reader).toContain('jump-to-toc')
+    expect(reader).toContain('isTocItemActive')
+  })
+
+  test('offline narrator picker lists real device voices, not Edge models', () => {
+    const reader = read('components/mobile/ReaderMobile.vue')
+    // Offline shows device voices from the OS engine, keyed "native:<index>".
+    expect(reader).toContain('deviceVoiceOptions')
+    expect(reader).toContain('loadDeviceVoices')
+    expect(reader).toContain('applyVoiceChoice')
+    expect(reader).toContain("voiceId.startsWith(\"native:\")")
+
+    const tts = read('composables/useTTS.js')
+    expect(tts).toContain('ttsNativeVoices')
+    expect(tts).toContain('ttsNativeVoiceIdx')
+    expect(tts).toContain('setNativeVoice')
+    expect(tts).toContain('loadDeviceVoices')
+
+    const native = read('composables/tts/nativeSpeech.js')
+    // The engine honours an explicit device-voice index over the auto-mapping.
+    expect(native).toContain('nativeVoiceIndex')
+  })
+
+  test('scroll reader reserves real measured section heights', () => {
+    const reader = read('components/mobile/ReaderMobile.vue')
+    expect(reader).toContain('scroll-height-measurer')
+    expect(reader).toContain('placeholderHeight')
+    expect(reader).toMatch(/heights\[index\]\s*=\s*Math\.max/)
+
+    // The height rides in the page-map cache (v2).
+    const map = read('composables/useEpubPageMap.js')
+    expect(map).toContain('PAGE_MAP_VERSION = 2')
+    expect(map).toContain('heights')
   })
 })

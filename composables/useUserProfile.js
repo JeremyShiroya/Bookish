@@ -11,18 +11,20 @@ export const DEFAULT_USER_PROFILE = Object.freeze({
 export const BOOKISH_PROFILE_UPDATED_EVENT = 'bookish:profile-updated'
 
 export const USER_AVATAR_OPTIONS = Object.freeze([
-  'Cranks.png',
-  'Cranks-1.png',
-  'Cranks-2.png',
-  'Delivery boy.png',
-  'Delivery boy-1.png',
   'Funny Bunny.png',
-  'Funny Bunny-4.png',
+  'Funny Bunny-1.png',
   'Funny Bunny-6.png',
-  'Upstream-1.png',
+  'Funny Bunny-4.png',
+  'Afterclap-2.png',
+  'Afterclap-5.png',
+  'Afterclap-4.png',
+  'Afterclap-6.png',
   'Upstream-2.png',
   'Upstream-4.png',
   'Upstream-5.png',
+  'Upstream-8.png',
+  'Teamwork-5.png',
+  'Teamwork-6.png',
 ].map((filename) => ({
   id: filename,
   label: filename.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '),

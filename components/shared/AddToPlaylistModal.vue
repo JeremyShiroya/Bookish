@@ -24,8 +24,8 @@
         </div>
       </div>
 
-      <!-- Creating a playlist is a row in the list, not a mode that replaces it:
-           the old modal swapped the whole list out for a text field. -->
+      <!-- One tap on a playlist adds the book and closes — the user already
+           chose the book to get here, so there's no second confirm step. -->
       <div class="playlist-list" role="group" aria-label="Your playlists">
         <div v-if="creating" class="new-playlist-row">
           <i class="ri-play-list-add-line"></i>
@@ -35,9 +35,17 @@
             type="text"
             maxlength="100"
             placeholder="Playlist name"
-            @keydown.enter.prevent="save"
+            @keydown.enter.prevent="createAndAdd"
             @keydown.esc="cancelCreating"
           />
+          <button
+            type="button"
+            class="row-create"
+            :disabled="!newPlaylistName.trim() || saving"
+            @click="createAndAdd"
+          >
+            Create
+          </button>
           <button type="button" class="row-ghost" aria-label="Cancel new playlist" @click="cancelCreating">
             <i class="ri-close-line"></i>
           </button>
@@ -55,10 +63,9 @@
           :key="playlist.id"
           type="button"
           class="playlist-row"
-          :class="{ selected: selectedIds.has(String(playlist.id)), added: playlist.alreadyHas }"
-          :disabled="playlist.alreadyHas"
-          :aria-pressed="selectedIds.has(String(playlist.id))"
-          @click="toggle(playlist)"
+          :class="{ added: playlist.alreadyHas }"
+          :disabled="playlist.alreadyHas || saving"
+          @click="addToPlaylist(playlist)"
         >
           <span class="row-icon"><i class="ri-play-list-2-line"></i></span>
           <span class="row-copy">
@@ -66,21 +73,13 @@
             <small>{{ playlist.bookIds?.length || 0 }} books</small>
           </span>
           <span v-if="playlist.alreadyHas" class="row-added">Added</span>
-          <span v-else class="row-check"><i class="ri-check-line"></i></span>
+          <span v-else class="row-add" aria-hidden="true"><i class="ri-add-line"></i></span>
         </button>
 
         <p v-if="!playlists.length && !creating" class="playlist-empty">
           You have no playlists yet. Create your first one above.
         </p>
       </div>
-
-      <footer>
-        <button type="button" class="cancel-button" @click="emit('close')">Cancel</button>
-        <button type="button" class="save-button" :disabled="!canSave || saving" @click="save">
-          <i :class="saving ? 'ri-loader-4-line spin' : 'ri-check-line'"></i>
-          {{ saveLabel }}
-        </button>
-      </footer>
     </section>
   </div>
 </template>
@@ -101,7 +100,6 @@ const emit = defineEmits(['close', 'saved'])
 const { collections, createPlaylist, addBookToPlaylist } = useBooks()
 const { addToast } = useToast()
 
-const selectedIds = ref(new Set())
 const creating = ref(false)
 const newPlaylistName = ref('')
 const newPlaylistInput = ref(null)
@@ -111,28 +109,6 @@ const playlists = computed(() => collections.value.map(playlist => ({
   ...playlist,
   alreadyHas: (playlist.bookIds || []).some(id => String(id) === String(props.book.id)),
 })))
-
-const selectedCount = computed(() => selectedIds.value.size)
-
-const canSave = computed(() => (
-  creating.value ? newPlaylistName.value.trim().length > 0 : selectedCount.value > 0
-))
-
-const saveLabel = computed(() => {
-  if (saving.value) return 'Adding…'
-  if (creating.value) return 'Create & add'
-  if (selectedCount.value > 1) return `Add to ${selectedCount.value} playlists`
-  return 'Add book'
-})
-
-const toggle = (playlist) => {
-  if (playlist.alreadyHas) return
-  const id = String(playlist.id)
-  const next = new Set(selectedIds.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  selectedIds.value = next
-}
 
 const generateCoverPlaceholder = (title) => {
   const safeTitle = String(title || 'Book')
@@ -158,30 +134,36 @@ const cancelCreating = () => {
   newPlaylistName.value = ''
 }
 
-const save = async () => {
-  if (!canSave.value || saving.value) return
+// One tap = add to this playlist and close. The book was already chosen to open
+// the sheet, so no further confirmation is needed.
+const addToPlaylist = async (playlist) => {
+  if (playlist.alreadyHas || saving.value) return
   saving.value = true
   try {
-    const targets = creating.value
-      ? [String((await createPlaylist({ name: newPlaylistName.value.trim() })).id)]
-      : [...selectedIds.value]
-
-    for (const playlistId of targets) {
-      await addBookToPlaylist(playlistId, props.book.id)
-    }
-
-    addToast(
-      targets.length > 1
-        ? `Book added to ${targets.length} playlists`
-        : 'Book added to playlist',
-      'success',
-    )
+    await addBookToPlaylist(playlist.id, props.book.id)
+    addToast(`Added to "${playlist.name}"`, 'success')
     emit('saved')
     emit('close')
   } catch (error) {
     console.error('Playlist update failed:', error)
     addToast('Failed to update playlist', 'error')
-  } finally {
+    saving.value = false
+  }
+}
+
+const createAndAdd = async () => {
+  const name = newPlaylistName.value.trim()
+  if (!name || saving.value) return
+  saving.value = true
+  try {
+    const playlist = await createPlaylist({ name })
+    await addBookToPlaylist(playlist.id, props.book.id)
+    addToast(`Added to "${name}"`, 'success')
+    emit('saved')
+    emit('close')
+  } catch (error) {
+    console.error('Playlist create failed:', error)
+    addToast('Failed to create playlist', 'error')
     saving.value = false
   }
 }
@@ -293,7 +275,7 @@ header h2 {
   gap: 0.5rem;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 1.1rem 0.4rem;
+  padding: 0 1.1rem calc(1rem + env(safe-area-inset-bottom));
 }
 
 .playlist-row,
@@ -314,7 +296,7 @@ header h2 {
   text-align: left;
 }
 
-.playlist-row.selected {
+.playlist-row:active {
   border-color: var(--color-brand-primary);
   background: var(--color-surface-active);
 }
@@ -322,6 +304,11 @@ header h2 {
 .playlist-row.added {
   cursor: default;
   opacity: 0.62;
+}
+
+.playlist-row.added:active {
+  border-color: var(--color-border-subtle);
+  background: var(--color-surface-input);
 }
 
 .row-icon {
@@ -360,21 +347,17 @@ header h2 {
   font-size: 0.76rem;
 }
 
-.row-check {
+/* The single-tap "add" affordance on each row. */
+.row-add {
   display: grid;
-  width: 24px;
-  height: 24px;
+  width: 30px;
+  height: 30px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 7px;
-  color: transparent;
-}
-
-.playlist-row.selected .row-check {
-  border-color: var(--color-brand-primary);
-  background: var(--color-brand-primary);
-  color: var(--color-text-on-brand);
+  border-radius: 50%;
+  background: var(--color-brand-primary-faint);
+  color: var(--color-brand-primary);
+  font-size: 1.1rem;
 }
 
 .row-added {
@@ -404,6 +387,25 @@ header h2 {
   font: inherit;
 }
 
+.row-create {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 0.85rem;
+  border: 0;
+  border-radius: 9px;
+  background: var(--gradient-brand-primary);
+  color: var(--color-text-on-brand);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.row-create:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .row-ghost {
   display: grid;
   width: 30px;
@@ -418,58 +420,9 @@ header h2 {
 }
 
 .playlist-empty {
-  margin: 0.5rem 0;
+  margin: 0.5rem 0 1rem;
   color: var(--color-text-muted);
   font-size: 0.85rem;
   text-align: center;
-}
-
-footer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-  gap: 0.7rem;
-  padding: 0.8rem 1.1rem calc(0.9rem + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--color-border-subtle);
-}
-
-.cancel-button,
-.save-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  min-height: 48px;
-  border-radius: 12px;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.cancel-button {
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-surface-primary);
-  color: var(--color-text-secondary);
-}
-
-.save-button {
-  border: 0;
-  background: var(--gradient-brand-primary);
-  color: var(--color-text-on-brand);
-}
-
-.save-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.spin {
-  animation: spin 0.9s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

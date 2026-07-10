@@ -92,9 +92,12 @@ function estimateDurationMs(text, rate) {
 // Build an <audio>-lookalike backed by the native TTS plugin. The plugin's
 // speak() resolves when the utterance FINISHES, which we translate into the
 // engine's `onended` so it advances to the next chunk.
-export function createNativeSpeechAudio({ text, voice, speed = 1, volume = 1, voices = [] }) {
+export function createNativeSpeechAudio({ text, voice, speed = 1, volume = 1, voices = [], nativeVoiceIndex = -1 }) {
   const lang = langForEdgeVoice(voice)
-  const voiceIndex = pickNativeVoiceIndex(voices, voice)
+  // An explicit device-voice choice (the offline narrator picker) wins; other-
+  // wise map the selected Edge voice onto the closest device voice.
+  const explicit = Number.isInteger(nativeVoiceIndex) && nativeVoiceIndex >= 0 && nativeVoiceIndex < voices.length
+  const voiceIndex = explicit ? nativeVoiceIndex : pickNativeVoiceIndex(voices, voice)
   const rate = clampRate(speed)
   const vol = clamp01(volume)
   const utterance = String(text || '')

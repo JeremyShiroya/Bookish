@@ -145,7 +145,9 @@ describe('responsive mobile component split', () => {
     expect(prewarm).toContain('prewarmReaderContent')
     expect(prewarm).toContain('getPrewarmedReaderContent')
     expect(mobileDetail).toContain('prewarmReaderContent(book.value.id)')
-    expect(mobileDetail).toContain('router.push(`/reader/${book.value.id}`)')
+    // Read/Listen open the reader in the requested mode.
+    expect(mobileDetail).toContain('router.push(`/reader/${book.value.id}?mode=read`)')
+    expect(mobileDetail).toContain('router.push(`/reader/${book.value.id}?mode=listen`)')
     expect(readerPage).toContain('getPrewarmedReaderContent')
     expect(readerPage).toContain('applyStoredReaderContent')
     expect(loadBook.indexOf('getPrewarmedReaderContent(id)')).toBeGreaterThan(-1)

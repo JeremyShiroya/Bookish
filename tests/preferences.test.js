@@ -15,8 +15,9 @@ describe('appearance preferences', () => {
     expect(DEFAULT_BOOKISH_SETTINGS.seriesCardLayout).toBe('fan')
     expect(DEFAULT_BOOKISH_SETTINGS.favouritesCardBackground).toBe('blur')
     expect(DEFAULT_BOOKISH_SETTINGS.favouritesCardLayout).toBe('grid')
-    expect(DEFAULT_BOOKISH_SETTINGS.playlistCardBackground).toBe('blur')
-    expect(DEFAULT_BOOKISH_SETTINGS.playlistCardLayout).toBe('cover')
+    // Playlist cards default to the same look as series cards.
+    expect(DEFAULT_BOOKISH_SETTINGS.playlistCardBackground).toBe('blank')
+    expect(DEFAULT_BOOKISH_SETTINGS.playlistCardLayout).toBe('fan')
     expect(DEFAULT_BOOKISH_SETTINGS.readerHighlight).toBe(true)
     expect(DEFAULT_BOOKISH_SETTINGS.listenCoverBlur).toBe(true)
     expect(DEFAULT_BOOKISH_SETTINGS.showStreak).toBe(true)
@@ -50,8 +51,8 @@ describe('appearance preferences', () => {
     })
     expect(junk.seriesCardLayout).toBe('fan')
     expect(junk.favouritesCardLayout).toBe('grid')
-    expect(junk.playlistCardLayout).toBe('cover')
-    expect(junk.playlistCardBackground).toBe('blur')
+    expect(junk.playlistCardLayout).toBe('fan')
+    expect(junk.playlistCardBackground).toBe('blank')
     expect(junk.formatFilter).toBe('all')
   })
 
@@ -91,9 +92,13 @@ describe('appearance preferences', () => {
     expect(fav).toContain('controls-row')
     expect(fav).toContain('setLayout')
 
+    // Playlist cards render through the shared SeriesCollageCard (playlist
+    // variant), which is where the playlist-card preferences are consumed.
     const playlists = read('components/mobile/PlaylistsMobile.vue')
-    expect(playlists).toContain('playlistCardLayout')
-    expect(playlists).toContain('playlistCardBackground')
+    expect(playlists).toContain('variant="playlist"')
+    const collageCard = read('components/shared/SeriesCollageCard.vue')
+    expect(collageCard).toContain('playlistCardLayout')
+    expect(collageCard).toContain('playlistCardBackground')
 
     const card = read('components/shared/LibraryBookCard.vue')
     expect(card).toContain('cardBackground')
