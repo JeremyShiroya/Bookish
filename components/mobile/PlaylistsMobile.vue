@@ -50,7 +50,7 @@
       v-if="playlistsWithBooks.length === 0 && !showSkeleton"
       title="No playlists yet"
       description="Organize your library by creating playlists for favorites, moods, genres, or reading plans."
-      icon="ri-play-list-2-line"
+      image="/Images/Empty-state.png"
     >
       <template #action>
         <button type="button" class="add-btn">

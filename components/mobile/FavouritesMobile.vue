@@ -21,7 +21,7 @@
               >
                 <i class="ri-filter-3-line"></i>
                 <span class="filter-label-text">Filter</span>
-                <span v-if="selectedStatus !== 'all'" class="filter-active-dot"></span>
+                <span v-if="hasActiveFilter" class="filter-active-dot"></span>
                 <i class="ri-arrow-down-s-line dropdown-arrow" :class="{ rotated: filterOpen }"></i>
               </button>
 
@@ -46,6 +46,23 @@
                       :class="{ active: selectedStatus === status }"
                       @click="setStatus(status)"
                     >{{ status }}</button>
+                  </div>
+                </div>
+
+                <div class="sfp-section">
+                  <div class="sfp-section-header">
+                    <i class="ri-file-list-2-line"></i>
+                    Format
+                  </div>
+                  <div class="sfp-pills">
+                    <button
+                      v-for="format in formatFilters"
+                      :key="format.value"
+                      type="button"
+                      class="sfp-pill"
+                      :class="{ active: selectedFormat === format.value }"
+                      @click="setFormat(format.value)"
+                    >{{ format.label }}</button>
                   </div>
                 </div>
               </div>
@@ -104,10 +121,10 @@
           v-else-if="favourites.length > 0"
           title="No favourites match this filter"
           description="Try a different reading status to see more of your favourites."
-          icon="ri-filter-off-line"
+          image="/Images/Empty-state.png"
         >
           <template #action>
-            <button type="button" class="explore-btn" @click="setStatus('all')">
+            <button type="button" class="explore-btn" @click="clearFilters">
               Clear filter
             </button>
           </template>
@@ -117,7 +134,7 @@
           v-else
           title="No favorites yet"
           description="Books you mark as favorite will appear here for quick access."
-          icon="ri-heart-line"
+          image="/Images/Empty-state.png"
         >
           <template #action>
             <NuxtLink to="/books" class="explore-btn">
@@ -147,7 +164,11 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useBooks } from "~/composables/useBooks";
-import { useBookishSettings } from '~/composables/useBookishSettings';
+import {
+  FORMAT_FILTER_CHOICES,
+  matchesFormatFilter,
+  useBookishSettings,
+} from '~/composables/useBookishSettings';
 import { useToast } from '~/composables/useToast';
 import { useTTS } from '~/composables/useTTS';
 import EmptyState from "../shared/EmptyState.vue";
@@ -169,21 +190,36 @@ const selectedPlaylistBook = ref(null);
 const showDeleteModal = ref(false);
 const selectedDeleteBook = ref(null);
 
-// ── Controls row: reading-status filter + grid/list view ────────────────────
+// ── Controls row: status + format filters, grid/list view ───────────────────
 const readingStatuses = ['Unread', 'Reading', 'Read'];
+const formatFilters = FORMAT_FILTER_CHOICES;
 const selectedStatus = ref('all');
+const selectedFormat = computed(() => settings.value.formatFilter || 'all');
 const filterRef = ref(null);
 const filterOpen = ref(false);
 
-const displayedFavourites = computed(() => (
-  selectedStatus.value === 'all'
-    ? favourites.value
-    : favourites.value.filter((book) => book.status === selectedStatus.value)
+const hasActiveFilter = computed(() => (
+  selectedStatus.value !== 'all' || selectedFormat.value !== 'all'
 ));
+
+const displayedFavourites = computed(() => favourites.value.filter((book) => (
+  matchesFormatFilter(book, selectedFormat.value)
+  && (selectedStatus.value === 'all' || book.status === selectedStatus.value)
+)));
 
 const setStatus = (status) => {
   selectedStatus.value = status;
   filterOpen.value = false;
+};
+
+const setFormat = (format) => {
+  updateSettings({ formatFilter: format });
+  filterOpen.value = false;
+};
+
+const clearFilters = () => {
+  selectedStatus.value = 'all';
+  updateSettings({ formatFilter: 'all' });
 };
 
 // The view choice is the same setting the Preferences page used to own; the

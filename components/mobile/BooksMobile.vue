@@ -38,7 +38,7 @@
                 >
                   <i class="ri-filter-3-line"></i>
                   <span class="filter-label-text">Filter</span>
-                  <span v-if="selectedStatus !== 'all'" class="filter-active-dot"></span>
+                  <span v-if="hasActiveFilter" class="filter-active-dot"></span>
                   <i class="ri-arrow-down-s-line dropdown-arrow" :class="{ rotated: filterOpen }"></i>
                 </button>
 
@@ -63,6 +63,23 @@
                         :class="{ active: selectedStatus === status }"
                         @click="setStatus(status)"
                       >{{ status }}</button>
+                    </div>
+                  </div>
+
+                  <div class="sfp-section">
+                    <div class="sfp-section-header">
+                      <i class="ri-file-list-2-line"></i>
+                      Format
+                    </div>
+                    <div class="sfp-pills">
+                      <button
+                        v-for="format in formatFilters"
+                        :key="format.value"
+                        type="button"
+                        class="sfp-pill"
+                        :class="{ active: selectedFormat === format.value }"
+                        @click="setFormat(format.value)"
+                      >{{ format.label }}</button>
                     </div>
                   </div>
                 </div>
@@ -149,7 +166,7 @@
         v-else
         title="Your library is empty"
         description="Connect your first document to start building your personal library."
-        icon="ri-book-open-line"
+        image="/Images/Empty-state.png"
       >
         <template #action>
           <button class="add-book-btn" @click="router.push('/add')">
@@ -204,7 +221,11 @@ import MobileTopNav from "./MobileTopNav.vue";
 import { useBooks } from "~/composables/useBooks";
 import { getGoodreadsRating } from "~/composables/useGoodreadsRating";
 import { useTTS } from "~/composables/useTTS";
-import { useBookishSettings } from "~/composables/useBookishSettings";
+import {
+  FORMAT_FILTER_CHOICES,
+  matchesFormatFilter,
+  useBookishSettings,
+} from "~/composables/useBookishSettings";
 import { useToast } from "~/composables/useToast";
 
 // Reactive data
@@ -248,11 +269,15 @@ const router = useRouter();
 
 // Filter options
 const readingStatuses = ["Unread", "Reading", "Read"];
+const formatFilters = FORMAT_FILTER_CHOICES;
 
 // Filter states
 const sortBy = ref(settings.value.librarySort);
 const sortDirection = ref(settings.value.librarySortDirection);
 const selectedStatus = ref("all");
+// Format lives in settings so the Books, Favourites, Series- and Playlist-detail
+// filters all agree on which formats the library is showing.
+const selectedFormat = computed(() => settings.value.formatFilter || "all");
 const viewMode = ref(settings.value.libraryView);
 
 // Modal states
@@ -262,13 +287,7 @@ const selectedPlaylistBook = ref(null);
 
 // Computed filtered books
 const filteredBooks = computed(() => {
-  let filtered = [...books.value];
-
-  // Format preference (Preferences → Format): show all, or only pdf / epub.
-  const format = settings.value.formatFilter || 'all';
-  if (format !== 'all') {
-    filtered = filtered.filter((book) => String(book.format || '').toLowerCase() === format);
-  }
+  let filtered = books.value.filter((book) => matchesFormatFilter(book, selectedFormat.value));
 
   // Filter by status
   if (selectedStatus.value !== "all") {
@@ -348,9 +367,18 @@ watch([activeViewIndex, viewHoverIndex], updateViewHighlight);
 // Mobile shows the full filtered library in one scrollable list — no paging.
 const displayedBooks = computed(() => filteredBooks.value);
 
+const hasActiveFilter = computed(() => (
+  selectedStatus.value !== "all" || selectedFormat.value !== "all"
+));
+
 // Methods
 const setStatus = (value) => {
   selectedStatus.value = value;
+  filterOpen.value = false;
+};
+
+const setFormat = (value) => {
+  updateSettings({ formatFilter: value });
   filterOpen.value = false;
 };
 

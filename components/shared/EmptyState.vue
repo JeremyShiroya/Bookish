@@ -1,6 +1,7 @@
 <template>
   <div class="empty-state">
-    <div class="empty-icon-wrap">
+    <img v-if="image" class="empty-image" :src="image" alt="" />
+    <div v-else class="empty-icon-wrap">
       <i :class="icon"></i>
     </div>
     <h2 class="empty-title">{{ title }}</h2>
@@ -24,6 +25,11 @@ defineProps({
   icon: {
     type: String,
     default: "ri-inbox-line"
+  },
+  // When set, an illustration replaces the icon badge entirely.
+  image: {
+    type: String,
+    default: ""
   }
 });
 </script>
@@ -36,6 +42,13 @@ defineProps({
   justify-content: center;
   padding: 5rem 2rem;
   text-align: center;
+}
+
+.empty-image {
+  width: min(200px, 62%);
+  height: auto;
+  margin-bottom: 1.5rem;
+  object-fit: contain;
 }
 
 .empty-icon-wrap {

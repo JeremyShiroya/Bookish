@@ -35,6 +35,20 @@ export const PLAYLIST_CARD_LAYOUT_OPTIONS = Object.freeze(['fan', 'cover'])
 export const FAVOURITES_CARD_LAYOUT_OPTIONS = Object.freeze(['grid', 'list'])
 export const FORMAT_FILTER_OPTIONS = Object.freeze(['all', 'pdf', 'epub'])
 
+// The pills every library Filter panel renders under its "Format" heading.
+export const FORMAT_FILTER_CHOICES = Object.freeze([
+  { value: 'all', label: 'All' },
+  { value: 'epub', label: 'EPUB' },
+  { value: 'pdf', label: 'PDF' },
+])
+
+// Books carry `format` as a free-form string; 'all' matches everything.
+export const matchesFormatFilter = (book, format) => (
+  !format || format === 'all'
+    ? true
+    : String(book?.format || '').toLowerCase() === format
+)
+
 export const LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS = Object.freeze([6, 8, 10, 12])
 export const LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS = Object.freeze([8, 10, 20, 30, 50, 100])
 

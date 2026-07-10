@@ -20,7 +20,7 @@
       v-else-if="showEmpty && !showSkeleton"
       title="No series detected"
       description="Books that share series metadata will automatically group here."
-      icon="ri-book-shelf-line"
+      image="/Images/Empty-state.png"
     >
       <template #action>
         <NuxtLink to="/books" class="add-btn">

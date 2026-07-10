@@ -151,10 +151,46 @@ describe('mobile UX batch', () => {
     for (const path of ['components/mobile/SeriesDetailMobile.vue', 'components/mobile/PlaylistDetailMobile.vue']) {
       const source = read(path)
       expect(source, path).toContain('hero-backdrop')
-      expect(source, path).toContain('hero-progress-fill')
-      expect(source, path).toContain('hero-play')
       expect(source, path).toContain('@hide="handleHideBook"')
+      // The hero is cover art + copy only: no read button, no progress bar.
+      expect(source, path).not.toContain('hero-progress')
+      expect(source, path).not.toContain('hero-play')
+      // Books, filter, and view options match the Books page.
+      expect(source, path).toContain('LibraryControlsRow')
+      expect(source, path).toContain('books-grid')
+      expect(source, path).toContain('mobile-list-book-card')
     }
+  })
+
+  test('the reader play button resumes a paused book instead of rewinding', () => {
+    const reader = read('components/mobile/ReaderMobile.vue')
+    // playFromHere must branch on "is this book loaded into the narrator"
+    // (playing OR paused), not on "is it playing" — otherwise pressing play
+    // after a pause re-reads from the first chunk of the visible page.
+    expect(reader).toMatch(/const playFromHere = \(\) => \{[\s\S]{0,300}?if \(isThisBookNarrating\.value\) \{\s*togglePlay\(\);/)
+  })
+
+  test('mobile library pages show the empty-state illustration, not an icon', () => {
+    for (const path of [
+      'components/mobile/HomeMobile.vue',
+      'components/mobile/BooksMobile.vue',
+      'components/mobile/SeriesMobile.vue',
+      'components/mobile/FavouritesMobile.vue',
+      'components/mobile/PlaylistsMobile.vue',
+    ]) {
+      expect(read(path), path).toContain('image="/Images/Empty-state.png"')
+    }
+
+    expect(existsSync(resolve(root, 'public/Images/Empty-state.png'))).toBe(true)
+    expect(read('components/shared/EmptyState.vue')).toContain('empty-image')
+  })
+
+  test('home search results come straight off the bound input', () => {
+    const home = read('components/mobile/HomeMobile.vue')
+    // No submit handler and no debounce: the computed re-runs on every keystroke.
+    expect(home).toContain('v-model="homeSearch"')
+    expect(home).toContain('searchLibrary(books.value, homeSearch.value)')
+    expect(home).not.toContain('setTimeout')
   })
 
   test('book detail page cannot overflow horizontally', () => {

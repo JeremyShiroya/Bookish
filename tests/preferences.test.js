@@ -3,6 +3,8 @@ import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import {
   DEFAULT_BOOKISH_SETTINGS,
+  FORMAT_FILTER_CHOICES,
+  matchesFormatFilter,
   normalizeBookishSettings,
 } from '../composables/useBookishSettings.js'
 
@@ -22,6 +24,22 @@ describe('appearance preferences', () => {
     expect(DEFAULT_BOOKISH_SETTINGS.listenCoverBlur).toBe(true)
     expect(DEFAULT_BOOKISH_SETTINGS.showStreak).toBe(true)
     expect(DEFAULT_BOOKISH_SETTINGS.formatFilter).toBe('all')
+  })
+
+  test('format filter offers all / epub / pdf and matches case-insensitively', () => {
+    expect(FORMAT_FILTER_CHOICES.map((choice) => choice.value)).toEqual(['all', 'epub', 'pdf'])
+
+    const epub = { format: 'EPUB' }
+    const pdf = { format: 'pdf' }
+
+    expect(matchesFormatFilter(epub, 'all')).toBe(true)
+    expect(matchesFormatFilter(pdf, 'all')).toBe(true)
+    expect(matchesFormatFilter(epub, 'epub')).toBe(true)
+    expect(matchesFormatFilter(epub, 'pdf')).toBe(false)
+    expect(matchesFormatFilter(pdf, 'pdf')).toBe(true)
+    // Books with no recorded format fall out of any narrowed filter.
+    expect(matchesFormatFilter({}, 'epub')).toBe(false)
+    expect(matchesFormatFilter({}, 'all')).toBe(true)
   })
 
   test('normalize validates preference values and rejects junk', () => {

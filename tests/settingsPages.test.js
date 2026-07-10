@@ -77,4 +77,28 @@ describe('settings pages wiring', () => {
     // The old sliding-chip status selector is gone.
     expect(books).not.toContain('status-chips')
   })
+
+  test('every library filter panel offers the shared Format pills', () => {
+    for (const path of [
+      'components/mobile/BooksMobile.vue',
+      'components/mobile/FavouritesMobile.vue',
+      'components/shared/LibraryControlsRow.vue',
+    ]) {
+      const source = read(path)
+      expect(source, path).toContain('FORMAT_FILTER_CHOICES')
+      expect(source, path).toContain('Format')
+      expect(source, path).toContain('setFormat')
+    }
+
+    // Format is a single library-wide setting, so choosing it anywhere applies
+    // to the Books, Favourites, series-detail and playlist-detail lists alike.
+    for (const path of [
+      'components/mobile/BooksMobile.vue',
+      'components/mobile/FavouritesMobile.vue',
+      'components/mobile/SeriesDetailMobile.vue',
+      'components/mobile/PlaylistDetailMobile.vue',
+    ]) {
+      expect(read(path), path).toContain('matchesFormatFilter')
+    }
+  })
 })

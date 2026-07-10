@@ -3,26 +3,20 @@
 
   # Bookish
 
-  **Your personal digital library and audiobook player.**<br />
-  Read EPUBs and PDFs, listen with neural text-to-speech, and let Bookish automatically enrich your collection with covers, ratings, and metadata.
+  **A local-first reading and listening library.**<br />
+  Import EPUB, PDF, and text files, keep your library private on your device, listen with read-aloud controls, and enrich books with web metadata when you want it.
 
   <br />
-<p align="center">
-  <img src="./public/icons/nuxt.svg" alt="Nuxt" height="36" />
-  &nbsp;
-  <img src="./public/icons/vue.svg" alt="Vue" height="36" />
-  &nbsp;
-  <img src="./public/icons/type--script.svg" alt="TypeScript" height="36" />
-  &nbsp;
-  <img src="./public/icons/drizzle.svg" alt="Drizzle ORM" height="36" />
-  &nbsp;
-  <img src="./public/icons/neon.svg" alt="Neon" height="36" />
-</p>
+  <p align="center">
+    <img src="./public/icons/nuxt.svg" alt="Nuxt" height="36" />
+    &nbsp;
+    <img src="./public/icons/vue.svg" alt="Vue" height="36" />
+    &nbsp;
+    <img src="./public/icons/type--script.svg" alt="TypeScript" height="36" />
+  </p>
   <br />
 
-  <!-- Replace with an actual screenshot once available -->
-  <img src="./docs/screenshots/home.png" alt="Bookish Home" width="85%" />
-
+  <img src="./docs/screenshots/home.png" alt="Bookish home" width="85%" />
 </div>
 
 <br />
@@ -31,19 +25,19 @@
 
 ## Features
 
-**Library** &nbsp;·&nbsp; Browse and manage your entire collection at once. Filter by author, genre, series, or custom collection. Track reading status — Unread, Reading, or Finished — and assign personal star ratings to every book.
+**Local-first library** - Books, playlists, profiles, settings, reading progress, and extracted reading content are stored in the browser with IndexedDB and localStorage. No account or shared database is required.
 
-**EPUB & PDF Reader** &nbsp;·&nbsp; A distraction-free, built-in reader with chapter navigation, a slide-out table of contents, pinch-to-zoom controls, and an independent dark/light mode that doesn't affect the rest of the app.
+**EPUB, PDF, and text import** - Upload documents manually in the web app, or use the Android build to scan selected device folders for EPUB and PDF files. Native PDF files are kept on device storage when available so large documents do not have to live entirely in IndexedDB.
 
-**Text-to-Speech** &nbsp;·&nbsp; Turn any book into an audiobook in one click. Powered by Microsoft Edge Neural voices (US, UK, and Australian accents) with real-time word-level highlighting so you can follow along. Skip sentences, rewind 10 seconds, adjust playback speed, and navigate between books — all from the persistent player bar.
+**Reader and progress tracking** - Read EPUBs and PDFs in-app, resume recent books, track unread/reading/read states, favourite books, and keep series grouped with installment and total counts.
 
-**Smart Metadata Enrichment** &nbsp;·&nbsp; Add a title and author and Bookish does the rest. Cover images, blurbs, publication year, and Goodreads community ratings are automatically pulled from Google Books, Open Library, Goodreads, and the Internet Archive.
+**Read aloud** - Use Microsoft Edge neural voices and Kokoro-powered TTS paths with persistent player controls, sentence navigation, playback speed, and word-level highlighting where supported.
 
-**Favourites, Collections & Playlists** &nbsp;·&nbsp; Heart books to surface them on your home screen, build named collections for themed reading lists, and queue up playlists for back-to-back listening sessions.
+**Metadata enrichment** - Search Goodreads, Google Books, Kobo, Open Library, the Internet Archive, publisher pages, and cover image sources to fill in covers, blurbs, publication data, ratings, series fields, and author details. Optional Gemini or Groq verification can clean up risky metadata.
 
-**Author Profiles** &nbsp;·&nbsp; Every author gets a dedicated page with a photo, biography, and their full catalogue from your library.
+**Authors, series, playlists, and favourites** - Browse derived author and genre views, inspect author profiles, group books into playlists, and surface favourites and current reads from the home screen.
 
-**Settings** &nbsp;·&nbsp; Control reader zoom defaults, app theme (light/dark), TTS voice selection, and more — all in one place alongside a live snapshot of your library stats.
+**Storage tools** - Export, import, or wipe a full Bookish backup from Settings. The backup includes library records, playlists, profiles, reading content, TTS session state, and settings.
 
 <br />
 
@@ -51,11 +45,9 @@
 
 ## Gallery
 
-<img src="./docs/gallery/image-1.2.png" width="100%" alt="Your Library, Always Organised" />
-<img src="./docs/gallery/image-2.png" width="100%" alt="Read How You Want To" />
-<img src="./docs/gallery/image-3.png" width="100%" alt="Every Book an Audiobook" />
-<!-- <img src="./docs/gallery/metadata.png" width="100%" alt="Covers. Ratings. Blurbs. Done." /> -->
-<!-- <img src="./docs/gallery/authors.png" width="100%" alt="Know Your Authors" /> -->
+<img src="./docs/gallery/image-1.2.png" width="100%" alt="Your library, always organised" />
+<img src="./docs/gallery/image-2.png" width="100%" alt="Read how you want to" />
+<img src="./docs/gallery/image-3.png" width="100%" alt="Every book an audiobook" />
 
 <br />
 
@@ -65,14 +57,16 @@
 
 | Layer | Technology |
 |:---|:---|
-| Framework | [Nuxt 4](https://nuxt.com) + [Vue 3](https://vuejs.org) |
-| Database | [Neon](https://neon.tech) (serverless PostgreSQL) |
-| ORM | [Drizzle ORM](https://orm.drizzle.team) |
-| Text-to-Speech | [msedge-tts](https://github.com/Migushthe2nd/msedge-tts) + [Kokoro JS](https://github.com/juntran/kokoro-js) |
-| PDF Rendering | [PDF.js](https://mozilla.github.io/pdf.js) |
-| EPUB Parsing | [JSZip](https://stuk.github.io/jszip) |
-| Metadata Sources | Goodreads · Google Books · Open Library · Internet Archive |
+| App framework | [Nuxt 4](https://nuxt.com) + [Vue 3](https://vuejs.org) |
+| Mobile shell | [Capacitor 8](https://capacitorjs.com) |
+| Local data | IndexedDB, localStorage, Capacitor Filesystem |
+| PWA | [@vite-pwa/nuxt](https://vite-pwa-org.netlify.app/frameworks/nuxt.html) |
+| Text-to-speech | [msedge-tts](https://github.com/Migushthe2nd/msedge-tts), [Kokoro JS](https://github.com/juntran/kokoro-js), Capacitor text-to-speech |
+| PDF rendering | [PDF.js](https://mozilla.github.io/pdf.js) |
+| EPUB parsing | [JSZip](https://stuk.github.io/jszip) |
+| Metadata sources | Goodreads, Google Books, Kobo, Open Library, Internet Archive, publisher sites |
 | Icons | [Remix Icon](https://remixicon.com) |
+| Tests | [Vitest](https://vitest.dev), Nuxt Test Utils, happy-dom, fake-indexeddb |
 
 <br />
 
@@ -82,8 +76,9 @@
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org) **v18 or later**
-- A [Neon](https://neon.tech) account — the free tier is sufficient
+- [Node.js](https://nodejs.org) 22 or later
+- npm
+- Android Studio if you want to run the native Android build
 
 ### 1. Clone the repository
 
@@ -98,17 +93,24 @@ cd bookish
 npm install
 ```
 
-### 3. Configure environment variables
+### 3. Configure optional environment variables
 
-Create a `.env` file in the project root:
+Bookish can run without a `.env` file. The web app uses its own Nuxt server routes for metadata and TTS during development.
+
+For a hosted web app or native app, set an API base URL when metadata/TTS routes live somewhere other than the current origin:
 
 ```env
-DATABASE_URL=postgresql://<user>:<password>@<host>/<database>?sslmode=require
+NUXT_PUBLIC_API_BASE_URL=https://your-bookish-server.example
+```
 
-# Optional: AI verification for fetched metadata and author details
-# BOOKISH_AI_PROVIDER=gemini
-# GEMINI_API_KEY=<your-google-ai-studio-key>
-# GEMINI_MODEL=gemini-2.5-flash
+The native app can also store or change this URL from Settings -> Storage.
+
+Optional AI metadata verification:
+
+```env
+BOOKISH_AI_PROVIDER=gemini
+GEMINI_API_KEY=<your-google-ai-studio-key>
+GEMINI_MODEL=gemini-2.5-flash
 
 # Or use Groq instead
 # BOOKISH_AI_PROVIDER=groq
@@ -116,41 +118,81 @@ DATABASE_URL=postgresql://<user>:<password>@<host>/<database>?sslmode=require
 # GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
-Get your connection string from the [Neon Console](https://console.neon.tech) under **Connection Details → Connection string**.
+Optional build number override:
 
-AI verification is optional. If no AI key is configured, Bookish still runs the normal metadata pipeline and applies local cleanup for obvious bad fields such as title/byline text being misread as a series.
-
-### 4. Push the database schema
-
-```bash
-npx drizzle-kit push
+```env
+BOOKISH_BUILD_NUMBER=123
 ```
 
-This introspects [`server/database/schema.ts`](./server/database/schema.ts) and creates all required tables in your Neon database.
-
-### 5. Start the development server
+### 4. Start the development server
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — your library is ready.
+Open [http://localhost:3000](http://localhost:3000).
 
 <br />
 
 ---
 
-## Building for Production
+## Scripts
 
 ```bash
-# Build
-npm run build
-
-# Preview the production build locally
-npm run preview
+npm run dev        # Start Nuxt locally
+npm run build      # Build the Nuxt app
+npm run generate   # Generate the static app output
+npm run preview    # Preview the production build
+npm run cap:sync   # Generate web output and sync Capacitor
+npm run cap:open:android
 ```
 
-When deploying (e.g. to Vercel or Railway), add `DATABASE_URL` as an environment variable in your hosting provider's project settings.
+There is no database setup step. Bookish no longer uses Neon, Drizzle, or `DATABASE_URL`.
+
+Tests are run directly with Vitest:
+
+```bash
+npx vitest run
+```
+
+<br />
+
+---
+
+## Android Build
+
+The Android project lives in `android/` and uses Capacitor. It includes native helpers for:
+
+- scanning selected folders for EPUB and PDF files
+- importing device files into the local library
+- storing PDF sources and cached covers on the device filesystem
+- background/media-session support for read-aloud playback
+
+After changing web code, sync the native project:
+
+```bash
+npm run cap:sync
+npm run cap:open:android
+```
+
+The native shell needs a reachable Bookish server URL for web metadata and TTS routes unless those features are not being used.
+
+<br />
+
+---
+
+## Data Model
+
+Bookish stores user data locally:
+
+| Store | Purpose |
+|:---|:---|
+| `bookish-library` IndexedDB | books, playlists, local profile records |
+| `bookish-storage` IndexedDB | extracted reading content and PDF source markers |
+| localStorage | settings, TTS session state, API base URL, Android scan preferences |
+| Capacitor Filesystem | native PDF files and cached image assets when available |
+
+The Settings storage panel can export and import a complete JSON backup of the local data.
 
 <br />
 
@@ -158,18 +200,19 @@ When deploying (e.g. to Vercel or Railway), add `DATABASE_URL` as an environment
 
 ## Project Structure
 
-```
+```text
 bookish/
-├── components/        # Vue components (reader, sidebar, player bar, modals…)
-├── composables/       # Shared logic (useBooks, useTTS, useEpubExtractor…)
-├── pages/             # File-based routing (/, /books, /reader/[id], /settings…)
-├── server/
-│   ├── api/           # Nuxt server routes (books, authors, collections, TTS…)
-│   ├── database/      # Drizzle schema + migrations
-│   └── utils/         # Scrapers and API clients (Goodreads, Google Books…)
-├── workers/           # Web Workers for background processing
-├── public/            # Static assets and cached cover images
-└── assets/css/        # Global styles and CSS variables
+|-- android/           # Capacitor Android project and native plugins
+|-- assets/css/        # Global styles and theme variables
+|-- components/        # Desktop, mobile, and shared Vue components
+|-- composables/       # Local storage, reader, metadata, TTS, settings, and backup logic
+|-- docs/              # Design notes, screenshots, and gallery assets
+|-- pages/             # Nuxt file-based routes
+|-- plugins/           # Client plugins for native sync, media session, analytics, and app hooks
+|-- public/            # Static images, icons, and app assets
+|-- server/api/        # Metadata, cover, author, and TTS server routes
+|-- server/utils/      # Scrapers, API clients, aggregators, and AI verifiers
+`-- tests/             # Vitest coverage for app behavior and regressions
 ```
 
 <br />

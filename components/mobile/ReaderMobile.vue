@@ -1118,7 +1118,10 @@ const setPdfViewer = (el) => {
 };
 
 const playFromHere = () => {
-  if (isPlaying.value) {
+  // Already loaded into the narrator — including when paused. Resuming must pick
+  // up mid-sentence, so never fall through to the "read from this page" path,
+  // which would rewind to the first chunk of the visible page.
+  if (isThisBookNarrating.value) {
     togglePlay();
     return;
   }

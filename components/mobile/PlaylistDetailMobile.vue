@@ -33,40 +33,23 @@
           <span class="hero-meta">
             {{ playlistBooks.length }} {{ playlistBooks.length === 1 ? 'book' : 'books' }}<template v-if="playlistBooks.length"> · {{ readCount }} read</template>
           </span>
-
-          <div v-if="playlistBooks.length" class="hero-progress" role="img" :aria-label="`${readPercent}% read`">
-            <div class="hero-progress-fill" :style="{ width: `${readPercent}%` }"></div>
-          </div>
-
-          <div v-if="playlistBooks.length" class="hero-actions">
-            <button type="button" class="hero-play" @click="playPlaylist">
-              <i :class="anyBookActive ? 'ri-pause-fill' : 'ri-play-fill'"></i>
-              {{ anyBookActive ? 'Pause' : heroPlayLabel }}
-            </button>
-          </div>
         </div>
       </header>
 
-      <div v-if="playlistBooks.length" class="status-chips" aria-label="Filter by reading status">
-        <button
-          v-for="status in statusOptions"
-          :key="status.value"
-          type="button"
-          class="status-chip"
-          :class="{ active: selectedStatus === status.value }"
-          @click="selectedStatus = status.value"
-        >
-          {{ status.label }}
-        </button>
-      </div>
+      <LibraryControlsRow
+        v-if="playlistBooks.length"
+        v-model:status="selectedStatus"
+        v-model:view="viewMode"
+      />
 
-      <div v-if="filteredBooks.length" class="book-list">
+      <div v-if="filteredBooks.length" :class="viewMode === 'list' ? 'book-list' : 'books-grid'">
         <LibraryBookCard
           :show-personal-rating="false"
           v-for="book in filteredBooks"
           :key="book.id"
           :book="book"
           :active="isBookActive(book)"
+          :class="{ 'mobile-list-book-card': viewMode === 'list' }"
           @open="router.push(`/book/${book.id}`)"
           @play="handlePlay"
           @favourite="toggleFavourite(book.id)"
@@ -79,8 +62,8 @@
 
       <EmptyState
         v-else-if="playlistBooks.length"
-        title="No books match this status"
-        description="Choose another reading status to see more books."
+        title="No books match this filter"
+        description="Choose another reading status or format to see more books."
         icon="ri-filter-3-line"
       />
 
@@ -129,7 +112,9 @@ import AddToPlaylistModal from '~/components/shared/AddToPlaylistModal.vue';
 import DeleteConfirmModal from '~/components/shared/DeleteConfirmModal.vue';
 import EmptyState from '~/components/shared/EmptyState.vue';
 import LibraryBookCard from '~/components/shared/LibraryBookCard.vue';
+import LibraryControlsRow from '~/components/shared/LibraryControlsRow.vue';
 import PlaylistEditModal from '~/components/shared/PlaylistEditModal.vue';
+import { matchesFormatFilter, useBookishSettings } from '~/composables/useBookishSettings';
 import { useBooks } from '~/composables/useBooks';
 import { useToast } from '~/composables/useToast';
 import { useTTS } from '~/composables/useTTS';
@@ -138,21 +123,16 @@ import MobileSettingsNav from './MobileSettingsNav.vue';
 const route = useRoute();
 const router = useRouter();
 const { books, collections, updatePlaylist, deleteBook, toggleFavourite, hideBook } = useBooks();
+const { settings } = useBookishSettings();
 const { addToast } = useToast();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const selectedStatus = ref('all');
+const viewMode = ref('grid');
 const selectedPlaylistBook = ref(null);
 const editingPlaylist = ref(null);
 const savingPlaylist = ref(false);
 const showDeleteModal = ref(false);
 const bookToDelete = ref(null);
-
-const statusOptions = [
-  { label: 'All', value: 'all' },
-  { label: 'Unread', value: 'Unread' },
-  { label: 'Reading', value: 'Reading' },
-  { label: 'Read', value: 'Read' },
-];
 
 const playlist = computed(() => (
   collections.value.find((item) => String(item.id) === String(route.params.id))
@@ -176,49 +156,16 @@ const normalizedStatus = (book) => {
   return 'Unread';
 };
 
-const filteredBooks = computed(() => (
-  selectedStatus.value === 'all'
-    ? playlistBooks.value
-    : playlistBooks.value.filter(book => normalizedStatus(book) === selectedStatus.value)
-));
+const filteredBooks = computed(() => playlistBooks.value.filter(book => (
+  matchesFormatFilter(book, settings.value.formatFilter)
+  && (selectedStatus.value === 'all' || normalizedStatus(book) === selectedStatus.value)
+)));
 
 const isBookActive = (book) => (
   ttsBook.value?.id === book.id && ttsStatus.value !== 'idle'
 );
 
 const readCount = computed(() => playlistBooks.value.filter((book) => normalizedStatus(book) === 'Read').length);
-const readPercent = computed(() => (
-  playlistBooks.value.length
-    ? Math.round((readCount.value / playlistBooks.value.length) * 100)
-    : 0
-));
-
-// Continue with the in-progress book; otherwise start the first unread one.
-const nextUpBook = computed(() => (
-  playlistBooks.value.find((book) => normalizedStatus(book) === 'Reading')
-  || playlistBooks.value.find((book) => normalizedStatus(book) === 'Unread')
-  || playlistBooks.value[0]
-));
-
-const anyBookActive = computed(() => (
-  ttsStatus.value === 'playing' && playlistBooks.value.some((book) => book.id === ttsBook.value?.id)
-));
-
-const heroPlayLabel = computed(() => (
-  nextUpBook.value && normalizedStatus(nextUpBook.value) === 'Reading' ? 'Continue' : 'Play'
-));
-
-const playPlaylist = () => {
-  if (anyBookActive.value) {
-    toggleTTS();
-    return;
-  }
-  if (ttsBook.value && playlistBooks.value.some((book) => book.id === ttsBook.value?.id) && ttsStatus.value === 'paused') {
-    toggleTTS();
-    return;
-  }
-  if (nextUpBook.value) playTTS(nextUpBook.value);
-};
 
 const handlePlay = (book) => {
   if (isBookActive(book)) {
@@ -355,52 +302,6 @@ const getStackStyle = (index, total = 3) => {
   font-size: var(--mobile-subtext-size);
 }
 
-.hero-progress {
-  width: min(230px, 70%);
-  height: 6px;
-  margin: 0.75rem auto 0;
-  overflow: hidden;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-brand-primary) 16%, transparent);
-}
-
-.hero-progress-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--color-brand-primary);
-  transition: width 0.4s ease;
-}
-
-.hero-actions {
-  display: flex;
-  justify-content: center;
-  margin-top: 0.9rem;
-}
-
-.hero-play {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 26px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--color-brand-primary);
-  color: #fff;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 600;
-  box-shadow: 0 10px 24px rgba(138, 43, 226, 0.35);
-}
-
-.hero-play i {
-  font-size: 20px;
-}
-
-.hero-play:active {
-  transform: scale(0.96);
-}
-
 .cover-stack {
   position: relative;
   z-index: 1;
@@ -479,34 +380,12 @@ const getStackStyle = (index, total = 3) => {
   font-size: 1rem;
 }
 
-.status-chips {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  margin-bottom: 1rem;
-  scrollbar-width: none;
-}
-
-.status-chips::-webkit-scrollbar {
-  display: none;
-}
-
-.status-chip {
-  min-height: 34px;
-  flex: 0 0 auto;
-  padding: 0 12px;
-  border: 0;
-  border-radius: var(--mobile-control-radius);
-  background: rgba(138, 43, 226, 0.1);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: var(--mobile-caption-size);
-  line-height: 1;
-}
-
-.status-chip.active {
-  background: var(--color-brand-primary-soft);
-  color: var(--color-brand-primary);
+/* Books, grid and list, exactly as the Books page renders them. */
+.books-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 14px;
+  justify-content: start;
 }
 
 .book-list {

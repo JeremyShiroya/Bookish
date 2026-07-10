@@ -76,7 +76,7 @@
           v-else
           title="Your library is clear"
           description="Start building your digital library by uploading your first book."
-          icon="ri-folder-add-line"
+          image="/Images/Empty-state.png"
         >
           <template #action>
             <NuxtLink to="/books" class="add-btn">
@@ -119,7 +119,7 @@
           v-else-if="books.length > 0"
           title="No series yet"
           description="Books with series metadata will appear here."
-          icon="ri-book-shelf-line"
+          image="/Images/Empty-state.png"
         />
       </section>
     </div>
@@ -133,6 +133,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBooks } from '~/composables/useBooks'
 import { onCoverError } from '~/composables/useCoverFallback'
+import { searchLibrary } from '~/composables/useLibrarySearch'
 import { useTTS } from '~/composables/useTTS'
 import EmptyState from '../shared/EmptyState.vue'
 import HomeBookRailCard from '../shared/HomeBookRailCard.vue'
@@ -180,18 +181,8 @@ const mobileRecentBooks = computed(() => (
 const currentReadingBook = computed(() => ttsBook.value || recentlyReadBooks.value[0] || null)
 const mobileSeries = computed(() => seriesList.value.slice(0, 2));
 
-const homeSearchResults = computed(() => {
-  const query = homeSearch.value.trim().toLowerCase()
-  if (!query) return []
-
-  return books.value
-    .filter((book) => [book.title, book.author, book.series, book.genre]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-      .includes(query))
-    .slice(0, 5)
-})
+// Ranked so the very first typed letter already surfaces the right books.
+const homeSearchResults = computed(() => searchLibrary(books.value, homeSearch.value))
 
 const openBook = (book) => {
   if (book?.id) router.push(`/book/${book.id}`)
@@ -287,6 +278,8 @@ const retryLoadLibrary = () => {
   left: 0;
   z-index: 10;
   display: grid;
+  max-height: 60vh;
+  overflow-y: auto;
   gap: 4px;
   padding: 8px;
   border: 1px solid rgba(148, 163, 184, 0.24);
