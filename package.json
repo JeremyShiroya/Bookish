@@ -40,5 +40,11 @@
     "happy-dom": "^20.8.9",
     "playwright-core": "^1.59.1",
     "vitest": "^4.1.4"
+  },
+  "overrides": {
+    "glob": "^13.0.6",
+    "workbox-build": {
+      "source-map": "^0.7.6"
+    }
   }
 }
