@@ -19,6 +19,70 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Lets Bookish appear in the system "Open with" sheet for book
+                 documents, matching the way Librera / MuPDF / ReadEra
+                 register. Three filters cover the three ways senders shape
+                 the intent. -->
+
+            <!-- 1. Proper MIME type (file managers, browsers, mail apps).
+                 No scheme needed: declaring a mimeType makes Android assume
+                 content:// and file://. Includes the legacy PDF/EPUB MIME
+                 aliases some apps still send. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/x-pdf" />
+                <data android:mimeType="application/acrobat" />
+                <data android:mimeType="application/vnd.pdf" />
+                <data android:mimeType="text/pdf" />
+                <data android:mimeType="text/x-pdf" />
+                <data android:mimeType="application/epub" />
+                <data android:mimeType="application/epub+zip" />
+                <data android:mimeType="application/x-epub" />
+                <data android:mimeType="application/x-epub+zip" />
+            </intent-filter>
+
+            <!-- 2. Generic or wrong MIME type (downloads and share targets
+                 often send application/octet-stream): match by extension.
+                 The repeated multi-dot patterns work around PatternMatcher's
+                 greedy ".*" failing on names with several dots. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.pdf" />
+                <data android:pathPattern=".*\\..*\\.pdf" />
+                <data android:pathPattern=".*\\..*\\..*\\.pdf" />
+                <data android:pathPattern=".*\\.PDF" />
+                <data android:pathPattern=".*\\.epub" />
+                <data android:pathPattern=".*\\..*\\.epub" />
+                <data android:pathPattern=".*\\..*\\..*\\.epub" />
+                <data android:pathPattern=".*\\.EPUB" />
+            </intent-filter>
+
+            <!-- 3. No MIME type at all (some file managers send a bare URI):
+                 a filter without mimeType only matches type-less intents. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.pdf" />
+                <data android:pathPattern=".*\\..*\\.pdf" />
+                <data android:pathPattern=".*\\.PDF" />
+                <data android:pathPattern=".*\\.epub" />
+                <data android:pathPattern=".*\\..*\\.epub" />
+                <data android:pathPattern=".*\\.EPUB" />
+            </intent-filter>
         </activity>
 
         <!-- Keeps narration alive (and the WebView unfrozen) outside the app. -->

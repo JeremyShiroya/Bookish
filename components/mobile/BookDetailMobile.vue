@@ -75,13 +75,13 @@
       </div>
 
       <div class="book-actions">
-        <button type="button" class="read-btn" @click="openReader">
-          <i class="ri-book-open-line"></i>
-          Read
-        </button>
         <button type="button" class="listen-btn" @click="handleListen">
           <i :class="isListening ? 'ri-pause-fill' : 'ri-headphone-line'"></i>
           {{ listenLabel }}
+        </button>
+        <button type="button" class="read-btn" @click="openReader">
+          <i class="ri-book-open-line"></i>
+          Read
         </button>
       </div>
 

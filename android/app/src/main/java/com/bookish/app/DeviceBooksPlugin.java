@@ -2,9 +2,11 @@ package com.bookish.app;
 
 import android.Manifest;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.provider.OpenableColumns;
 import android.provider.Settings;
 
 import com.getcapacitor.JSArray;
@@ -21,6 +23,7 @@ import android.util.Base64;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayDeque;
 import java.util.Locale;
@@ -42,6 +45,18 @@ public class DeviceBooksPlugin extends Plugin {
     private static final int MAX_DEPTH = 8;
     private static final int MAX_RESULTS = 500;
     private static final int MAX_VISITED_DIRS = 4000;
+
+    // Matches MAX_DEVICE_IMPORT_BYTES on the JS side: bigger documents would
+    // exhaust the WebView's memory crossing the base64 bridge.
+    private static final long MAX_OPENED_DOCUMENT_BYTES = 150L * 1024 * 1024;
+
+    // Document URI parked by MainActivity when the app is launched from the
+    // system "Open with" sheet, until the web layer consumes it.
+    private static Uri pendingOpenedDocument = null;
+
+    static void setPendingOpenedDocument(Uri uri) {
+        pendingOpenedDocument = uri;
+    }
 
     private boolean hasFullAccess() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -93,6 +108,95 @@ public class DeviceBooksPlugin extends Plugin {
     @PermissionCallback
     private void storagePermissionCallback(PluginCall call) {
         check(call);
+    }
+
+    /**
+     * Hands the document the app was opened with (system "Open with" sheet)
+     * to the web layer as base64 bytes plus a display name. Reading the
+     * content:// URI uses the temporary grant from the sending app, so no
+     * storage permission is needed. Resolves { available: false } when the
+     * app was opened normally.
+     */
+    @PluginMethod
+    public void consumeOpenedDocument(PluginCall call) {
+        Uri uri = pendingOpenedDocument;
+        pendingOpenedDocument = null;
+
+        if (uri == null) {
+            JSObject ret = new JSObject();
+            ret.put("available", false);
+            call.resolve(ret);
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                String name = resolveDisplayName(uri);
+                long size = resolveSize(uri);
+                if (size > MAX_OPENED_DOCUMENT_BYTES) {
+                    call.reject("Document is too large to open (over 150 MB)");
+                    return;
+                }
+
+                try (InputStream in = getContext().getContentResolver().openInputStream(uri)) {
+                    if (in == null) {
+                        call.reject("Document could not be opened: " + uri);
+                        return;
+                    }
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    byte[] chunk = new byte[65536];
+                    int read;
+                    long total = 0;
+                    while ((read = in.read(chunk)) != -1) {
+                        total += read;
+                        if (total > MAX_OPENED_DOCUMENT_BYTES) {
+                            call.reject("Document is too large to open (over 150 MB)");
+                            return;
+                        }
+                        out.write(chunk, 0, read);
+                    }
+
+                    JSObject ret = new JSObject();
+                    ret.put("available", true);
+                    ret.put("name", name);
+                    ret.put("size", total);
+                    ret.put("mimeType", getContext().getContentResolver().getType(uri));
+                    ret.put("data", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP));
+                    call.resolve(ret);
+                }
+            } catch (Exception e) {
+                call.reject("Failed to read opened document: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    private String resolveDisplayName(Uri uri) {
+        if ("content".equals(uri.getScheme())) {
+            try (Cursor cursor = getContext().getContentResolver().query(
+                uri, new String[] { OpenableColumns.DISPLAY_NAME }, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    String name = cursor.getString(0);
+                    if (name != null && !name.isEmpty()) return name;
+                }
+            } catch (Exception ignored) {}
+        }
+        String segment = uri.getLastPathSegment();
+        return segment != null && !segment.isEmpty() ? segment : "document";
+    }
+
+    private long resolveSize(Uri uri) {
+        if ("content".equals(uri.getScheme())) {
+            try (Cursor cursor = getContext().getContentResolver().query(
+                uri, new String[] { OpenableColumns.SIZE }, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst() && !cursor.isNull(0)) {
+                    return cursor.getLong(0);
+                }
+            } catch (Exception ignored) {}
+        }
+        if ("file".equals(uri.getScheme()) && uri.getPath() != null) {
+            return new File(uri.getPath()).length();
+        }
+        return -1;
     }
 
     /**

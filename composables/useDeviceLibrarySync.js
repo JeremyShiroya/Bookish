@@ -123,6 +123,11 @@ export function selectNewDeviceFiles(files, registry) {
   return (Array.isArray(files) ? files : []).filter((file) => {
     if (!file?.path || !/\.(pdf|epub)$/i.test(file.path)) return false
     if (Number(file.size) > MAX_DEVICE_IMPORT_BYTES) return false
+    // Already imported through the "Open with" flow (keyed by name + size —
+    // those imports have no on-disk path); re-importing it here would
+    // duplicate the book.
+    const name = file.path.split('/').pop()
+    if (registry[`openwith:${name}:${file.size}`]?.bookId) return false
     const known = registry[file.path]
     if (!known) return true
     // The user deleted this book. Never resurrect it, even if the file survived
@@ -195,7 +200,7 @@ function generateCoverPlaceholder(title) {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
-function base64ToFile(base64, name, extension) {
+export function base64ToFile(base64, name, extension) {
   // Tolerate a data: URI prefix or stray whitespace from either reader path.
   const clean = String(base64 || '').replace(/^data:[^,]*,/, '').replace(/\s/g, '')
   const binary = atob(clean)
@@ -256,11 +261,11 @@ async function readDeviceFileBase64(path) {
   return data
 }
 
-async function importDeviceFile(file, { addBook, saveBookContent }) {
-  const extension = file.name.split('.').pop().toLowerCase()
-  const data = await readDeviceFileBase64(file.path)
-  const documentFile = base64ToFile(data, file.name, extension)
-
+// Shared import pipeline: extracts a PDF / EPUB File object, adds the book and
+// persists its content. Used by the startup device scan (which passes the
+// on-disk path) and by the system "Open with" flow (which has no path — the
+// document may come from Drive, mail, a browser download, etc.).
+export async function importDocumentFile(documentFile, extension, { addBook, saveBookContent, deviceImportPath = null }) {
   let extracted = {}
   let source = null
   if (extension === 'epub') {
@@ -272,7 +277,7 @@ async function importDeviceFile(file, { addBook, saveBookContent }) {
     source = extracted.source ?? await documentFile.arrayBuffer()
   }
 
-  const title = extracted.title || cleanTitleFromFileName(file.name)
+  const title = extracted.title || cleanTitleFromFileName(documentFile.name)
   const savedBook = await addBook({
     title,
     author: extracted.author || '',
@@ -287,8 +292,8 @@ async function importDeviceFile(file, { addBook, saveBookContent }) {
     series: null,
     seriesInstallment: null,
     seriesTotal: null,
-    deviceImport: true,
-    deviceImportPath: file.path,
+    deviceImport: !!deviceImportPath,
+    deviceImportPath,
   })
 
   if (savedBook?.id && (extracted.content || source)) {
@@ -306,6 +311,17 @@ async function importDeviceFile(file, { addBook, saveBookContent }) {
   }
 
   return savedBook
+}
+
+async function importDeviceFile(file, { addBook, saveBookContent }) {
+  const extension = file.name.split('.').pop().toLowerCase()
+  const data = await readDeviceFileBase64(file.path)
+  const documentFile = base64ToFile(data, file.name, extension)
+  return importDocumentFile(documentFile, extension, {
+    addBook,
+    saveBookContent,
+    deviceImportPath: file.path,
+  })
 }
 
 async function backfillBookMetadata(importedBooks, { updateBook, addToast }) {
