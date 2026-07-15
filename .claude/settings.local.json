@@ -10,7 +10,15 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(npx vitest *)",
-      "Bash(node -e \"const p = require\\('C:/Users/jerem/GitHub/Bookish/package.json'\\); const combined = {...p.dependencies, ...p.devDependencies}; const keys = Object.keys\\(combined\\).filter\\(k => /fake|vitest|indexeddb/i.test\\(k\\)\\); keys.forEach\\(k => console.log\\(k, combined[k]\\)\\)\")"
+      "Bash(node -e \"const p = require\\('C:/Users/jerem/GitHub/Bookish/package.json'\\); const combined = {...p.dependencies, ...p.devDependencies}; const keys = Object.keys\\(combined\\).filter\\(k => /fake|vitest|indexeddb/i.test\\(k\\)\\); keys.forEach\\(k => console.log\\(k, combined[k]\\)\\)\")",
+      "Bash(npm audit *)",
+      "Bash(npm ls *)",
+      "Bash(npm view *)",
+      "Bash(echo \"glob latest: $\\(npm view glob version \\)\")",
+      "Bash(echo \"source-map latest: $\\(npm view source-map version \\)\")",
+      "Bash(echo \"boolean versions: $\\(npm view boolean versions --json)",
+      "Bash(npm install *)",
+      "Bash(echo \"deprecated still in tree: $\\(npm ls source-map glob whatwg-encoding boolean)"
     ]
   }
 }
