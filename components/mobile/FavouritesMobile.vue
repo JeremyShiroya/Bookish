@@ -119,9 +119,9 @@
         
         <EmptyState
           v-else-if="favourites.length > 0"
-          title="No favourites match this filter"
+          illustration="filter"
+          title="Nothing matches this filter"
           description="Try a different reading status to see more of your favourites."
-          image="/Images/Empty-state.png"
         >
           <template #action>
             <button type="button" class="explore-btn" @click="clearFilters">
@@ -132,9 +132,9 @@
 
         <EmptyState
           v-else
-          title="No favorites yet"
-          description="Books you mark as favorite will appear here for quick access."
-          image="/Images/Empty-state.png"
+          illustration="favourites"
+          title="No favourites yet"
+          description="Tap the heart on any book and it will be kept here for quick access."
         >
           <template #action>
             <NuxtLink to="/books" class="explore-btn">

@@ -48,9 +48,9 @@
     <!-- Empty State -->
     <EmptyState
       v-if="playlistsWithBooks.length === 0 && !showSkeleton"
+      illustration="playlists"
       title="No playlists yet"
-      description="Organize your library by creating playlists for favorites, moods, genres, or reading plans."
-      image="/Images/Empty-state.png"
+      description="Gather books into playlists for moods, genres or a ready-to-listen queue."
     >
       <template #action>
         <button type="button" class="add-btn">

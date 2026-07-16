@@ -18,16 +18,32 @@
       </template>
     </EmptyState>
 
+    <!-- A brand-new library gets one welcoming hero instead of an empty
+         state per section. -->
+    <EmptyState
+      v-else-if="initialized && books.length === 0"
+      illustration="library"
+      title="Your library awaits"
+      description="Add your first book and Bookish will keep your reading, listening and progress right here."
+    >
+      <template #action>
+        <NuxtLink to="/add" class="add-btn">
+          <i class="ri-add-line"></i>
+          Add your first book
+        </NuxtLink>
+      </template>
+    </EmptyState>
+
     <template v-else-if="initialized">
       <div class="desktop-home">
-        <section class="home-section">
+        <section v-if="recentlyAddedBooks.length > 0" class="home-section">
           <div class="section-header">
             <h2 class="section-title">Recently Added</h2>
             <NuxtLink to="/books" class="show-all-btn">
               See all <i class="ri-arrow-right-s-line"></i>
             </NuxtLink>
           </div>
-          <div v-if="recentlyAddedBooks.length > 0" class="recent-grid">
+          <div class="recent-grid">
             <div
               v-for="book in recentlyAddedBooks.slice(0, 3)"
               :key="book.id"
@@ -57,27 +73,16 @@
               </button>
             </div>
           </div>
-          <EmptyState
-            v-else
-            title="Your library is clear"
-            description="Start building your digital library by uploading your first book."
-            icon="ri-folder-add-line"
-          >
-            <template #action>
-              <NuxtLink to="/books" class="add-btn">
-                <i class="ri-add-line"></i>
-                Add Book
-              </NuxtLink>
-            </template>
-          </EmptyState>
         </section>
 
         <div class="main-content-row">
-          <section class="popular-column">
+          <!-- Sections with nothing to show stay hidden; the page simply
+               displays whatever content exists. -->
+          <section v-if="popularBooks.length > 0" class="popular-column">
             <div class="section-header">
               <h2 class="section-title">Popular Books</h2>
             </div>
-            <div v-if="popularBooks.length > 0" class="popular-grid">
+            <div class="popular-grid">
               <div
                 v-for="book in popularBooks"
                 :key="book.id"
@@ -102,19 +107,13 @@
                 </button>
               </div>
             </div>
-            <EmptyState
-              v-else
-              title="No popular books"
-              description="Add and rate books to see your favorites here."
-              icon="ri-star-line"
-            />
           </section>
 
-          <section class="your-authors-column">
+          <section v-if="recentAuthors.length > 0" class="your-authors-column">
             <div class="section-header">
               <h2 class="section-title">Your Authors</h2>
             </div>
-            <div v-if="recentAuthors.length > 0" class="authors-list-card">
+            <div class="authors-list-card">
               <div
                 v-for="author in recentAuthors"
                 :key="author.id"
@@ -139,12 +138,6 @@
                 </div>
               </div>
             </div>
-            <EmptyState
-              v-else
-              title="No authors yet"
-              description="Your most read authors will appear here."
-              icon="ri-group-line"
-            />
           </section>
         </div>
       </div>

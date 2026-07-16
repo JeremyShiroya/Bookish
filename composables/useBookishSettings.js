@@ -27,6 +27,7 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   listenCoverBlur: true,           // blurred cover backdrop in Listen mode
   showStreak: true,                // reading-streak pill in the top nav
   formatFilter: 'all',             // 'all' | 'pdf' | 'epub'
+  hideContent: false,              // preview the app as though the library were empty
 })
 
 export const CARD_BACKGROUND_OPTIONS = Object.freeze(['blank', 'blur'])
@@ -166,6 +167,7 @@ export function normalizeBookishSettings(value) {
     formatFilter: FORMAT_FILTER_OPTIONS.includes(source.formatFilter)
       ? source.formatFilter
       : DEFAULT_BOOKISH_SETTINGS.formatFilter,
+    hideContent: source.hideContent === true,
   }
 }
 

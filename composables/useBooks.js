@@ -7,6 +7,7 @@ import { coverPlaceholder } from '~/composables/useCoverFallback';
 import { getGoodreadsRating } from '~/composables/useGoodreadsRating';
 import { useLibraryStore } from '~/composables/useLibraryStore';
 import { useApiEndpoint } from '~/composables/useApiEndpoint';
+import { readBookishSettings } from '~/composables/useBookishSettings';
 
 const coverCacheInFlight = new Set();
 
@@ -195,13 +196,17 @@ export const useBooks = () => {
         store.getBooks(),
         store.getCollections(),
       ]);
+      // "Hide content" (Settings → Preferences) previews the app as though
+      // the library were empty: nothing enters the in-memory library, while
+      // IndexedDB keeps everything for when the toggle turns back off.
+      const { hideContent } = readBookishSettings();
       // Hidden books stay in IndexedDB but never enter the in-memory library,
       // so they disappear from every page. Restore lives in Settings → Storage.
-      books.value = booksData
+      books.value = hideContent ? [] : booksData
         .filter((book) => !book.isHidden)
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      collections.value = collectionsData;
-      cacheRemoteLibraryCovers();
+      collections.value = hideContent ? [] : collectionsData;
+      if (!hideContent) cacheRemoteLibraryCovers();
     } catch (fetchError) {
       console.error('Failed to load library:', fetchError);
       error.value = 'Bookish could not load your library.';

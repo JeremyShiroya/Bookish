@@ -23,6 +23,12 @@ describe('useBookishSettings storage helpers', () => {
     expect(readBookishSettings(createMemoryStorage())).toEqual(DEFAULT_BOOKISH_SETTINGS)
   })
 
+  it('hide content activates only when explicitly true', () => {
+    expect(normalizeBookishSettings({ hideContent: true }).hideContent).toBe(true)
+    expect(normalizeBookishSettings({ hideContent: 'yes' }).hideContent).toBe(false)
+    expect(normalizeBookishSettings({}).hideContent).toBe(false)
+  })
+
   it('persists partial updates with defaults for missing values', () => {
     const storage = createMemoryStorage()
 

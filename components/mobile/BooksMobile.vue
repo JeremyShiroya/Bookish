@@ -164,9 +164,9 @@
       <!-- Empty State -->
       <EmptyState
         v-else
-        title="Your library is empty"
-        description="Connect your first document to start building your personal library."
-        image="/Images/Empty-state.png"
+        illustration="books"
+        title="No books yet"
+        description="Import a PDF or EPUB — or let Bookish find the documents already on your device — and your shelves start here."
       >
         <template #action>
           <button class="add-book-btn" @click="router.push('/add')">

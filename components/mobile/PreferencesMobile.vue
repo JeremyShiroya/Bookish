@@ -188,6 +188,23 @@
 
         <div class="pref-row">
           <div class="pref-copy">
+            <span class="pref-label">Hide content</span>
+            <span class="pref-hint">Preview the app as though your library were empty. Nothing is deleted.</span>
+          </div>
+          <button
+            type="button"
+            class="pref-toggle"
+            role="switch"
+            :aria-checked="settings.hideContent === true"
+            :class="{ on: settings.hideContent === true }"
+            @click="toggleHideContent"
+          >
+            <span class="knob"></span>
+          </button>
+        </div>
+
+        <div class="pref-row">
+          <div class="pref-copy">
             <span class="pref-label">Book format</span>
             <span class="pref-hint">Which formats appear in your library.</span>
           </div>
@@ -209,6 +226,7 @@
 
 <script setup>
 import { useBookishSettings } from '~/composables/useBookishSettings'
+import { useBooks } from '~/composables/useBooks'
 import MobileSettingsNav from './MobileSettingsNav.vue'
 import ReadingPreview from '../shared/previews/ReadingPreview.vue'
 // Playlist cards offer the same two layouts as series cards, so they share the
@@ -218,6 +236,14 @@ import SeriesPreview from '../shared/previews/SeriesCardPreview.vue'
 const { settings, updateSettings } = useBookishSettings()
 
 const set = (key, value) => updateSettings({ [key]: value })
+
+// Hide content swaps the in-memory library for an empty one (or back), so
+// the change is visible the moment you leave settings — no restart needed.
+const toggleHideContent = async () => {
+  set('hideContent', settings.value.hideContent !== true)
+  const { fetchAllData } = useBooks()
+  await fetchAllData(true)
+}
 
 const backgroundOptions = [
   { value: 'blank', label: 'Default' },

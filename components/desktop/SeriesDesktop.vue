@@ -15,9 +15,9 @@
 
     <EmptyState
       v-else-if="showEmpty"
-      title="No series detected"
-      description="Books that share series metadata will automatically group here."
-      icon="ri-book-shelf-line"
+      illustration="series"
+      title="No series yet"
+      description="Books that share a series name group here automatically — refresh a book's details to pick up its series."
     >
       <template #action>
         <NuxtLink to="/books" class="add-btn">

@@ -357,9 +357,9 @@
       <!-- Empty State -->
       <EmptyState
         v-else
-        title="Your library is empty"
-        description="Connect your first document to start building your personal library."
-        icon="ri-book-open-line"
+        illustration="books"
+        title="No books yet"
+        description="Import a PDF or EPUB and your shelves start here."
       >
         <template #action>
           <button class="add-book-btn" @click="router.push('/add')">

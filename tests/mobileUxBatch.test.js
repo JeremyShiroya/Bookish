@@ -170,19 +170,33 @@ describe('mobile UX batch', () => {
     expect(reader).toMatch(/const playFromHere = \(\) => \{[\s\S]{0,300}?if \(isThisBookNarrating\.value\) \{\s*togglePlay\(\);/)
   })
 
-  test('mobile library pages show the empty-state illustration, not an icon', () => {
-    for (const path of [
-      'components/mobile/HomeMobile.vue',
-      'components/mobile/BooksMobile.vue',
-      'components/mobile/SeriesMobile.vue',
-      'components/mobile/FavouritesMobile.vue',
-      'components/mobile/PlaylistsMobile.vue',
-    ]) {
-      expect(read(path), path).toContain('image="/Images/Empty-state.png"')
+  test('mobile library pages show a per-page empty-state illustration, not an icon', () => {
+    const expected = {
+      'components/mobile/HomeMobile.vue': 'illustration="library"',
+      'components/mobile/BooksMobile.vue': 'illustration="books"',
+      'components/mobile/SeriesMobile.vue': 'illustration="series"',
+      'components/mobile/FavouritesMobile.vue': 'illustration="favourites"',
+      'components/mobile/PlaylistsMobile.vue': 'illustration="playlists"',
+    }
+    for (const [path, marker] of Object.entries(expected)) {
+      expect(read(path), path).toContain(marker)
     }
 
-    expect(existsSync(resolve(root, 'public/Images/Empty-state.png'))).toBe(true)
-    expect(read('components/shared/EmptyState.vue')).toContain('empty-image')
+    // The illustrations are inline SVG so they recolour with the theme.
+    const emptyState = read('components/shared/EmptyState.vue')
+    expect(emptyState).toContain('empty-illustration')
+    expect(emptyState).toContain('<svg')
+  })
+
+  test('home renders one hero empty state and hides sections with no content', () => {
+    const home = read('components/mobile/HomeMobile.vue')
+    // Empty library: a single welcome hero, not an empty state per section.
+    expect(home).toContain('initialized && books.length === 0')
+    // Currently Reading / Series only render when they have content.
+    expect(home).toContain('<section v-if="currentReadingBook"')
+    expect(home).toContain('<section v-if="mobileSeries.length > 0"')
+    // No leftover per-section empty states anywhere on home.
+    expect(home.match(/<EmptyState/g)).toHaveLength(2)
   })
 
   test('home search results come straight off the bound input', () => {

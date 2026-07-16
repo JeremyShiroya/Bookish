@@ -28,9 +28,9 @@
         
         <EmptyState
           v-else
-          title="No favorites yet"
-          description="Books you mark as favorite will appear here for quick access."
-          icon="ri-heart-line"
+          illustration="favourites"
+          title="No favourites yet"
+          description="Tap the heart on any book and it will be kept here for quick access."
         >
           <template #action>
             <NuxtLink to="/books" class="explore-btn">

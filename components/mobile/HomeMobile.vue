@@ -20,6 +20,23 @@
       </template>
     </EmptyState>
 
+    <!-- A brand-new library gets one welcoming hero, not a page of hollow
+         sections. -->
+    <div v-else-if="initialized && books.length === 0" class="mobile-home mobile-home-empty">
+      <EmptyState
+        illustration="library"
+        title="Your library awaits"
+        description="Add your first book and Bookish will keep your reading, listening and progress right here."
+      >
+        <template #action>
+          <NuxtLink to="/add" class="add-btn">
+            <i class="ri-add-line"></i>
+            Add your first book
+          </NuxtLink>
+        </template>
+      </EmptyState>
+    </div>
+
     <div v-else-if="initialized" class="mobile-home">
       <section class="mobile-search-section">
         <label class="mobile-search-bar">
@@ -62,9 +79,11 @@
         <p v-else-if="homeSearch.trim()" class="mobile-search-empty">No books found</p>
       </section>
 
-      <section class="mobile-home-section">
+      <!-- Sections only render when they have something to show — a reader
+           who hasn't started a book yet just sees their actual content. -->
+      <section v-if="currentReadingBook" class="mobile-home-section">
         <h2 class="mobile-section-title">Currently Reading</h2>
-        <div v-if="currentReadingBook" class="continue-single">
+        <div class="continue-single">
           <HomeContinueReadingCard
             :book="currentReadingBook"
             :is-playing="isBookPlaying(currentReadingBook)"
@@ -72,19 +91,6 @@
             @play="handleContinuePlay"
           />
         </div>
-        <EmptyState
-          v-else
-          title="Your library is clear"
-          description="Start building your digital library by uploading your first book."
-          image="/Images/Empty-state.png"
-        >
-          <template #action>
-            <NuxtLink to="/books" class="add-btn">
-              <i class="ri-add-line"></i>
-              Add Book
-            </NuxtLink>
-          </template>
-        </EmptyState>
       </section>
 
       <section class="mobile-home-section">
@@ -102,12 +108,12 @@
         </div>
       </section>
 
-      <section class="mobile-home-section mobile-series-section">
+      <section v-if="mobileSeries.length > 0" class="mobile-home-section mobile-series-section">
         <div class="mobile-section-header">
           <h2 class="mobile-section-title">Series</h2>
           <NuxtLink to="/series" class="mobile-see-all">See all</NuxtLink>
         </div>
-        <div v-if="mobileSeries.length > 0" class="series-list">
+        <div class="series-list">
           <SeriesCollageCard
             v-for="series in mobileSeries"
             :key="series.id"
@@ -115,12 +121,6 @@
             @open="openSeries"
           />
         </div>
-        <EmptyState
-          v-else-if="books.length > 0"
-          title="No series yet"
-          description="Books with series metadata will appear here."
-          image="/Images/Empty-state.png"
-        />
       </section>
     </div>
 
@@ -212,6 +212,13 @@ const retryLoadLibrary = () => {
 .mobile-home {
   min-height: calc(100vh - 106px);
   padding: 0 var(--mobile-page-padding-inline) 16px;
+}
+
+/* Empty-library hero: one centred welcome fills the page instead of a
+   column of hollow sections. */
+.mobile-home-empty {
+  display: grid;
+  place-items: center;
 }
 
 .mobile-search-section {
