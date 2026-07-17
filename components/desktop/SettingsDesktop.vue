@@ -82,6 +82,31 @@
             <i class="ri-add-line"></i>
           </div>
         </div>
+
+        <div class="setting-block">
+          <div class="setting-copy">
+            <h3>Highlight while reading</h3>
+            <p>Highlight the sentence being read aloud.</p>
+          </div>
+          <div class="option-grid">
+            <button
+              v-for="option in toggleOptions"
+              :key="`hl-${option.value}`"
+              type="button"
+              class="option"
+              :class="{ active: (settings.readerHighlight !== false) === option.value }"
+              @click="set('readerHighlight', option.value)"
+            >
+              <span class="option-preview">
+                <ReadingPreview kind="highlight" :on="option.value" />
+              </span>
+              <span class="option-label">
+                {{ option.label }}
+                <i v-if="(settings.readerHighlight !== false) === option.value" class="ri-check-line"></i>
+              </span>
+            </button>
+          </div>
+        </div>
       </article>
 
       <SettingsAudioPanel id="audio" />
@@ -190,10 +215,95 @@
           </div>
         </div>
 
+        <div class="setting-row">
+          <div class="setting-copy">
+            <h3>Book format</h3>
+            <p>Which formats appear in your library.</p>
+          </div>
+          <div class="segmented-control" aria-label="Book format filter">
+            <button
+              v-for="option in formatOptions"
+              :key="option.value"
+              :class="{ active: settings.formatFilter === option.value }"
+              @click="set('formatFilter', option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+
         <div class="format-strip" v-if="formatStats.length">
           <div v-for="format in formatStats" :key="format.name" class="format-pill">
             <span>{{ format.name }}</span>
             <strong>{{ format.count }}</strong>
+          </div>
+        </div>
+      </article>
+
+      <article id="appearance" class="settings-panel">
+        <div class="panel-heading">
+          <i class="ri-layout-masonry-line"></i>
+          <div>
+            <h2>Appearance</h2>
+            <p>How series and playlist cards are drawn.</p>
+          </div>
+        </div>
+
+        <div
+          v-for="group in cardGroups"
+          :key="group.key"
+          class="card-group"
+        >
+          <h3 class="card-group-title">{{ group.title }}</h3>
+
+          <div class="setting-block">
+            <div class="setting-copy">
+              <h3>Layout</h3>
+              <p>Fanned covers, or the playlist-style card.</p>
+            </div>
+            <div class="option-grid">
+              <button
+                v-for="option in seriesLayoutOptions"
+                :key="`${group.key}-layout-${option.value}`"
+                type="button"
+                class="option"
+                :class="{ active: settings[group.layoutKey] === option.value }"
+                @click="set(group.layoutKey, option.value)"
+              >
+                <span class="option-preview">
+                  <SeriesPreview :layout="option.value" :background="settings[group.backgroundKey]" />
+                </span>
+                <span class="option-label">
+                  {{ option.label }}
+                  <i v-if="settings[group.layoutKey] === option.value" class="ri-check-line"></i>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-block">
+            <div class="setting-copy">
+              <h3>Background</h3>
+              <p>Plain surface, or a blurred cover image.</p>
+            </div>
+            <div class="option-grid">
+              <button
+                v-for="option in backgroundOptions"
+                :key="`${group.key}-bg-${option.value}`"
+                type="button"
+                class="option"
+                :class="{ active: settings[group.backgroundKey] === option.value }"
+                @click="set(group.backgroundKey, option.value)"
+              >
+                <span class="option-preview">
+                  <SeriesPreview :layout="settings[group.layoutKey]" :background="option.value" />
+                </span>
+                <span class="option-label">
+                  {{ option.label }}
+                  <i v-if="settings[group.backgroundKey] === option.value" class="ri-check-line"></i>
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </article>
@@ -277,6 +387,10 @@ import {
 import { useToast } from '~/composables/useToast'
 import SettingsAudioPanel from '../shared/SettingsAudioPanel.vue'
 import SettingsStoragePanel from '../shared/SettingsStoragePanel.vue'
+import ReadingPreview from '../shared/previews/ReadingPreview.vue'
+// Playlist cards offer the same two layouts as series cards, so they share the
+// same preview mockup.
+import SeriesPreview from '../shared/previews/SeriesCardPreview.vue'
 
 const { books, authors, collections, genres, recentlyAddedBooks, fetchAndStoreAuthorDetails } = useBooks()
 const { settings, updateSettings } = useBookishSettings()
@@ -355,6 +469,34 @@ const setLibrarySort = (librarySort, librarySortDirection) => updateSettings({ l
 const setLibraryGridItemsPerPage = (libraryGridItemsPerPage) => updateSettings({ libraryGridItemsPerPage })
 const setLibraryTableItemsPerPage = (libraryTableItemsPerPage) => updateSettings({ libraryTableItemsPerPage })
 const setMetadataAutoFill = (metadataAutoFill) => updateSettings({ metadataAutoFill })
+
+const set = (key, value) => updateSettings({ [key]: value })
+
+const backgroundOptions = [
+  { value: 'blank', label: 'Default' },
+  { value: 'blur', label: 'Blur image' },
+]
+const seriesLayoutOptions = [
+  { value: 'fan', label: 'Fanned' },
+  { value: 'cover', label: 'Playlist style' },
+]
+// Series and playlist cards each get the same pair of choices, so the panel
+// renders one group per card type.
+const cardGroups = [
+  { key: 'series', title: 'Series cards', layoutKey: 'seriesCardLayout', backgroundKey: 'seriesCardBackground' },
+  { key: 'playlist', title: 'Playlist cards', layoutKey: 'playlistCardLayout', backgroundKey: 'playlistCardBackground' },
+]
+// Highlight is a boolean, but it's presented as a picture choice like the card
+// sections rather than as a bare switch.
+const toggleOptions = [
+  { value: true, label: 'On' },
+  { value: false, label: 'Off' },
+]
+const formatOptions = [
+  { value: 'all', label: 'All' },
+  { value: 'pdf', label: 'PDF' },
+  { value: 'epub', label: 'EPUB' },
+]
 
 const gridItemsPerPageOptions = LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS
 const tableItemsPerPageOptions = LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS
@@ -594,6 +736,83 @@ const coverStyle = (index) => ({
 .setting-copy h3 {
   font-size: 0.96rem;
   margin-bottom: 0.2rem;
+}
+
+/* Block = a label above a row of visual option cards, for settings that are
+   easier to pick by picture than by word. */
+.setting-block {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.setting-block:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.card-group + .card-group {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.card-group-title {
+  margin: 1rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.card-group:last-child .setting-block:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.option {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 2px solid var(--color-border-card);
+  border-radius: 10px;
+  background: var(--color-surface-card);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.option:hover {
+  background: var(--color-surface-hover);
+}
+
+.option.active {
+  border-color: var(--color-brand-primary);
+}
+
+.option-preview {
+  display: block;
+  height: 104px;
+  overflow: hidden;
+  border-radius: 7px;
+}
+
+.option-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+}
+
+.option.active .option-label {
+  color: var(--color-brand-primary);
 }
 
 .segmented-control,

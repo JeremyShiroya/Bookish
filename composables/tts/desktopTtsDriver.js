@@ -12,11 +12,21 @@
 
 import { nativeSpeechSupported } from '~/composables/tts/nativeSpeech'
 
+// A usable reply carries an mp3 data URL in `audio`. Anything else means the
+// endpoint didn't synthesize: most often there is no Nuxt server behind this
+// build (a static/exported host answers /api/tts with the SPA's index.html and
+// a cheerful 200), so $fetch resolves instead of throwing and the failure would
+// otherwise sail through as a silent chunk.
+function hasUsableAudio(result) {
+  return typeof result?.audio === 'string' && result.audio.startsWith('data:audio')
+}
+
 // Returns { audio, boundaries } for <audio> playback, or a { native: true }
 // marker the shared engine speaks live with the device voice.
 export async function synthesizeDesktopSpeech({ text, voice, speed, apiUrl }) {
+  let result
   try {
-    return await $fetch(apiUrl('/api/tts'), {
+    result = await $fetch(apiUrl('/api/tts'), {
       method: 'POST',
       body: { text, voice, speed },
     })
@@ -27,4 +37,12 @@ export async function synthesizeDesktopSpeech({ text, voice, speed, apiUrl }) {
     }
     throw error
   }
+
+  if (hasUsableAudio(result)) return result
+
+  console.warn('[TTS] Desktop server returned no audio; trying browser voice.')
+  if (nativeSpeechSupported()) {
+    return { native: true, text, voice, speed }
+  }
+  throw new Error('TTS endpoint returned no audio')
 }
