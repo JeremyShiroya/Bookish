@@ -11,6 +11,20 @@ import { readBookishSettings } from '~/composables/useBookishSettings';
 
 const coverCacheInFlight = new Set();
 
+// Reading status and progress are two views of the same fact, and the cards
+// read progress while the filters read status. Editing one without the other
+// left books that filtered as "Unread" but still rendered a 100% badge, so
+// every write path routes the pair through here.
+export const reconcileStatusProgress = (status, progress) => {
+  const clamped = Math.max(0, Math.min(100, Number(progress) || 0));
+
+  if (status === 'Read') return 100;
+  if (status === 'Unread') return 0;
+  // "Reading" is by definition unfinished: a full 100 would render the
+  // complete badge on a book the user just said they're still reading.
+  return Math.min(99, clamped);
+};
+
 export const normalizeLibrarySeriesName = (value) => String(value || '')
   .normalize('NFKD')
   .replace(/[\u0300-\u036f]/g, '')

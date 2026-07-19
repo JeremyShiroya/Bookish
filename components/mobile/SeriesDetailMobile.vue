@@ -32,21 +32,37 @@
       />
 
       <div v-if="filteredBooks.length" :class="viewMode === 'list' ? 'book-list' : 'books-grid'">
-        <LibraryBookCard
-          :show-personal-rating="false"
-          v-for="book in filteredBooks"
-          :key="book.id"
-          :book="book"
-          :active="isBookActive(book)"
-          :class="{ 'mobile-list-book-card': viewMode === 'list' }"
-          @open="router.push(`/book/${book.id}`)"
-          @play="handlePlay"
-          @favourite="toggleFavourite(book.id)"
-          @playlist="selectedPlaylistBook = book"
-          @edit="router.push(`/edit/${book.id}`)"
-          @hide="handleHideBook"
-          @delete="handleDeleteBook(book)"
-        />
+        <template v-for="entry in seriesEntries" :key="entry.key">
+          <LibraryBookCard
+            v-if="entry.kind === 'book'"
+            :show-personal-rating="false"
+            :book="entry.book"
+            :active="isBookActive(entry.book)"
+            :class="{ 'mobile-list-book-card': viewMode === 'list' }"
+            @open="router.push(`/book/${entry.book.id}`)"
+            @play="handlePlay"
+            @favourite="toggleFavourite(entry.book.id)"
+            @playlist="selectedPlaylistBook = entry.book"
+            @edit="router.push(`/edit/${entry.book.id}`)"
+            @hide="handleHideBook"
+            @delete="handleDeleteBook(entry.book)"
+          />
+
+          <article
+            v-else
+            class="missing-book-card"
+            :class="{ 'missing-book-card-list': viewMode === 'list' }"
+          >
+            <div class="missing-cover">
+              <i class="ri-add-line" aria-hidden="true"></i>
+              <span class="missing-number">{{ entry.installment }}</span>
+            </div>
+            <div class="missing-info">
+              <h3>Book {{ entry.installment }}</h3>
+              <p>Not in your library</p>
+            </div>
+          </article>
+        </template>
       </div>
 
       <EmptyState
@@ -162,6 +178,63 @@ const isBookActive = (book) => (
 );
 
 const readCount = computed(() => seriesBooks.value.filter((book) => normalizedStatus(book) === 'Read').length);
+
+// ── Series suggestions (Settings → Preferences) ─────────────────────────────
+//
+// The hero already counts what you own against the whole series ("2/6 books").
+// With suggestions on, the installments behind that gap are shown as muted
+// cards sitting in their real place in the reading order. Only in the
+// unfiltered view: a placeholder has no reading status and no file format, so
+// it can't honestly answer either filter.
+const suggestionsEnabled = computed(() => (
+  settings.value.seriesSuggestions === true
+  && selectedStatus.value === 'all'
+  && (settings.value.formatFilter || 'all') === 'all'
+));
+
+const missingInstallments = computed(() => {
+  if (!suggestionsEnabled.value) return [];
+  const total = derivedSeriesTotal.value;
+  if (!Number.isSafeInteger(total) || total < 1) return [];
+
+  const owned = new Set(
+    seriesBooks.value
+      .map((book) => Number(book.seriesInstallment))
+      .filter((installment) => Number.isSafeInteger(installment) && installment >= 1),
+  );
+
+  const missing = [];
+  for (let installment = 1; installment <= total; installment += 1) {
+    if (!owned.has(installment)) missing.push(installment);
+  }
+  return missing;
+});
+
+// Owned books and missing-installment placeholders as one ordered list. Books
+// with no installment number can't be placed against the series, so they sort
+// to the end exactly as they already did.
+const seriesEntries = computed(() => {
+  const entries = filteredBooks.value.map((book) => ({
+    key: `book-${book.id}`,
+    kind: 'book',
+    book,
+    order: Number(book.seriesInstallment),
+  }));
+
+  for (const installment of missingInstallments.value) {
+    entries.push({
+      key: `missing-${installment}`,
+      kind: 'missing',
+      installment,
+      order: installment,
+    });
+  }
+
+  return entries.sort((a, b) => (
+    (Number.isFinite(a.order) ? a.order : Infinity)
+    - (Number.isFinite(b.order) ? b.order : Infinity)
+  ));
+});
 
 const handlePlay = (book) => {
   if (isBookActive(book)) {
@@ -362,5 +435,63 @@ watch(seriesBooks, async (books) => {
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
+}
+
+/* Series suggestions: an installment the library doesn't have yet. Deliberately
+   quiet — a dashed, desaturated placeholder that reads as a gap in the shelf
+   rather than as another book competing with the real covers. */
+.missing-book-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  opacity: 0.62;
+}
+
+.missing-cover {
+  position: relative;
+  display: grid;
+  aspect-ratio: 2 / 3;
+  place-items: center;
+  border: 1.5px dashed color-mix(in srgb, var(--color-text-muted) 55%, transparent);
+  border-radius: var(--mobile-card-radius, 20px);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.missing-cover i {
+  font-size: 26px;
+}
+
+.missing-number {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  font-size: var(--mobile-caption-size);
+  font-weight: 700;
+}
+
+.missing-info h3 {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--mobile-subtext-size);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.missing-info p {
+  margin: 2px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--mobile-caption-size);
+}
+
+/* List view puts the placeholder on one row, like the list book cards. */
+.missing-book-card-list {
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.missing-book-card-list .missing-cover {
+  width: 64px;
 }
 </style>

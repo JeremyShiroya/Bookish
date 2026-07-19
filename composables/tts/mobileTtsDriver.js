@@ -19,36 +19,67 @@ import { nativeSpeechSupported } from '~/composables/tts/nativeSpeech'
 // not because Edge was actually unreachable.
 const EDGE_FAILURE_LIMIT = 3
 
-let _edgeDisabled = false
+// Falling back to the device voice is a temporary degradation, not a verdict.
+// It used to latch for the whole session, so one hiccup on a train left the
+// narrator on the phone's voice until the app was restarted — even after the
+// connection came back. Edge is re-probed once the cooldown expires.
+const EDGE_COOLDOWN_MS = 60_000
+
+let _edgeDisabledUntil = 0
 let _consecutiveEdgeFailures = 0
 
+// The engine keeps up to three synthesis requests in flight at once (the
+// playing chunk plus two prefetches). A single network blip therefore fails all
+// three at the same instant, which used to count as three "consecutive"
+// failures and trip the limit immediately — the unprovoked mid-sentence switch
+// to the device voice. Requests are numbered so only a failure from a request
+// that STARTED AFTER the previous failure was already known counts as a new
+// one; everything already in flight is the same blip.
+let _requestSeq = 0
+let _lastCountedFailureSeq = -1
+
 export function mobileTtsEdgeDisabled() {
-  return _edgeDisabled
+  return _edgeDisabledUntil > 0 && Date.now() < _edgeDisabledUntil
 }
 
 // Re-enable the cloud path (e.g. the user reconnects / restarts narration).
 export function resetMobileTtsDriver() {
-  _edgeDisabled = false
+  _edgeDisabledUntil = 0
   _consecutiveEdgeFailures = 0
+  _requestSeq = 0
+  _lastCountedFailureSeq = -1
+}
+
+// Count this failure unless it belongs to a burst already accounted for.
+function noteEdgeFailure(requestSeq) {
+  if (requestSeq <= _lastCountedFailureSeq) return false
+  _lastCountedFailureSeq = _requestSeq - 1
+  _consecutiveEdgeFailures += 1
+  return true
 }
 
 const documentHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden'
 
 export async function synthesizeMobileSpeech({ text, voice, speed, apiUrl, apiBaseUrl }) {
-  if (!_edgeDisabled) {
+  if (!mobileTtsEdgeDisabled()) {
     // Backgrounded WebViews get their timers and sockets throttled by Android,
     // so a handshake that would take 2s in the foreground can take much longer.
     // Give it room instead of mistaking the throttle for a dead endpoint.
     const hidden = documentHidden()
+    const requestSeq = _requestSeq++
     try {
       const result = await synthesizeEdgeSpeechInBrowser({
         text,
         voice,
         speed,
-        attempts: hidden ? 2 : 1,
-        timeoutMs: hidden ? 30000 : 12000,
+        // Foreground: two short attempts rather than one long one. A single
+        // stalled handshake used to hold the sentence for a full 12s before
+        // anything retried — the "long load" mid-book.
+        attempts: 2,
+        timeoutMs: hidden ? 30000 : 6000,
       })
       _consecutiveEdgeFailures = 0
+      _lastCountedFailureSeq = -1
       return result
     } catch (error) {
       console.warn('[TTS] Edge synth failed on device:', error?.message || error)
@@ -59,6 +90,7 @@ export async function synthesizeMobileSpeech({ text, voice, speed, apiUrl, apiBa
         try {
           const result = await $fetch(apiUrl('/api/tts'), { method: 'POST', body: { text, voice, speed } })
           _consecutiveEdgeFailures = 0
+          _lastCountedFailureSeq = -1
           return result
         } catch {
           // fall through
@@ -73,10 +105,12 @@ export async function synthesizeMobileSpeech({ text, voice, speed, apiUrl, apiBa
         throw error instanceof Error ? error : new Error(String(error))
       }
 
-      _consecutiveEdgeFailures += 1
+      noteEdgeFailure(requestSeq)
       if (_consecutiveEdgeFailures >= EDGE_FAILURE_LIMIT) {
-        console.warn(`[TTS] Edge failed ${_consecutiveEdgeFailures}× in a row; switching to device voice.`)
-        _edgeDisabled = true
+        console.warn(`[TTS] Edge failed ${_consecutiveEdgeFailures}× in a row; using the device voice for ${EDGE_COOLDOWN_MS / 1000}s.`)
+        _edgeDisabledUntil = Date.now() + EDGE_COOLDOWN_MS
+        _consecutiveEdgeFailures = 0
+        _lastCountedFailureSeq = -1
       } else {
         // Not yet conclusive — let the engine retry this chunk with Edge.
         throw error instanceof Error ? error : new Error(String(error))

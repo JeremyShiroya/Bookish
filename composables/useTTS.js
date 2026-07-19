@@ -15,6 +15,7 @@ let _chunks = []
 let _chunkIdx = 0
 let _currentBoundaries = []      // word boundaries for the currently playing chunk
 let _rafId = null                // requestAnimationFrame handle for word-highlight loop
+let _onlineListenerBound = false // useTTS() runs per-component; bind the listener once
 
 const DEFAULT_SENTENCE_MAX_CHARS = 480
 const AUDIO_CACHE_LIMIT = 8
@@ -540,6 +541,12 @@ export const useTTS = () => {
   const ttsNativeVoices = useState('tts:nativeVoices', () => [])
   // Index into ttsNativeVoices the user explicitly chose (-1 = auto-map).
   const ttsNativeVoiceIdx = useState('tts:nativeVoiceIdx', () => -1)
+  // True while narration is actually coming out of the phone's TTS engine.
+  // The narrator picker keys off this rather than navigator.onLine, which an
+  // Android WebView reports as `true` for any network interface — a phone on
+  // Wi-Fi with no working internet still claimed to be online, so the picker
+  // kept listing Edge voices the device could not reach.
+  const ttsUsingDeviceVoice = useState('tts:usingDeviceVoice', () => false)
   const ttsCurrentChunk = useState('tts:currentChunk', () => '')
   const ttsPlayingChunkIdx = useState('tts:playingChunkIdx', () => -1)
   const ttsPlayingChunkText = useState('tts:playingChunkText', () => '')
@@ -551,6 +558,13 @@ export const useTTS = () => {
   const ttsChapterBoundaries = useState('tts:chapterBoundaries', () => [])
 
   const { getBookContent } = useBookStorage()
+
+  // Coming back online is the clearest signal that a device-voice fallback is
+  // stale, so re-probe Edge immediately instead of waiting out the cooldown.
+  if (import.meta.client && !_onlineListenerBound) {
+    _onlineListenerBound = true
+    window.addEventListener('online', () => resetMobileTtsDriver())
+  }
 
   const normalizedVoice = normalizeAvailableVoice(ttsVoiceId.value)
   if (ttsVoiceId.value !== normalizedVoice) {
@@ -899,6 +913,7 @@ export const useTTS = () => {
       if (_chunkIdx !== requestedChunkIdx || _chunks[requestedChunkIdx] !== requestedChunkText) return
       // Keep the exposed device-voice list fresh for the narrator picker.
       if (voices.length && voices.length !== ttsNativeVoices.value.length) ttsNativeVoices.value = voices
+      ttsUsingDeviceVoice.value = true
       audio = createNativeSpeechAudio({
         text: chunkData.nativeText ?? requestedChunkText,
         voice: chunkData.nativeVoice ?? normalizeAvailableVoice(ttsVoiceId.value),
@@ -909,6 +924,7 @@ export const useTTS = () => {
       })
       chunkData.boundaries = []
     } else {
+      ttsUsingDeviceVoice.value = false
       audio = new Audio(chunkData.audio)
     }
     audio.volume = ttsVolume.value
@@ -1306,7 +1322,7 @@ export const useTTS = () => {
     ttsBook, ttsStatus, ttsProgress, ttsChunkIdx, ttsTotalChunks,
     ttsElapsedSeconds, ttsTotalSeconds,
     ttsSpeed, ttsVolume, ttsVoiceId, ttsVoices, ttsCurrentChunk,
-    ttsNativeVoices, ttsNativeVoiceIdx,
+    ttsNativeVoices, ttsNativeVoiceIdx, ttsUsingDeviceVoice,
     ttsPlayingChunkIdx, ttsPlayingChunkText,
     ttsWordIdx, ttsBoundaries, ttsChapterBoundaries,
     elapsedTime, totalTime,

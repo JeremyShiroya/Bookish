@@ -92,11 +92,45 @@ describe('mobileTtsDriver Edge resilience', () => {
       expect.objectContaining({ timeoutMs: 30000, attempts: 2 }),
     )
 
+    // Foreground gets two short attempts, so one stalled handshake retries in
+    // 6s instead of holding the sentence for a full 12s.
     setHidden(false)
     await speak()
     expect(synthesizeEdgeSpeechInBrowser).toHaveBeenLastCalledWith(
-      expect.objectContaining({ timeoutMs: 12000, attempts: 1 }),
+      expect.objectContaining({ timeoutMs: 6000, attempts: 2 }),
     )
+  })
+
+  // Regression (the unprovoked mid-sentence voice switch): the engine keeps the
+  // playing chunk plus two prefetches in flight, so ONE blip rejects all three
+  // at once. That burst must count as a single failure, not three.
+  it('treats a burst of simultaneous failures as one failure', async () => {
+    synthesizeEdgeSpeechInBrowser.mockRejectedValue(new Error('one blip'))
+
+    const results = await Promise.allSettled([speak(), speak(), speak()])
+    expect(results.every((r) => r.status === 'rejected')).toBe(true)
+    expect(mobileTtsEdgeDisabled()).toBe(false)
+  })
+
+  // Regression: the fallback used to latch for the whole session, so the
+  // narrator stayed on the phone's voice long after the connection returned.
+  it('re-probes Edge once the cooldown expires', async () => {
+    vi.useFakeTimers()
+    try {
+      synthesizeEdgeSpeechInBrowser.mockRejectedValue(new Error('dead'))
+      await expect(speak()).rejects.toThrow()
+      await expect(speak()).rejects.toThrow()
+      await speak()
+      expect(mobileTtsEdgeDisabled()).toBe(true)
+
+      vi.advanceTimersByTime(61_000)
+      expect(mobileTtsEdgeDisabled()).toBe(false)
+
+      synthesizeEdgeSpeechInBrowser.mockResolvedValue(EDGE_AUDIO)
+      await expect(speak()).resolves.toEqual(EDGE_AUDIO)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('once disabled, keeps using the device voice without calling Edge again', async () => {

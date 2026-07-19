@@ -764,6 +764,7 @@ const {
   ttsVoiceId,
   ttsNativeVoices,
   ttsNativeVoiceIdx,
+  ttsUsingDeviceVoice,
   ttsPlayingChunkIdx,
   elapsedTime,
   totalTime,
@@ -896,6 +897,10 @@ const updatePageGeometry = () => {
 const pageMap = ref(null);
 let _pageMapToken = 0;
 
+// How often the in-progress page map is published to the template. See the
+// publish site in buildPageMap for why this isn't every section.
+const PAGE_MAP_PUBLISH_EVERY = 8;
+
 const _idleSlice = () => new Promise((resolve) => {
   if (typeof requestIdleCallback === "function") {
     requestIdleCallback(() => resolve(), { timeout: 500 });
@@ -971,7 +976,14 @@ const buildPageMap = async () => {
 
     // Publish progress so page numbers (and reserved heights) appear as soon as
     // the reading position has been measured, not only when the book is done.
-    pageMap.value = { counts: counts.slice(), chunkPages, heights: heights.slice() };
+    //
+    // In batches, though: placeholderHeight() reads pageMap from the template,
+    // so every publish re-renders the entire section list. Publishing after
+    // each of a long book's sections made measuring the page map quadratic, and
+    // it competes for the same idle slices as section mounting.
+    if (index % PAGE_MAP_PUBLISH_EVERY === 0) {
+      pageMap.value = { counts: counts.slice(), chunkPages, heights: heights.slice() };
+    }
   }
 
   el.innerHTML = "";
@@ -1039,8 +1051,16 @@ const dockLabel = computed(() => {
 // falls back to the phone's built-in voices. When offline the picker therefore
 // lists the REAL device narrators (from the OS TTS engine), not Edge models the
 // device can't reach.
+//
+// navigator.onLine alone was not enough: an Android WebView reports `true` for
+// any network interface, so a phone on Wi-Fi with no working internet kept
+// being offered Edge voices it could never load. ttsUsingDeviceVoice is the
+// ground truth — the engine sets it when narration actually comes out of the
+// phone's own TTS engine.
 const OFFLINE_VOICE = { id: "__offline_device__", name: "Device voice (auto)" };
-const useOfflineVoice = computed(() => isNativeCapacitorPlatform() && isOffline.value);
+const useOfflineVoice = computed(() => (
+  isNativeCapacitorPlatform() && (isOffline.value || ttsUsingDeviceVoice.value)
+));
 
 // Device voices as picker options: id "native:<index>" into ttsNativeVoices.
 // Deduped by name, with a language hint, and an "auto" entry that lets the OS
@@ -1486,8 +1506,11 @@ const observePlaceholders = async () => {
   const placeholders = document.querySelectorAll("[data-section-placeholder]");
   if (!placeholders.length) return;
 
-  // Large margin so sections mount well before they scroll into view, even
-  // during a fast fling — no blank pages.
+  // Mount a few screens ahead — enough that a section is ready before it
+  // scrolls into view, small enough that the callback never hands the page a
+  // dozen sections to parse in one tick. A very wide margin meant opening a
+  // long book fired mount-section for ~13 screens of content at once, and the
+  // resulting innerHTML parse + relayout was the freeze on open.
   _placeholderObserver = new IntersectionObserver((entries) => {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
@@ -1495,27 +1518,68 @@ const observePlaceholders = async () => {
       if (!Number.isNaN(index)) emit("mount-section", index);
       _placeholderObserver?.unobserve(entry.target);
     }
-  }, { rootMargin: "8000px 0px" });
+  }, { rootMargin: `${MOUNT_LOOKAHEAD_PX}px 0px` });
 
   placeholders.forEach((el) => _placeholderObserver.observe(el));
 };
 
-// Safety net: if a fast fling outruns the observer, mount any placeholder
-// near the viewport. Time-throttled so it never runs more than ~16×/sec.
-// Mount any placeholder near the viewport. Exact measured heights keep the
-// document correctly sized, so a generous window (4 screens back, 10 ahead)
-// mounts sections well before a fast fling reaches them. Mounts are memoized,
-// so an over-wide window is cheap. rAF-driven, so no extra throttle is needed.
+// Safety net for a fling that outruns the observer.
+//
+// Mounting a section is a synchronous innerHTML parse plus a relayout of the
+// whole document. Mounting every placeholder in a 14-screen window in one frame
+// — which is what this used to do — IS the multi-second freeze it was meant to
+// prevent. So: rank candidates by distance from the viewport, mount only a
+// couple per frame, and continue on the next frame while work remains. The
+// reader gets what it is about to look at first, and the main thread stays
+// responsive.
+const MOUNT_LOOKAHEAD_PX = 2400;
+const MOUNTS_PER_FRAME = 2;
+
+let _mountFollowUpRaf = null;
+let _lastMountCandidateCount = -1;
+
 const mountNearbyPlaceholders = () => {
-  const placeholders = document.querySelectorAll("[data-section-placeholder]");
-  if (!placeholders.length) return;
-  const vh = window.innerHeight;
+  const container = props.readerRefs?.chaptersContainerRef?.value;
+  const placeholders = (container ?? document).querySelectorAll("[data-section-placeholder]");
+  if (!placeholders.length) {
+    _lastMountCandidateCount = -1;
+    return;
+  }
+
+  const behind = window.innerHeight;
+  const candidates = [];
   for (const el of placeholders) {
     const rect = el.getBoundingClientRect();
-    if (rect.bottom > -vh * 4 && rect.top < vh * 10) {
-      const index = Number(el.dataset.sectionPlaceholder);
-      if (!Number.isNaN(index)) emit("mount-section", index);
-    }
+    if (rect.bottom < -behind || rect.top > MOUNT_LOOKAHEAD_PX) continue;
+    const index = Number(el.dataset.sectionPlaceholder);
+    if (Number.isNaN(index)) continue;
+    // Distance from the viewport edge: sections below sort by how far down
+    // they are, sections already scrolled past sort behind them.
+    candidates.push({ index, distance: rect.top >= 0 ? rect.top : -rect.bottom });
+  }
+
+  if (!candidates.length) {
+    _lastMountCandidateCount = -1;
+    return;
+  }
+
+  candidates.sort((a, b) => a.distance - b.distance);
+  for (const candidate of candidates.slice(0, MOUNTS_PER_FRAME)) {
+    emit("mount-section", candidate.index);
+  }
+
+  // Keep filling in on later frames so a fling that stops mid-flight still
+  // finishes. Only while the backlog is actually shrinking — if a mount didn't
+  // take, rescheduling forever would be a freeze of its own.
+  const shrinking = _lastMountCandidateCount === -1
+    || candidates.length < _lastMountCandidateCount;
+  _lastMountCandidateCount = candidates.length;
+
+  if (candidates.length > MOUNTS_PER_FRAME && shrinking && _mountFollowUpRaf === null) {
+    _mountFollowUpRaf = requestAnimationFrame(() => {
+      _mountFollowUpRaf = null;
+      mountNearbyPlaceholders();
+    });
   }
 };
 
@@ -1606,6 +1670,7 @@ onUnmounted(() => {
   _pageMapToken += 1;
   _placeholderObserver?.disconnect();
   if (_mountScrollRaf !== null) cancelAnimationFrame(_mountScrollRaf);
+  if (_mountFollowUpRaf !== null) cancelAnimationFrame(_mountFollowUpRaf);
 });
 </script>
 
@@ -1647,6 +1712,25 @@ onUnmounted(() => {
   --mobile-reader-text: #43331f;
   --mobile-reader-muted: #8a7454;
   --mobile-reader-surface: #f6ecd9;
+}
+
+/* The app's tab bar renders inside the reader page, so it follows the reader's
+   paper colour — "Book brown", dark, or light — exactly like the top bar does.
+   Left on --color-background-app it was the one strip of app chrome that stayed
+   grey while the rest of the page turned brown. */
+.reader-mobile-page :deep(.mobile-bottom-nav) {
+  background: var(--mobile-reader-bg);
+  box-shadow: 0 -2px 10px color-mix(in srgb, var(--mobile-reader-text) 8%, transparent);
+}
+
+/* Brand purple fought the warm page the same way the mode toggle did, so the
+   tabs tint with the reader's own text colour instead. */
+.reader-mobile-page :deep(.mobile-nav-item) {
+  color: color-mix(in srgb, var(--mobile-reader-text) 55%, transparent);
+}
+
+.reader-mobile-page :deep(.mobile-nav-item.active) {
+  color: var(--mobile-reader-text);
 }
 
 .reader-mobile-topbar {

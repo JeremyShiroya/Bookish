@@ -1050,20 +1050,37 @@ function _buildChunkMap() {
   _chunkEls = []
   _activeWordMapIdx = -1
 
-  const { chunks, sectionCounts } = readableChunkData.value
-  let offset = 0
+  const { sectionCounts } = readableChunkData.value
   for (let s = 0; s < sectionCounts.length; s++) {
-    const count = sectionCounts[s] || 0
-    if (count > 0) {
-      const sectionEl = document.getElementById(`ch-${s}`)
-      if (sectionEl) {
-        mapSectionChunks(sectionEl, chunks.slice(offset, offset + count), offset, (chunkIdx, span) => {
-          _chunkEls[chunkIdx] = span
-        })
-      }
-    }
-    offset += count
+    _mapOneSection(s)
   }
+}
+
+// Wrap just one section's sentences. Sections mount progressively, so narration
+// regularly reaches a chunk whose spans don't exist yet. Rebuilding the whole
+// book's map to get them — unwrapping and re-wrapping every section of the
+// document, synchronously — was a multi-second freeze on long books, and it
+// recurred every time the reader moved into freshly mounted territory.
+function _mapOneSection(sectionIndex) {
+  const { chunks, sectionCounts } = readableChunkData.value
+  const count = sectionCounts[sectionIndex] || 0
+  if (count <= 0) return
+
+  const sectionEl = document.getElementById(`ch-${sectionIndex}`)
+  if (!sectionEl) return
+
+  // mapSectionChunks isn't idempotent — wrapping an already-wrapped section
+  // would nest spans — so clear this section's spans first. Scoped to the one
+  // section, this is cheap.
+  unwrapTtsSpans(sectionEl)
+  _activeWordMapIdx = -1
+
+  let offset = 0
+  for (let s = 0; s < sectionIndex; s++) offset += sectionCounts[s] || 0
+
+  mapSectionChunks(sectionEl, chunks.slice(offset, offset + count), offset, (chunkIdx, span) => {
+    _chunkEls[chunkIdx] = span
+  })
 }
 
 function _isNearViewport(el) {
@@ -1080,7 +1097,10 @@ function _highlightChunk(index) {
 
   let el = _chunkEls[index]
   if (!el) {
-    _buildChunkMap()
+    // Map only the section that owns this chunk — its spans are missing
+    // because the section mounted after the map was built, not because the
+    // whole map is stale.
+    _mapOneSection(sectionForChunk(index))
     el = _chunkEls[index]
   }
   if (!el) return

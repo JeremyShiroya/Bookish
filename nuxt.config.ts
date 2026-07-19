@@ -45,6 +45,10 @@ export default defineNuxtConfig({
       appVersion: packageJson.version,
       buildNumber: resolveBuildNumber(),
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || process.env.BOOKISH_API_BASE_URL || '',
+      // Where the native build looks for version.json (see
+      // scripts/generate-version-manifest.mjs). Empty disables the update
+      // check entirely, which is the right default for web and desktop.
+      updateManifestUrl: process.env.BOOKISH_UPDATE_MANIFEST_URL || '',
     },
   },
   nitro: {

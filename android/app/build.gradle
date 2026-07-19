@@ -1,4 +1,70 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
+
+// ── App version ──────────────────────────────────────────────────────────────
+// The APK's version is DERIVED, never hand-written, so it can't drift from what
+// the app reports about itself. It mirrors nuxt.config.ts exactly:
+//
+//   versionName ← package.json "version"        (= runtimeConfig.appVersion)
+//   versionCode ← git commit count              (= runtimeConfig.buildNumber)
+//
+// so the About screen and the installed APK always agree.
+//
+// versionCode carries real weight: Android refuses to install an APK whose code
+// is lower than the installed one, and every update mechanism compares it. It
+// must never be a constant and must never go backwards — hence a commit count
+// (monotonic by construction) rather than a timestamp or a literal.
+
+ext.resolveVersionName = {
+    def packageJson = new File(rootDir, '../package.json')
+    if (!packageJson.exists()) {
+        throw new GradleException("Cannot resolve versionName: ${packageJson.canonicalPath} not found.")
+    }
+    def version = new JsonSlurper().parse(packageJson)?.version
+    if (!version) {
+        throw new GradleException('Cannot resolve versionName: package.json has no "version" field.')
+    }
+    return version.toString()
+}
+
+ext.resolveVersionCode = {
+    // Same override nuxt.config.ts honours, so a CI build can pin both layers
+    // to one number.
+    def override = System.getenv('BOOKISH_BUILD_NUMBER')
+    if (override?.trim()) {
+        def parsed = override.trim()
+        if (!parsed.isInteger()) {
+            throw new GradleException("BOOKISH_BUILD_NUMBER must be an integer, got '${parsed}'.")
+        }
+        return parsed.toInteger()
+    }
+
+    def count = null
+    try {
+        def process = new ProcessBuilder(['git', 'rev-list', '--count', 'HEAD'])
+            .directory(rootDir)
+            .start()
+        def output = process.inputStream.text.trim()
+        process.waitFor()
+        if (process.exitValue() == 0 && output.isInteger()) {
+            count = output.toInteger()
+        }
+    } catch (Exception ignored) {
+        count = null
+    }
+
+    // Deliberately fail instead of falling back to a placeholder. A wrong
+    // versionCode is unrecoverable in the field: ship a too-high one and every
+    // later build is refused as a downgrade; ship a constant and no user is
+    // ever offered the update.
+    if (!count) {
+        throw new GradleException(
+            'Cannot resolve versionCode: git history unavailable. '
+            + 'Build from a git clone, or set BOOKISH_BUILD_NUMBER to an integer.')
+    }
+    return count
+}
 
 android {
     namespace = "com.bookish.app"
@@ -7,8 +73,8 @@ android {
         applicationId "com.bookish.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode project.ext.resolveVersionCode()
+        versionName project.ext.resolveVersionName()
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -28,6 +28,7 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   showStreak: true,                // reading-streak pill in the top nav
   formatFilter: 'all',             // 'all' | 'pdf' | 'epub'
   hideContent: false,              // preview the app as though the library were empty
+  seriesSuggestions: false,        // show the series installments you don't own yet
 })
 
 export const CARD_BACKGROUND_OPTIONS = Object.freeze(['blank', 'blur'])
@@ -168,6 +169,7 @@ export function normalizeBookishSettings(value) {
       ? source.formatFilter
       : DEFAULT_BOOKISH_SETTINGS.formatFilter,
     hideContent: source.hideContent === true,
+    seriesSuggestions: source.seriesSuggestions === true,
   }
 }
 

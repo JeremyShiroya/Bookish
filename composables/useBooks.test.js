@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useBooks } from '~/composables/useBooks'
+import { reconcileStatusProgress, useBooks } from '~/composables/useBooks'
 import { getGoodreadsRating } from '~/composables/useGoodreadsRating'
 
 const mockExists = vi.fn()
@@ -130,5 +130,25 @@ describe('cacheRemoteLibraryCovers', () => {
 
     expect(books.value[0].cover).toBe(cached)
     expect(books.value[0].coverSource).toBe('https://images.example.com/fresh.jpg')
+  })
+})
+
+describe('reconcileStatusProgress', () => {
+  it('clears the progress of a finished book that is marked unread again', () => {
+    expect(reconcileStatusProgress('Unread', 100)).toBe(0)
+  })
+
+  it('completes a book marked as read', () => {
+    expect(reconcileStatusProgress('Read', 12)).toBe(100)
+  })
+
+  it('keeps a book marked as reading short of the complete badge', () => {
+    expect(reconcileStatusProgress('Reading', 100)).toBe(99)
+    expect(reconcileStatusProgress('Reading', 40)).toBe(40)
+  })
+
+  it('clamps junk progress values', () => {
+    expect(reconcileStatusProgress('Reading', -5)).toBe(0)
+    expect(reconcileStatusProgress('Reading', undefined)).toBe(0)
   })
 })

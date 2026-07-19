@@ -329,7 +329,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useBooks } from '~/composables/useBooks'
+import { reconcileStatusProgress, useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
 import { useBookStorage } from '~/composables/useBookStorage'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
@@ -430,10 +430,9 @@ const updateMetadataProgress = (event) => {
 
 watch(
   () => newBook.value.status,
-  (status) => {
-    if (status === 'Read') {
-      newBook.value.progress = 100
-    }
+  (status, previous) => {
+    if (status === previous) return
+    newBook.value.progress = reconcileStatusProgress(status, newBook.value.progress)
   },
 )
 
@@ -751,7 +750,7 @@ const saveBook = async () => {
 
   const bookToSave = {
     ...newBook.value,
-    progress: newBook.value.status === 'Read' ? 100 : newBook.value.progress,
+    progress: reconcileStatusProgress(newBook.value.status, newBook.value.progress),
     cover: cachedCover || generateCoverPlaceholder(newBook.value.title || 'Book')
   }
   

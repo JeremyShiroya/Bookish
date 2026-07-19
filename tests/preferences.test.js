@@ -83,7 +83,7 @@ describe('appearance preferences', () => {
     expect(settings).not.toMatch(/Preferences[^}]*comingSoon/)
 
     const prefs = read('components/mobile/PreferencesMobile.vue')
-    for (const key of ['seriesCardBackground', 'seriesCardLayout', 'playlistCardBackground', 'playlistCardLayout', 'readerHighlight', 'listenCoverBlur', 'showStreak', 'formatFilter']) {
+    for (const key of ['seriesCardBackground', 'seriesCardLayout', 'playlistCardBackground', 'playlistCardLayout', 'readerHighlight', 'listenCoverBlur', 'showStreak', 'formatFilter', 'seriesSuggestions']) {
       expect(prefs, key).toContain(key)
     }
 

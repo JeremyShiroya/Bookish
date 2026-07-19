@@ -8,6 +8,7 @@
     "cap:open:android": "npx cap open android",
     "cap:open:ios": "npx cap open ios",
     "cap:sync": "npm run generate && npx cap sync",
+    "release:manifest": "node scripts/generate-version-manifest.mjs",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",

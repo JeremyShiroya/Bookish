@@ -56,6 +56,32 @@
         </div>
       </section>
 
+      <!-- Series suggestions -->
+      <section class="pref-group">
+        <h2 class="pref-group-title">Series suggestions</h2>
+
+        <div class="pref-row">
+          <div class="pref-copy">
+            <span class="pref-label">Show missing books</span>
+            <span class="pref-hint">
+              A series detail page counts what you own against the whole series
+              ("2/6 books"). Turn this on to see the installments you're missing
+              as muted cards, in their place in the reading order.
+            </span>
+          </div>
+          <button
+            type="button"
+            class="pref-toggle"
+            role="switch"
+            :aria-checked="settings.seriesSuggestions === true"
+            :class="{ on: settings.seriesSuggestions === true }"
+            @click="set('seriesSuggestions', settings.seriesSuggestions !== true)"
+          >
+            <span class="knob"></span>
+          </button>
+        </div>
+      </section>
+
       <!-- Playlist cards — the same card and the same options as Series cards. -->
       <section class="pref-group">
         <h2 class="pref-group-title">Playlist cards</h2>

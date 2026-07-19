@@ -316,7 +316,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useBooks } from '~/composables/useBooks'
+import { reconcileStatusProgress, useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
 import { fetchCoverImageResults } from '~/composables/useCoverSearch'
@@ -414,12 +414,14 @@ const updateMetadataProgress = (event) => {
   }
 }
 
+// Progress follows the status the user picks, in both directions. Only setting
+// it on "Read" left a finished book that was marked Unread again still showing
+// a 100% badge on its card while the filters counted it as unread.
 watch(
   () => editBook.value.status,
-  (status) => {
-    if (status === 'Read') {
-      editBook.value.progress = 100
-    }
+  (status, previous) => {
+    if (status === previous) return
+    editBook.value.progress = reconcileStatusProgress(status, editBook.value.progress)
   },
 )
 
@@ -673,7 +675,7 @@ const handleUpdateBook = async () => {
 
   const bookToUpdate = {
     ...editBook.value,
-    progress: editBook.value.status === 'Read' ? 100 : editBook.value.progress,
+    progress: reconcileStatusProgress(editBook.value.status, editBook.value.progress),
     cover: cachedCover || editBook.value.cover,
   }
   
