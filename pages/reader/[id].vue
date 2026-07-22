@@ -432,6 +432,7 @@ const chapterList = computed(() => {
 const mountedSections = ref([])
 let _mountIdleId = null
 let _mountTimerId = null
+let _mountCursor = 0
 
 function estimateSectionHeight(html) {
   // Estimate rendered column height from the visible text length. Tuned for the
@@ -441,7 +442,10 @@ function estimateSectionHeight(html) {
   const raw = html || ''
   const textLen = raw.replace(/<[^>]+>/g, '').length
   const imageCount = (raw.match(/<img\b|<image\b|<svg\b/gi) || []).length
-  return Math.max(360, Math.min(40000, Math.round(textLen * 0.62) + imageCount * 300))
+  // ~0.9px of column height per character, measured against the reader's own
+  // typography at mobile width. The old 0.62 understated sections by a third,
+  // which showed up as the document growing under the reader as it scrolled.
+  return Math.max(360, Math.min(40000, Math.round(textLen * 0.9) + imageCount * 300))
 }
 
 // Placeholder heights are expensive to compute (regex per chapter) and never
@@ -450,13 +454,28 @@ function estimateSectionHeight(html) {
 // re-scan every chapter's HTML each time (that O(n²) work froze the reader).
 const _sectionHeights = computed(() => chapterList.value.map((c) => estimateSectionHeight(c.html)))
 
+// Two stable arrays — mounted and placeholder — built once per chapter list.
+// mobileChapterList then only picks between them, so a mount never allocates a
+// fresh object and Vue can skip re-patching every untouched section.
+//
+// estHeight rides on BOTH variants. It used to be attached only to
+// placeholders, so once a section mounted it lost its estimate — and since the
+// mounted section reserves space through `contain-intrinsic-size`, every
+// section fell back to a flat 600px guess against a real height nearer 2900px.
+// That understated the document by ~5x and made the scrollbar lurch while
+// reading.
+const _mountedSectionViews = computed(() => (
+  chapterList.value.map((chapter, index) => ({ ...chapter, estHeight: _sectionHeights.value[index] }))
+))
+
+const _placeholderSectionViews = computed(() => (
+  _mountedSectionViews.value.map((chapter) => ({ ...chapter, html: null }))
+))
+
 const mobileChapterList = computed(() => {
-  const heights = _sectionHeights.value
   const mounted = mountedSections.value
-  return chapterList.value.map((chapter, index) => (
-    mounted[index]
-      ? chapter
-      : { ...chapter, html: null, estHeight: heights[index] }
+  return _mountedSectionViews.value.map((chapter, index) => (
+    mounted[index] ? chapter : _placeholderSectionViews.value[index]
   ))
 })
 
@@ -487,6 +506,27 @@ async function _onAllSectionsMounted() {
   _scheduleChunkMapBuild()
 }
 
+// Fill the REST of the book in, starting from the reading position.
+//
+// This used to mount 4 sections per requestIdleCallback slice, which on a busy
+// main thread meant ~4 sections every 350ms — a 600-section EPUB needed the
+// better part of a minute to finish, so any determined scroll outran it and
+// landed on an unmounted section. Nothing tunable about that loop could win the
+// race, because the reader can always scroll faster than a fixed drip.
+//
+// So the race is gone: every section is mounted within a few hundred ms, in
+// time-boxed batches that keep each frame under budget. Off-screen sections
+// cost almost nothing to keep mounted because `.reader-mobile-section` carries
+// `content-visibility: auto` — the browser skips their layout and paint
+// natively, on its own schedule, with no JS in the scroll path.
+// One batch per frame-ish, each capped to a slice of the frame budget. Pacing
+// matters in both directions: too small a batch and scrolling outruns it (the
+// original bug), too small a GAP and the mounting loop starves the renderer it
+// is feeding — a chain of setTimeout(…, 0) pegs the main thread just as badly
+// as one giant mount.
+const MOUNT_BATCH_BUDGET_MS = 8
+const MOUNT_BATCH_INTERVAL_MS = 16
+
 function _startIdleSectionMounting(startIdx) {
   _cancelIdleSectionMounting()
 
@@ -494,36 +534,40 @@ function _startIdleSectionMounting(startIdx) {
     _mountIdleId = null
     _mountTimerId = null
     const flags = mountedSections.value
+    const deadline = performance.now() + MOUNT_BATCH_BUDGET_MS
 
-    // Mount outward from the reading position: forward first, then backward.
-    // Four per idle slice — with the memoized sanitizer a mount is cheap, and
-    // the whole book needs to be ready before a fast fling can reach it.
-    for (let mounted = 0; mounted < 4; mounted += 1) {
+    // Sweep outward from the reading position — forward first, then backward —
+    // holding a cursor rather than rescanning from startIdx every time (that
+    // rescan was itself O(n²) over a long book).
+    let done = false
+    while (performance.now() < deadline) {
       let next = -1
-      for (let i = startIdx; i < flags.length; i += 1) {
+      for (let i = _mountCursor; i < flags.length; i += 1) {
         if (!flags[i]) { next = i; break }
+        _mountCursor = i + 1
       }
       if (next === -1) {
         for (let i = startIdx - 1; i >= 0; i -= 1) {
           if (!flags[i]) { next = i; break }
         }
       }
-      if (next === -1) break
+      if (next === -1) { done = true; break }
       flags[next] = true
     }
 
-    if (flags.some((flag) => !flag)) schedule()
-    else _onAllSectionsMounted()
+    if (done) _onAllSectionsMounted()
+    else schedule()
   }
 
+  // A plain timer, not requestIdleCallback: idle callbacks are exactly what
+  // gets starved while the user is scrolling, which is precisely when the
+  // remaining sections are needed most. (Not rAF either — it is suspended in a
+  // backgrounded WebView, which would strand the book half-mounted.)
   const schedule = () => {
-    if (typeof requestIdleCallback === 'function') {
-      _mountIdleId = requestIdleCallback(step, { timeout: 350 })
-    } else {
-      _mountTimerId = setTimeout(step, 80)
-    }
+    _mountTimerId = setTimeout(step, MOUNT_BATCH_INTERVAL_MS)
   }
 
+  _mountCursor = startIdx
   schedule()
 }
 
@@ -725,7 +769,13 @@ function chunkIndexForCurrentPosition() {
   // sentence on screen, so "read from here" begins at the visible page — not a
   // proportional estimate that drifts toward where narration last was.
   const anchorY = 80
-  if (import.meta.client && !_chunkEls.length) _buildChunkMap()
+  // Only the section under the anchor line can hold the answer, so map that one
+  // rather than forcing the whole book's map to exist first.
+  if (import.meta.client) {
+    const anchorEl = document.elementFromPoint(Math.round(window.innerWidth / 2), anchorY)
+    const anchorSection = Number(anchorEl?.closest?.('[id^="ch-"]')?.id?.slice(3))
+    if (Number.isFinite(anchorSection)) _mapOneSection(anchorSection)
+  }
   if (import.meta.client && _chunkEls.length) {
     let best = -1
     let firstConnected = -1
@@ -1040,6 +1090,15 @@ function _scheduleChunkMapBuild() {
   }
 }
 
+// Wrapping every sentence of the book walks a character-level index over the
+// whole document and allocates an object PER CHARACTER — millions of them for a
+// real novel. As one synchronous sweep that is a multi-second freeze, so the
+// pre-warm is spread across time-boxed slices. Anything that needs a specific
+// section sooner calls _mapOneSection directly instead of waiting.
+const CHUNK_MAP_BUDGET_MS = 6
+const CHUNK_MAP_INTERVAL_MS = 16
+let _chunkMapCursor = 0
+
 function _buildChunkMap() {
   _cancelScheduledChunkMapBuild()
   const container = chaptersContainerRef.value
@@ -1049,10 +1108,22 @@ function _buildChunkMap() {
   unwrapTtsSpans(container)
   _chunkEls = []
   _activeWordMapIdx = -1
+  _chunkMapCursor = 0
+  _stepChunkMap()
+}
 
+function _stepChunkMap() {
+  _chunkMapTimerId = null
   const { sectionCounts } = readableChunkData.value
-  for (let s = 0; s < sectionCounts.length; s++) {
-    _mapOneSection(s)
+  const deadline = performance.now() + CHUNK_MAP_BUDGET_MS
+
+  while (_chunkMapCursor < sectionCounts.length && performance.now() < deadline) {
+    _mapOneSection(_chunkMapCursor)
+    _chunkMapCursor += 1
+  }
+
+  if (_chunkMapCursor < sectionCounts.length) {
+    _chunkMapTimerId = setTimeout(_stepChunkMap, CHUNK_MAP_INTERVAL_MS)
   }
 }
 

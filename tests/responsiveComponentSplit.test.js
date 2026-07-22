@@ -175,7 +175,22 @@ describe('responsive mobile component split', () => {
     expect(readerPage).toContain('initializeSectionMounting()')
     expect(readerMobile).toContain('data-section-placeholder')
     expect(readerMobile).toContain('mount-section')
+    // content-visibility looks ideal here but applies `contain: size`, which
+    // breaks EPUB percentage sizing (covers blow up, text stops wrapping).
+    // Sections must stay plain boxes; the reader keeps up by mounting fast.
     expect(readerMobile).not.toContain('content-visibility')
+  })
+
+  // The whole book must finish mounting quickly — that is what guarantees there
+  // is nothing left to scroll into. Both the mount loop and the sentence-span
+  // pre-warm are time-boxed so neither pegs the main thread.
+  test('reader background work is time-boxed rather than dripped', () => {
+    const readerPage = read('pages/reader/[id].vue')
+
+    expect(readerPage).toContain('MOUNT_BATCH_BUDGET_MS')
+    expect(readerPage).toContain('CHUNK_MAP_BUDGET_MS')
+    // requestIdleCallback is starved by exactly the scrolling that needs these.
+    expect(readerPage).not.toContain('requestIdleCallback(step')
   })
 
   test('docked chapter pill sits flush with the screen bottom', () => {

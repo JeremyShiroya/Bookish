@@ -1523,63 +1523,25 @@ const observePlaceholders = async () => {
   placeholders.forEach((el) => _placeholderObserver.observe(el));
 };
 
-// Safety net for a fling that outruns the observer.
+// Safety net for the brief window before the page has mounted the whole book.
 //
-// Mounting a section is a synchronous innerHTML parse plus a relayout of the
-// whole document. Mounting every placeholder in a 14-screen window in one frame
-// — which is what this used to do — IS the multi-second freeze it was meant to
-// prevent. So: rank candidates by distance from the viewport, mount only a
-// couple per frame, and continue on the next frame while work remains. The
-// reader gets what it is about to look at first, and the main thread stays
-// responsive.
+// The page now fills every section in within a few hundred milliseconds, so by
+// the time a scroll gets going there is usually nothing left to do here. What
+// remains near the viewport is mounted immediately and uncapped: capping it
+// per-frame only recreated the drip that let scrolling outrun mounting.
 const MOUNT_LOOKAHEAD_PX = 2400;
-const MOUNTS_PER_FRAME = 2;
-
-let _mountFollowUpRaf = null;
-let _lastMountCandidateCount = -1;
 
 const mountNearbyPlaceholders = () => {
   const container = props.readerRefs?.chaptersContainerRef?.value;
   const placeholders = (container ?? document).querySelectorAll("[data-section-placeholder]");
-  if (!placeholders.length) {
-    _lastMountCandidateCount = -1;
-    return;
-  }
+  if (!placeholders.length) return;
 
   const behind = window.innerHeight;
-  const candidates = [];
   for (const el of placeholders) {
     const rect = el.getBoundingClientRect();
     if (rect.bottom < -behind || rect.top > MOUNT_LOOKAHEAD_PX) continue;
     const index = Number(el.dataset.sectionPlaceholder);
-    if (Number.isNaN(index)) continue;
-    // Distance from the viewport edge: sections below sort by how far down
-    // they are, sections already scrolled past sort behind them.
-    candidates.push({ index, distance: rect.top >= 0 ? rect.top : -rect.bottom });
-  }
-
-  if (!candidates.length) {
-    _lastMountCandidateCount = -1;
-    return;
-  }
-
-  candidates.sort((a, b) => a.distance - b.distance);
-  for (const candidate of candidates.slice(0, MOUNTS_PER_FRAME)) {
-    emit("mount-section", candidate.index);
-  }
-
-  // Keep filling in on later frames so a fling that stops mid-flight still
-  // finishes. Only while the backlog is actually shrinking — if a mount didn't
-  // take, rescheduling forever would be a freeze of its own.
-  const shrinking = _lastMountCandidateCount === -1
-    || candidates.length < _lastMountCandidateCount;
-  _lastMountCandidateCount = candidates.length;
-
-  if (candidates.length > MOUNTS_PER_FRAME && shrinking && _mountFollowUpRaf === null) {
-    _mountFollowUpRaf = requestAnimationFrame(() => {
-      _mountFollowUpRaf = null;
-      mountNearbyPlaceholders();
-    });
+    if (!Number.isNaN(index)) emit("mount-section", index);
   }
 };
 
@@ -1670,7 +1632,6 @@ onUnmounted(() => {
   _pageMapToken += 1;
   _placeholderObserver?.disconnect();
   if (_mountScrollRaf !== null) cancelAnimationFrame(_mountScrollRaf);
-  if (_mountFollowUpRaf !== null) cancelAnimationFrame(_mountFollowUpRaf);
 });
 </script>
 
@@ -2258,6 +2219,15 @@ onUnmounted(() => {
   gap: 0;
 }
 
+/* Sections are deliberately plain boxes — no browser-level off-screen skipping.
+ *
+ * That native skipping looked like the perfect fit (it would remove every race
+ * against scrolling) but it applies `contain: size`, and EPUB content leans on
+ * percentage sizing: images styled `width: 100%` resolved against a
+ * size-contained box and blew up to their intrinsic pixel size, and body text
+ * stopped wrapping to the column and ran off the right edge. The reader keeps
+ * up instead by mounting the whole book quickly (see _startIdleSectionMounting).
+ */
 .reader-mobile-section {
   min-height: auto;
 }
