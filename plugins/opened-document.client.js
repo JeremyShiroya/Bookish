@@ -1,7 +1,7 @@
 import { consumeOpenedDocument } from '~/composables/useOpenedDocument'
 import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
 
-// Imports and opens the document Bookish was launched with from the system
+// Imports and opens the document Pages was launched with from the system
 // "Open with" sheet. Cold starts consume the parked document once the app is
 // mounted; warm starts (app already running, launchMode singleTask) are
 // nudged by MainActivity through the bookishOpenedDocument window event.

@@ -8,7 +8,7 @@ import { useToast } from '~/composables/useToast'
 
 // ReadERA-style device library sync for the native app.
 //
-// On every app open Bookish scans the phone's storage for PDF / EPUB
+// On every app open Pages scans the phone's storage for PDF / EPUB
 // documents (via the DeviceBooks native plugin, which handles the
 // All-files-access permission on Android 11+), imports anything new into the
 // library, and then backfills missing book details from the web in the

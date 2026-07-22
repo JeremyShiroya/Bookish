@@ -58,7 +58,7 @@ export async function consumeOpenedDocument() {
 
     const extension = resolveOpenedExtension(result.name, result.mimeType)
     if (!extension) {
-      addToast('Bookish can only open PDF and EPUB documents.', 'error')
+      addToast('Pages can only open PDF and EPUB documents.', 'error')
       return
     }
 

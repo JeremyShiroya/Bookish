@@ -111,7 +111,7 @@
         <i class="ri-folder-open-line"></i>
         <div>
           <h2>Scanned folders</h2>
-          <p>Folders Bookish checks for new PDF and EPUB books on every app open.</p>
+          <p>Folders Pages checks for new PDF and EPUB books on every app open.</p>
         </div>
       </div>
 
@@ -208,7 +208,7 @@
         <i class="ri-server-line"></i>
         <div>
           <h2>Server connection</h2>
-          <p>Optional Bookish server for publisher research and AI checks.</p>
+          <p>Optional Pages server for publisher research and AI checks.</p>
         </div>
       </div>
       <form class="server-row" @submit.prevent="saveServerUrl">
@@ -218,7 +218,7 @@
           type="url"
           inputmode="url"
           placeholder="https://your-bookish-server.example"
-          aria-label="Bookish server URL"
+          aria-label="Pages server URL"
         />
         <button class="primary-btn compact" type="submit">Save</button>
       </form>
@@ -473,10 +473,10 @@ const exportData = async () => {
     document.body.appendChild(link)
     link.click()
     link.remove()
-    addToast('Bookish backup exported', 'success')
+    addToast('Pages backup exported', 'success')
   } catch (error) {
-    console.error('[Storage] Failed to export Bookish data:', error)
-    addToast(error?.message || 'Could not export Bookish data', 'error')
+    console.error('[Storage] Failed to export Pages data:', error)
+    addToast(error?.message || 'Could not export Pages data', 'error')
   } finally {
     if (url) setTimeout(() => URL.revokeObjectURL(url), 0)
     backupLoading.value = false
@@ -492,7 +492,7 @@ const importData = async (event) => {
   event.target.value = ''
   if (!file) return
 
-  const confirmed = window.confirm('Importing a backup will replace the current Bookish data on this device. Continue?')
+  const confirmed = window.confirm('Importing a backup will replace the current Pages data on this device. Continue?')
   if (!confirmed) return
 
   backupLoading.value = true
@@ -504,17 +504,17 @@ const importData = async (event) => {
     await fetchAllData(true)
     await refreshStorageSummary()
     await refreshHiddenCount()
-    addToast('Bookish backup imported', 'success')
+    addToast('Pages backup imported', 'success')
   } catch (error) {
-    console.error('[Storage] Failed to import Bookish data:', error)
-    addToast(error?.message || 'Could not import Bookish backup', 'error')
+    console.error('[Storage] Failed to import Pages data:', error)
+    addToast(error?.message || 'Could not import Pages backup', 'error')
   } finally {
     backupLoading.value = false
   }
 }
 
 const wipeData = async () => {
-  const confirmed = window.confirm('This permanently removes all Bookish books, playlists, progress, and settings from this device. Continue?')
+  const confirmed = window.confirm('This permanently removes all Pages books, playlists, progress, and settings from this device. Continue?')
   if (!confirmed) return
 
   wipeLoading.value = true
@@ -525,10 +525,10 @@ const wipeData = async () => {
     await fetchAllData(true)
     await refreshStorageSummary()
     await refreshHiddenCount()
-    addToast('Bookish data wiped from this device', 'success')
+    addToast('Pages data wiped from this device', 'success')
   } catch (error) {
-    console.error('[Storage] Failed to wipe Bookish data:', error)
-    addToast(error?.message || 'Could not wipe Bookish data', 'error')
+    console.error('[Storage] Failed to wipe Pages data:', error)
+    addToast(error?.message || 'Could not wipe Pages data', 'error')
   } finally {
     wipeLoading.value = false
   }

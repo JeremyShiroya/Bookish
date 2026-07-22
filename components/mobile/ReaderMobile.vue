@@ -212,7 +212,7 @@
             This PDF was imported before original-page rendering was available.
           </p>
           <p class="hint">
-            Re-upload the PDF once so Bookish can display the document exactly
+            Re-upload the PDF once so Pages can display the document exactly
             as it is.
           </p>
         </div>

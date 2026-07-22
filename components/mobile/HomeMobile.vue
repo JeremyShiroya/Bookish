@@ -26,7 +26,7 @@
       <EmptyState
         illustration="library"
         title="Your library awaits"
-        description="Add your first book and Bookish will keep your reading, listening and progress right here."
+        description="Add your first book and Pages will keep your reading, listening and progress right here."
       >
         <template #action>
           <NuxtLink to="/add" class="add-btn">

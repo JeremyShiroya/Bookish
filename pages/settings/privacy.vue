@@ -3,16 +3,16 @@
   <main class="privacy-page">
     <article class="policy-card" aria-labelledby="privacy-title">
       <p class="lede">
-        Bookish is a local-first reading application. Your library lives on your own device, there
-        are no user accounts, and Bookish does not sell, rent, or trade any information about you.
-        This policy explains exactly what data Bookish handles, where it goes, and the choices you
+        Pages is a local-first reading application. Your library lives on your own device, there
+        are no user accounts, and Pages does not sell, rent, or trade any information about you.
+        This policy explains exactly what data Pages handles, where it goes, and the choices you
         have.
       </p>
 
       <section>
         <h2>1. Data stored on your device</h2>
         <p>
-          Everything you create in Bookish is stored locally on the device you use it on, in browser
+          Everything you create in Pages is stored locally on the device you use it on, in browser
           storage (IndexedDB and localStorage) or the app's private storage on mobile. This includes:
         </p>
         <ul>
@@ -25,7 +25,7 @@
         </ul>
         <p>
           This data never leaves your device unless you explicitly export it or a feature described
-          below requires a network request. Bookish has no server-side copy of your library.
+          below requires a network request. Pages has no server-side copy of your library.
         </p>
       </section>
 
@@ -45,7 +45,7 @@
         <h2>3. Metadata, cover, and author-image lookups</h2>
         <p>
           Metadata search runs only when you press a search button — it never runs automatically in
-          the background. When you request it, Bookish queries public book-information sources with
+          the background. When you request it, Pages queries public book-information sources with
           the title, author, or publisher you typed (and nothing else). Depending on the search,
           those sources may include: Goodreads, Google Books, Google Images, Kobo, Open Library,
           Internet Archive, Bing Images, DuckDuckGo, Wikipedia, Wikidata, Wikimedia Commons, and
@@ -62,9 +62,9 @@
       <section>
         <h2>4. Optional self-hosted server</h2>
         <p>
-          You may connect the app to your own Bookish server (Settings → Storage → Server
+          You may connect the app to your own Pages server (Settings → Storage → Server
           connection). When configured, metadata and image searches are performed by that server on
-          your behalf instead of directly from the device. Bookish only communicates with the server
+          your behalf instead of directly from the device. Pages only communicates with the server
           address you enter, and you can remove it at any time.
         </p>
       </section>
@@ -72,7 +72,7 @@
       <section>
         <h2>5. Analytics</h2>
         <p>
-          The hosted web version of Bookish may collect anonymous, aggregated page-view analytics
+          The hosted web version of Pages may collect anonymous, aggregated page-view analytics
           (via Vercel Web Analytics) to understand overall usage. These analytics do not use cookies,
           do not identify you, and do not include the contents of your library.
           <strong>The installed mobile app collects no analytics at all.</strong>
@@ -80,7 +80,7 @@
       </section>
 
       <section>
-        <h2>6. What Bookish does not do</h2>
+        <h2>6. What Pages does not do</h2>
         <ul>
           <li>No accounts, sign-ups, passwords, or profiles stored on our systems;</li>
           <li>No selling, renting, or sharing of personal data with third parties for marketing;</li>
@@ -94,7 +94,7 @@
         <h2>7. Your control: export, import, and deletion</h2>
         <p>
           From Settings → Storage you can export your full library as a backup file, import a
-          backup, and permanently wipe all Bookish data from the device. Because all data is local,
+          backup, and permanently wipe all Pages data from the device. Because all data is local,
           uninstalling the app or clearing browser site data also removes your library entirely.
           Deletion is immediate and irreversible — there is no server copy to purge.
         </p>
@@ -104,9 +104,9 @@
         <h2>8. Data security</h2>
         <p>
           Your library is protected by your device's own security (device lock, browser sandboxing,
-          and app sandboxing on mobile). All network requests Bookish makes use encrypted HTTPS
+          and app sandboxing on mobile). All network requests Pages makes use encrypted HTTPS
           connections where the provider supports them. Because data is stored locally, anyone with
-          access to your unlocked device profile can access your Bookish library — please secure
+          access to your unlocked device profile can access your Pages library — please secure
           your device accordingly.
         </p>
       </section>
@@ -114,7 +114,7 @@
       <section>
         <h2>9. Children's privacy</h2>
         <p>
-          Bookish does not knowingly collect personal information from anyone, including children.
+          Pages does not knowingly collect personal information from anyone, including children.
           Since no data is transmitted to us, there is nothing for us to collect, retain, or delete
           on a child's behalf.
         </p>
@@ -124,7 +124,7 @@
         <h2>10. Your rights</h2>
         <p>
           Depending on where you live (for example under the GDPR or CCPA), you may have rights to
-          access, correct, delete, or port your personal data. Bookish's design satisfies these by
+          access, correct, delete, or port your personal data. Pages' design satisfies these by
           default: all of your data is already in your hands, exportable at any time from Settings →
           Storage, and deletable in full from the same page.
         </p>
@@ -133,20 +133,20 @@
       <section>
         <h2>11. Changes to this policy</h2>
         <p>
-          If Bookish's data practices change, this policy will be updated and the effective date
+          If Pages' data practices change, this policy will be updated and the effective date
           above revised. Material changes will be noted in the app's release notes. Continued use of
-          Bookish after an update constitutes acceptance of the revised policy.
+          Pages after an update constitutes acceptance of the revised policy.
         </p>
       </section>
 
       <section>
         <h2>12. Contact</h2>
         <p>
-          Questions or concerns about privacy in Bookish can be raised on the project's GitHub
+          Questions or concerns about privacy in Pages can be raised on the project's GitHub
           repository at
-          <a href="https://github.com/JeremyShiroya/Bookish" target="_blank" rel="noopener">github.com/JeremyShiroya/Bookish</a>.
+          <a href="https://github.com/JeremyShiroya/Pages" target="_blank" rel="noopener">github.com/JeremyShiroya/Pages</a>.
         </p>
-        <p class="policy-meta">Effective date: 3 July 2026 · Applies to the Bookish web app and the Bookish mobile app.</p>
+        <p class="policy-meta">Effective date: 3 July 2026 · Applies to the Pages web app and the Pages mobile app.</p>
       </section>
     </article>
   </main>

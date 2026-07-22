@@ -63,7 +63,7 @@
     <section class="appearance-panel" aria-labelledby="appearance-title">
       <div>
         <h2 id="appearance-title">Appearance</h2>
-        <p>This is how your profile appears across Bookish.</p>
+        <p>This is how your profile appears across Pages.</p>
       </div>
 
       <div class="profile-preview-card">
@@ -83,7 +83,7 @@
           <header>
             <div>
               <h2 id="avatar-modal-title">Choose an avatar</h2>
-              <p>Select the image Bookish uses for your profile.</p>
+              <p>Select the image Pages uses for your profile.</p>
             </div>
             <button type="button" aria-label="Close avatar picker" @click="avatarModalOpen = false">
               <i class="ri-close-line"></i>

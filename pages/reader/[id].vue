@@ -175,7 +175,7 @@
         <div v-else-if="isPdfBook" class="pdf-unavailable-card">
           <i class="ri-file-pdf-2-line"></i>
           <p>This PDF was imported before original-page rendering was available.</p>
-          <p class="hint">Re-upload the PDF once so Bookish can display the document exactly as it is.</p>
+          <p class="hint">Re-upload the PDF once so Pages can display the document exactly as it is.</p>
         </div>
 
         <div v-else class="chapters-container" ref="chaptersContainerRef">

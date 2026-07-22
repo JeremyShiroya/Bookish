@@ -32,11 +32,11 @@ export default defineNuxtConfig({
   css: ['@/assets/css/main.css'],
   app: {
     head: {
-      title: 'Bookish',
+      title: 'Pages',
       link: [
-        { rel: 'icon', type: 'image/png', href: '/Images/Logo.png' },
-        { rel: 'shortcut icon', type: 'image/png', href: '/Images/Logo.png' },
-        { rel: 'apple-touch-icon', href: '/Images/Logo.png' },
+        { rel: 'icon', type: 'image/png', href: '/Images/Pages-Logo.png' },
+        { rel: 'shortcut icon', type: 'image/png', href: '/Images/Pages-Logo.png' },
+        { rel: 'apple-touch-icon', href: '/Images/Pages-Logo.png' },
       ],
     },
   },
@@ -59,8 +59,8 @@ export default defineNuxtConfig({
   pwa: {
     registerType: 'autoUpdate',
     manifest: {
-      name: 'Bookish',
-      short_name: 'Bookish',
+      name: 'Pages',
+      short_name: 'Pages',
       description: 'A local-first mobile reading and listening library.',
       theme_color: '#8A2BE2',
       background_color: '#e8e8f2',
@@ -70,13 +70,13 @@ export default defineNuxtConfig({
       start_url: '/',
       icons: [
         {
-          src: '/Images/Logo.png',
+          src: '/Images/Pages-Logo.png',
           sizes: '192x192',
           type: 'image/png',
           purpose: 'any maskable',
         },
         {
-          src: '/Images/Logo.png',
+          src: '/Images/Pages-Logo.png',
           sizes: '512x512',
           type: 'image/png',
           purpose: 'any maskable',

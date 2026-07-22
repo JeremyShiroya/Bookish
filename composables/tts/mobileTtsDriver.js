@@ -84,7 +84,7 @@ export async function synthesizeMobileSpeech({ text, voice, speed, apiUrl, apiBa
     } catch (error) {
       console.warn('[TTS] Edge synth failed on device:', error?.message || error)
 
-      // If a Bookish server is configured, give it one shot before giving up on
+      // If a Pages server is configured, give it one shot before giving up on
       // cloud TTS entirely — it keeps the same voice.
       if (apiBaseUrl) {
         try {

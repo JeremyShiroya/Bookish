@@ -2,7 +2,10 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.bookish.app',
-  appName: 'Bookish',
+  // Display name only. appId stays com.bookish.app on purpose: it is the
+  // installed app's identity, and changing it would land on devices as a
+  // brand-new app, orphaning every existing library, setting and import.
+  appName: 'Pages',
   webDir: '.output/public',
   bundledWebRuntime: false,
   // The Edge Read Aloud endpoint only accepts WebSocket handshakes from

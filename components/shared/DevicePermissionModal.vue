@@ -14,13 +14,13 @@
 
           <h2 id="perm-title">Find books on this phone</h2>
           <p>
-            Bookish can scan your phone for PDF and EPUB books and add them to
+            Pages can scan your phone for PDF and EPUB books and add them to
             your library automatically — new books are picked up every time you
             open the app.
           </p>
           <p class="perm-note">
             On the next screen, allow <strong>“All files access”</strong> for
-            Bookish so it can see your documents. Bookish only reads book
+            Pages so it can see your documents. Pages only reads book
             files and never uploads them anywhere.
           </p>
 

@@ -7,7 +7,7 @@ import {
 import { verifyAuthorDetails } from '../../utils/aiAuthorVerifier'
 
 const JSON_HEADERS = {
-  'User-Agent': 'Bookish/1.0 (author info lookup; contact: local-app)',
+  'User-Agent': 'Pages/1.0 (author info lookup; contact: local-app)',
   'Accept': 'application/json',
 }
 

@@ -8,9 +8,9 @@
       <router-link to="/" class="brand-link">
         <div class="logo-container">
           <div class="logo">
-            <img src="/Images/Logo.png" alt="Logo" class="logo-image" />
+            <img src="/Images/Pages-Logo.png" alt="Pages" class="logo-image" />
           </div>
-          <h1 class="title">Bookish</h1>
+          <h1 class="title">Pages</h1>
         </div>
       </router-link>
     </div>
@@ -201,11 +201,11 @@ watch(hoverIndex, updateHighlight);
   width: 40px;
   height: 40px;
   overflow: hidden;
-  margin-right: 10px;
+  margin-right: 5px;
 }
 
 .logo-image {
-  width: 50px;
+  width: 40px;
   height: 100%;
   object-fit: cover;
 }

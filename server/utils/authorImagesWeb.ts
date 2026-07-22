@@ -16,7 +16,7 @@ const imageHeaders = {
 };
 
 const jsonHeaders = {
-  'User-Agent': 'Bookish/1.0 (author image lookup; contact: local-app)',
+  'User-Agent': 'Pages/1.0 (author image lookup; contact: local-app)',
   'Accept': 'application/json',
 };
 

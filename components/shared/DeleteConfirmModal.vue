@@ -20,7 +20,7 @@
 
       <h2 id="delete-title">Delete this book?</h2>
       <p id="delete-description" class="delete-description">
-        This permanently removes the book from Bookish. It cannot be undone.
+        This permanently removes the book from Pages. It cannot be undone.
       </p>
 
       <!-- Spell out exactly what disappears, so "delete" is never mistaken for

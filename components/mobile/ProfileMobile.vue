@@ -73,7 +73,7 @@
           <header>
             <div>
               <h2 id="avatar-modal-title">Choose an avatar</h2>
-              <p>Select the image Bookish uses for your profile.</p>
+              <p>Select the image Pages uses for your profile.</p>
             </div>
             <button type="button" aria-label="Close avatar picker" @click="avatarModalOpen = false">
               <i class="ri-close-line"></i>

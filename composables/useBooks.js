@@ -223,7 +223,7 @@ export const useBooks = () => {
       if (!hideContent) cacheRemoteLibraryCovers();
     } catch (fetchError) {
       console.error('Failed to load library:', fetchError);
-      error.value = 'Bookish could not load your library.';
+      error.value = 'Pages could not load your library.';
     } finally {
       initialized.value = true;
       loading.value = false;

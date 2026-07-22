@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
       signal: controller.signal,
       headers: {
         accept: 'image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8',
-        'user-agent': 'Bookish/1.0 cover-cache',
+        'user-agent': 'Pages/1.0 cover-cache',
       },
     })
 

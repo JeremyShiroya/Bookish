@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Bookish</string>
-    <string name="title_activity_main">Bookish</string>
+    <string name="app_name">Pages</string>
+    <string name="title_activity_main">Pages</string>
     <string name="package_name">com.bookish.app</string>
     <string name="custom_url_scheme">com.bookish.app</string>
 </resources>

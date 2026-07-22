@@ -1,7 +1,7 @@
 import { defineEventHandler, getQuery, createError } from 'h3';
 
 const headers = {
-  'User-Agent': 'Bookish/1.0 (author image lookup; contact: local-app)',
+  'User-Agent': 'Pages/1.0 (author image lookup; contact: local-app)',
   'Accept': 'application/json',
 };
 

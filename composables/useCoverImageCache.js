@@ -65,7 +65,7 @@ export const useCoverImageCache = () => {
       const saved = await saveBase64('covers', name, data)
       return saved?.webSrc || coverUrl
     } catch (error) {
-      console.warn('[Bookish] On-device cover cache failed:', error)
+      console.warn('[Pages] On-device cover cache failed:', error)
       return coverUrl
     }
   }
@@ -87,7 +87,7 @@ export const useCoverImageCache = () => {
       })
       return result?.dataUrl || coverUrl
     } catch (error) {
-      console.warn('[Bookish] Failed to cache remote cover image:', error)
+      console.warn('[Pages] Failed to cache remote cover image:', error)
       return coverUrl
     }
   }

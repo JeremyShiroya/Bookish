@@ -2,8 +2,8 @@
   <main class="settings-page">
     <section class="settings-hero" aria-labelledby="settings-title">
       <div>
-        <span class="eyebrow">Bookish Settings</span>
-        <h1 id="settings-title">Tune Bookish for your reading flow.</h1>
+        <span class="eyebrow">Pages Settings</span>
+        <h1 id="settings-title">Tune Pages for your reading flow.</h1>
         <p>Reader defaults, library sorting, audiobook playback, metadata, and local storage in one place.</p>
       </div>
       <div class="hero-covers" aria-hidden="true">
@@ -44,7 +44,7 @@
         <div class="setting-row">
           <div class="setting-copy">
             <h3>App theme</h3>
-            <p>Switch Bookish between light and dark mode.</p>
+            <p>Switch Pages between light and dark mode.</p>
           </div>
           <button
             class="theme-mode-toggle"
@@ -363,15 +363,15 @@
     </section>
 
     <section class="about-section" aria-labelledby="about-title">
-      <img src="/Images/Logo.png" alt="Bookish" class="about-logo" />
-      <h2 id="about-title">Bookish</h2>
+      <img src="/Images/Pages-Logo.png" alt="Pages" class="about-logo" />
+      <h2 id="about-title">Pages</h2>
       <p>Version {{ appVersion }} &bull; Build {{ buildNumber }}</p>
-      <nav class="about-links" aria-label="Bookish links">
+      <nav class="about-links" aria-label="Pages links">
         <a href="#">Support Center</a>
         <a href="#">Release Notes</a>
         <a href="#">Privacy Policy</a>
       </nav>
-      <small>© 2026 Bookish. Made with <i class="ri-heart-fill heart-icon"></i> for readers.</small>
+      <small>© 2026 Pages. Made with <i class="ri-heart-fill heart-icon"></i> for readers.</small>
     </section>
   </main>
 </template>

@@ -1,12 +1,12 @@
 // Sideloaded-APK update checker.
 //
-// Bookish APKs are installed outside the Play Store, so nothing tells a user a
+// Pages APKs are installed outside the Play Store, so nothing tells a user a
 // newer build exists. On native startup this fetches a small manifest
 // (version.json — see scripts/generate-version-manifest.mjs), compares its
 // versionCode against the installed one, and offers the download.
 //
 // It only ever OPENS the APK url; it never downloads or installs anything
-// itself. That keeps Bookish free of the REQUEST_INSTALL_PACKAGES permission —
+// itself. That keeps Pages free of the REQUEST_INSTALL_PACKAGES permission —
 // the browser handles the download and Android's own installer takes over.
 //
 // The manifest is remote content, so it is treated as untrusted: the validation

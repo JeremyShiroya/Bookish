@@ -85,7 +85,7 @@ export default defineNuxtPlugin(() => {
     }
 
     const payload = {
-      title: book.title || 'Bookish',
+      title: book.title || 'Pages',
       artist: book.author || 'Narration',
       playing: status === 'playing',
       position: Math.max(0, Number(ttsElapsedSeconds.value) || 0),

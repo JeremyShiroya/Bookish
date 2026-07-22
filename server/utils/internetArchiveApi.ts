@@ -13,7 +13,7 @@ export interface IAResult {
 }
 
 const internetArchiveHeaders = {
-  'User-Agent': 'Bookish/1.0 (metadata lookup; contact: local-app)',
+  'User-Agent': 'Pages/1.0 (metadata lookup; contact: local-app)',
   'Accept': 'application/json',
 };
 

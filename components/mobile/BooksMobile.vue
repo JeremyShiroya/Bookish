@@ -166,7 +166,7 @@
         v-else
         illustration="books"
         title="No books yet"
-        description="Import a PDF or EPUB — or let Bookish find the documents already on your device — and your shelves start here."
+        description="Import a PDF or EPUB — or let Pages find the documents already on your device — and your shelves start here."
       >
         <template #action>
           <button class="add-book-btn" @click="router.push('/add')">

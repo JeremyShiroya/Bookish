@@ -34,7 +34,7 @@
     <div class="data-portability">
       <div class="setting-copy">
         <h3>Import and export</h3>
-        <p>Move your full Bookish library, playlists, reading content, audio session, and settings.</p>
+        <p>Move your full Pages library, playlists, reading content, audio session, and settings.</p>
       </div>
       <div class="data-actions">
         <button class="data-action primary" :disabled="backupLoading" @click="exportData">
@@ -64,7 +64,7 @@
         <h3>Server connection</h3>
         <p>
           Web metadata search (Goodreads, Google Books, publisher sites) runs on a
-          Bookish server. The installed app needs its address; the web app can
+          Pages server. The installed app needs its address; the web app can
           leave this empty.
         </p>
       </div>
@@ -75,7 +75,7 @@
           type="url"
           inputmode="url"
           placeholder="https://your-bookish-server.example"
-          aria-label="Bookish server URL"
+          aria-label="Pages server URL"
         />
         <button class="data-action primary" type="submit">
           <i class="ri-save-3-line"></i>
@@ -149,7 +149,7 @@ const formattedStorageSize = computed(() => formatBytes(storageSummary.value.tot
 
 const storageMessage = computed(() => {
   if (!storageSummary.value.available) {
-    return storageSummary.value.error || 'Bookish cannot inspect local storage right now.'
+    return storageSummary.value.error || 'Pages cannot inspect local storage right now.'
   }
 
   if (storageSummary.value.contentCount === 0 && storageSummary.value.sourceCount === 0) {
@@ -180,10 +180,10 @@ const exportData = async () => {
     document.body.appendChild(link)
     link.click()
     link.remove()
-    addToast('Bookish backup exported', 'success')
+    addToast('Pages backup exported', 'success')
   } catch (error) {
-    console.error('[Settings] Failed to export Bookish data:', error)
-    addToast(error?.message || 'Could not export Bookish data', 'error')
+    console.error('[Settings] Failed to export Pages data:', error)
+    addToast(error?.message || 'Could not export Pages data', 'error')
   } finally {
     if (url) setTimeout(() => URL.revokeObjectURL(url), 0)
     backupLoading.value = false
@@ -199,7 +199,7 @@ const importData = async (event) => {
   event.target.value = ''
   if (!file) return
 
-  const confirmed = window.confirm('Importing a backup will replace the current Bookish data in this browser. Continue?')
+  const confirmed = window.confirm('Importing a backup will replace the current Pages data in this browser. Continue?')
   if (!confirmed) return
 
   backupLoading.value = true
@@ -210,17 +210,17 @@ const importData = async (event) => {
     loadSettings()
     await fetchAllData(true)
     await refreshStorageSummary()
-    addToast('Bookish backup imported', 'success')
+    addToast('Pages backup imported', 'success')
   } catch (error) {
-    console.error('[Settings] Failed to import Bookish data:', error)
-    addToast(error?.message || 'Could not import Bookish backup', 'error')
+    console.error('[Settings] Failed to import Pages data:', error)
+    addToast(error?.message || 'Could not import Pages backup', 'error')
   } finally {
     backupLoading.value = false
   }
 }
 
 const wipeData = async () => {
-  const confirmed = window.confirm('This will permanently remove all Bookish books, playlists, reading content, progress, audio state, and settings from this browser. Continue?')
+  const confirmed = window.confirm('This will permanently remove all Pages books, playlists, reading content, progress, audio state, and settings from this browser. Continue?')
   if (!confirmed) return
 
   wipeLoading.value = true
@@ -230,10 +230,10 @@ const wipeData = async () => {
     loadSettings()
     await fetchAllData(true)
     await refreshStorageSummary()
-    addToast('Bookish data wiped from this browser', 'success')
+    addToast('Pages data wiped from this browser', 'success')
   } catch (error) {
-    console.error('[Settings] Failed to wipe Bookish data:', error)
-    addToast(error?.message || 'Could not wipe Bookish data', 'error')
+    console.error('[Settings] Failed to wipe Pages data:', error)
+    addToast(error?.message || 'Could not wipe Pages data', 'error')
   } finally {
     wipeLoading.value = false
   }

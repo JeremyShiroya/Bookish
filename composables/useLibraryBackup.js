@@ -170,8 +170,8 @@ async function clearStores(db, storeNames) {
 
 function normalizeBackup(input) {
   const backup = typeof input === 'string' ? JSON.parse(input) : input
-  if (!backup || backup.app !== 'Bookish' || backup.version !== BACKUP_VERSION) {
-    throw new Error('This is not a compatible Bookish backup file.')
+  if (!backup || backup.app !== 'Pages' || backup.version !== BACKUP_VERSION) {
+    throw new Error('This is not a compatible Pages backup file.')
   }
   return backup
 }
@@ -191,7 +191,7 @@ export const useLibraryBackup = () => {
     ])
 
     return {
-      app: 'Bookish',
+      app: 'Pages',
       version: BACKUP_VERSION,
       exportedAt: new Date().toISOString(),
       settings: readBookishSettings(),

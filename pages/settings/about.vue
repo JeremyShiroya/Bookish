@@ -6,7 +6,7 @@
 
       <div class="about-copy">
         <p>
-          <strong>Bookish</strong> is a local-first library for keeping books, favourites,
+          <strong>Pages</strong> is a local-first library for keeping books, favourites,
           playlists, reading status, and read-aloud sessions together in one calm workspace.
         </p>
         <p>
@@ -15,13 +15,13 @@
           choose to export it.
         </p>
         <p>
-          Use Bookish to add books, group series, track what you are reading, listen from the
+          Use Pages to add books, group series, track what you are reading, listen from the
           player, and carry your backup with you through Storage import and export.
         </p>
       </div>
 
       <p class="closing-copy">
-        Bookish keeps library management, listening defaults, and storage tools visible so you can
+        Pages keeps library management, listening defaults, and storage tools visible so you can
         shape the app around your own reading habits.
       </p>
     </section>
