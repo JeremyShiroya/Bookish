@@ -249,3 +249,26 @@ describe('publisher crawling is not performed blind', () => {
     }
   })
 })
+
+// Google Books' keyless quota is shared across every anonymous caller and is
+// measured PER DAY. Observed exhausted in the wild:
+// "Quota exceeded for quota metric 'Queries' and limit 'Queries per day'".
+// A short cooldown just walks back into the same wall on every later lookup.
+describe('Google Books quota handling', () => {
+  test('a per-day quota backs off for hours, a per-minute one for seconds', async () => {
+    const { googleBooksCooldownFor } = await import('../server/utils/googleBooksApi.ts')
+    const perDay = googleBooksCooldownFor("Quota exceeded for quota metric 'Queries' and limit 'Queries per day'")
+    const perMinute = googleBooksCooldownFor("Quota exceeded for quota metric 'Queries' and limit 'Queries per minute'")
+    expect(perDay).toBeGreaterThanOrEqual(60 * 60 * 1000)
+    expect(perMinute).toBeLessThanOrEqual(5 * 60 * 1000)
+    expect(perDay).toBeGreaterThan(perMinute)
+  })
+
+  test('lookups stop early instead of burning every query variant', () => {
+    const api = read('server/utils/googleBooksApi.ts')
+    expect(api).toContain('if (results.length >= ENOUGH_RESULTS) break')
+    // process does not exist in the WebView; reading env unguarded would throw
+    // on import and take the whole on-device metadata pipeline with it.
+    expect(api).toContain("typeof process === 'undefined'")
+  })
+})

@@ -35,12 +35,20 @@ function buildGoogleBooksUrls(title: string, author?: string) {
   return urls;
 }
 
-// Google Books' anonymous quota is per-IP and small. A library backfill plus a
-// series sweep can burn through it in minutes, after which EVERY request is a
-// 429 — observed on a 300-book device where this provider returned nothing but
-// quota errors. Once rate-limited, stop asking for a while: further calls only
-// deepen the block and add latency to every lookup.
-const GOOGLE_BOOKS_COOLDOWN_MS = 10 * 60 * 1000;
+// Without an API key every caller shares one anonymous Google project, and its
+// quota is measured PER DAY — observed exhausted in the wild with
+// "Quota exceeded for quota metric 'Queries' and limit 'Queries per day'".
+// A short cooldown is useless against that: it just walks back into the same
+// wall and adds a wasted round trip to every lookup for the rest of the day.
+// So the backoff length is read from the quota that actually tripped.
+const GOOGLE_BOOKS_MINUTE_COOLDOWN_MS = 90 * 1000;
+const GOOGLE_BOOKS_DAY_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+// Enough matches that further query variants only add duplicates — and, more
+// to the point, more quota. Each lookup could otherwise fire four requests,
+// which across a few hundred books is what exhausts a daily allowance.
+const ENOUGH_RESULTS = 8;
+
 let googleBooksBlockedUntil = 0;
 
 export function googleBooksRateLimited() {
@@ -51,18 +59,38 @@ export function resetGoogleBooksRateLimit() {
   googleBooksBlockedUntil = 0;
 }
 
+export function googleBooksCooldownFor(message: string) {
+  return /per day/i.test(message) ? GOOGLE_BOOKS_DAY_COOLDOWN_MS : GOOGLE_BOOKS_MINUTE_COOLDOWN_MS;
+}
+
+// An API key moves us off the shared anonymous project entirely. Server-side
+// only: `process` does not exist in the WebView, so this must stay guarded or
+// the whole on-device metadata pipeline throws on import.
+function googleBooksKey() {
+  if (typeof process === 'undefined') return '';
+  return process.env?.GOOGLE_BOOKS_API_KEY || process.env?.NUXT_GOOGLE_BOOKS_API_KEY || '';
+}
+
 export async function searchGoogleBooks(title: string, author?: string): Promise<GBResult[]> {
   if (googleBooksRateLimited()) return [];
 
   try {
     const seen = new Set<string>();
     const results: GBResult[] = [];
+    const key = googleBooksKey();
 
     for (const url of buildGoogleBooksUrls(title, author)) {
-      const res = await fetch(url);
+      if (results.length >= ENOUGH_RESULTS) break;
+      const res = await fetch(key ? `${url}&key=${encodeURIComponent(key)}` : url);
       if (res.status === 429) {
-        googleBooksBlockedUntil = Date.now() + GOOGLE_BOOKS_COOLDOWN_MS;
-        console.warn('[GoogleBooks] Quota exceeded — pausing this provider for 10 minutes');
+        const body = await res.text().catch(() => '');
+        const cooldown = googleBooksCooldownFor(body);
+        googleBooksBlockedUntil = Date.now() + cooldown;
+        console.warn(
+          `[GoogleBooks] Quota exceeded (${/per day/i.test(body) ? 'per day' : 'per minute'})`
+          + ` — pausing this provider for ${Math.round(cooldown / 60000)} min`
+          + (key ? '' : '. Set GOOGLE_BOOKS_API_KEY to use your own quota instead of the shared anonymous one.'),
+        );
         return results;
       }
       if (!res.ok) continue;
