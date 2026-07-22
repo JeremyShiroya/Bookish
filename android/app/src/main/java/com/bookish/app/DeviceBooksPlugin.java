@@ -138,12 +138,30 @@ public class DeviceBooksPlugin extends Plugin {
                     return;
                 }
 
+                // Same heap arithmetic as readFile: refuse what we cannot
+                // afford rather than dying part-way through the encode.
+                if (size > 0) {
+                    long needed = (long) (size * READ_PEAK_MULTIPLIER) + READ_HEADROOM_BYTES;
+                    if (needed > availableHeapBytes()) {
+                        System.gc();
+                        if (needed > availableHeapBytes()) {
+                            call.reject(
+                                "Not enough memory to open a " + (size / (1024 * 1024)) + "MB document",
+                                TOO_LARGE
+                            );
+                            return;
+                        }
+                    }
+                }
+
                 try (InputStream in = getContext().getContentResolver().openInputStream(uri)) {
                     if (in == null) {
                         call.reject("Document could not be opened: " + uri);
                         return;
                     }
-                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    ByteArrayOutputStream out = new ByteArrayOutputStream(
+                        size > 0 && size <= Integer.MAX_VALUE ? (int) size : 65536
+                    );
                     byte[] chunk = new byte[65536];
                     int read;
                     long total = 0;
@@ -156,16 +174,19 @@ public class DeviceBooksPlugin extends Plugin {
                         out.write(chunk, 0, read);
                     }
 
+                    String encoded = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
                     JSObject ret = new JSObject();
                     ret.put("available", true);
                     ret.put("name", name);
                     ret.put("size", total);
                     ret.put("mimeType", getContext().getContentResolver().getType(uri));
-                    ret.put("data", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP));
+                    ret.put("data", encoded);
                     call.resolve(ret);
                 }
-            } catch (Exception e) {
-                call.reject("Failed to read opened document: " + e.getMessage());
+            } catch (OutOfMemoryError e) {
+                call.reject("Ran out of memory opening this document", TOO_LARGE);
+            } catch (Throwable t) {
+                call.reject("Failed to read opened document: " + t.getMessage());
             }
         }).start();
     }
@@ -199,11 +220,39 @@ public class DeviceBooksPlugin extends Plugin {
         return -1;
     }
 
+    /** Rejection code the web layer checks to skip a file permanently. */
+    private static final String TOO_LARGE = "FILE_TOO_LARGE";
+
+    /**
+     * Base64 across the bridge costs roughly 2.7x the file size at peak (the
+     * raw bytes, plus the encoded bytes, plus the String). Require that much
+     * headroom plus a safety margin before even attempting the read.
+     */
+    private static final double READ_PEAK_MULTIPLIER = 2.7d;
+    private static final long READ_HEADROOM_BYTES = 32L * 1024 * 1024;
+
+    private static long availableHeapBytes() {
+        Runtime runtime = Runtime.getRuntime();
+        // maxMemory is the growth limit; totalMemory-freeMemory is live usage.
+        return runtime.maxMemory() - (runtime.totalMemory() - runtime.freeMemory());
+    }
+
     /**
      * Reads a book file's bytes and returns them base64-encoded. Reading here
      * (with the same MANAGE_EXTERNAL_STORAGE grant that let us list the file)
      * is more reliable than Capacitor Filesystem, which does not resolve raw
      * absolute paths outside the app sandbox.
+     *
+     * Memory safety matters more than throughput here: a library with hundreds
+     * of books is very likely to contain one huge document, and this used to
+     * build the bytes in a ByteArrayOutputStream (which doubles as it grows),
+     * copy them out with toByteArray(), then encode to a String — around 4.7x
+     * the file size at peak. An 80MB book needed ~380MB against a 256MB heap
+     * cap, and the resulting OutOfMemoryError was an Error (not an Exception),
+     * so it escaped the catch below, killed this thread, and took the whole
+     * app down with it. Now: the size is checked against real free heap first,
+     * the bytes are read into an exactly-sized array, and Throwable is caught
+     * so a file we cannot afford is reported instead of fatal.
      */
     @PluginMethod
     public void readFile(PluginCall call) {
@@ -218,23 +267,64 @@ public class DeviceBooksPlugin extends Plugin {
         }
 
         new Thread(() -> {
-            File file = new File(path);
-            if (!file.exists() || !file.canRead()) {
-                call.reject("File cannot be read: " + path);
-                return;
-            }
-            try (FileInputStream in = new FileInputStream(file)) {
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
-                byte[] chunk = new byte[65536];
-                int read;
-                while ((read = in.read(chunk)) != -1) {
-                    out.write(chunk, 0, read);
+            try {
+                File file = new File(path);
+                if (!file.exists() || !file.canRead()) {
+                    call.reject("File cannot be read: " + path);
+                    return;
                 }
+
+                long length = file.length();
+                if (length <= 0) {
+                    call.reject("File is empty: " + path);
+                    return;
+                }
+                if (length > Integer.MAX_VALUE) {
+                    call.reject("File is too large to import: " + path, TOO_LARGE);
+                    return;
+                }
+
+                long needed = (long) (length * READ_PEAK_MULTIPLIER) + READ_HEADROOM_BYTES;
+                if (needed > availableHeapBytes()) {
+                    // Give the collector a chance to hand back room from the
+                    // previous book before declaring the file unaffordable.
+                    System.gc();
+                    if (needed > availableHeapBytes()) {
+                        call.reject(
+                            "Not enough memory to import a " + (length / (1024 * 1024)) + "MB file",
+                            TOO_LARGE
+                        );
+                        return;
+                    }
+                }
+
+                byte[] bytes = new byte[(int) length];
+                try (FileInputStream in = new FileInputStream(file)) {
+                    int offset = 0;
+                    while (offset < bytes.length) {
+                        int read = in.read(bytes, offset, bytes.length - offset);
+                        if (read < 0) break;
+                        offset += read;
+                    }
+                    if (offset < bytes.length) {
+                        call.reject("File ended early while reading: " + path);
+                        return;
+                    }
+                }
+
+                String encoded = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                // Drop the raw copy before the bridge serializes the String.
+                bytes = null;
+
                 JSObject ret = new JSObject();
-                ret.put("data", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP));
+                ret.put("data", encoded);
                 call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to read file: " + e.getMessage());
+            } catch (OutOfMemoryError e) {
+                // Reject rather than rethrow: an Error escaping this thread is
+                // a fatal, app-killing crash.
+                call.reject("Ran out of memory reading: " + path, TOO_LARGE);
+            } catch (Throwable t) {
+                call.reject("Failed to read file: " + t.getMessage());
             }
         }).start();
     }

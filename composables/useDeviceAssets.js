@@ -65,6 +65,16 @@ function base64ToArrayBuffer(base64) {
   return bytes.buffer
 }
 
+// Every plugin-call argument is rebuilt as a Java String on the bridge's MAIN
+// thread. Handing Filesystem.writeFile a whole book's base64 in one call meant
+// a single ~54MB String allocation, which blew a 256MB heap and killed the app
+// outright (FATAL EXCEPTION: main, inside Capacitor's own Bridge). Writing in
+// slices keeps every bridge message small no matter how big the document is.
+//
+// Must stay a multiple of 4: each plugin call decodes its own base64, and 4
+// base64 characters map to 3 bytes — splitting off-boundary corrupts the file.
+export const ASSET_WRITE_CHUNK_CHARS = 4 * 1024 * 1024
+
 export const useDeviceAssets = () => {
   // Returns { uri, webSrc } or null on failure / web.
   const saveBase64 = async (subdir, name, base64) => {
@@ -72,11 +82,26 @@ export const useDeviceAssets = () => {
     try {
       await ensureDir(subdir)
       const path = fullPath(subdir, name)
-      await Filesystem.writeFile({
-        path,
-        data: stripBase64Prefix(base64),
-        directory: Directory.Data,
-      })
+      const data = stripBase64Prefix(base64)
+
+      if (data.length <= ASSET_WRITE_CHUNK_CHARS) {
+        await Filesystem.writeFile({ path, data, directory: Directory.Data })
+      } else {
+        // First slice creates (and truncates) the file, the rest append.
+        await Filesystem.writeFile({
+          path,
+          data: data.slice(0, ASSET_WRITE_CHUNK_CHARS),
+          directory: Directory.Data,
+        })
+        for (let offset = ASSET_WRITE_CHUNK_CHARS; offset < data.length; offset += ASSET_WRITE_CHUNK_CHARS) {
+          await Filesystem.appendFile({
+            path,
+            data: data.slice(offset, offset + ASSET_WRITE_CHUNK_CHARS),
+            directory: Directory.Data,
+          })
+        }
+      }
+
       const { uri } = await Filesystem.getUri({ path, directory: Directory.Data })
       return { uri, webSrc: assetWebSrc(uri) }
     } catch (error) {

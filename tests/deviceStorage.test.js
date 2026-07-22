@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { assetsAvailable } from '../composables/useDeviceAssets.js'
+import { ASSET_WRITE_CHUNK_CHARS, assetsAvailable } from '../composables/useDeviceAssets.js'
 import { isRemoteCoverUrl } from '../composables/useCoverImageCache.js'
 import { pdfSourceToBytes } from '../composables/usePdfExtractor.js'
 
@@ -72,5 +72,31 @@ describe('device storage layer', () => {
     expect(plugin).toContain('isNativeCapacitorPlatform')
     expect(plugin).toContain('unregister()')
     expect(plugin).toContain('caches.delete')
+  })
+})
+
+// Regression: Capacitor rebuilds every plugin-call argument as a Java String on
+// the bridge's MAIN thread. Passing a whole book's base64 to Filesystem.writeFile
+// in one call meant a ~54MB String allocation, which exhausted a 256MB heap and
+// killed the app inside Capacitor's own Bridge (FATAL EXCEPTION: main).
+describe('large assets are written in bridge-sized slices', () => {
+  test('writes chunked, and every chunk is base64-aligned', () => {
+    const source = read('composables/useDeviceAssets.js')
+    expect(source).toContain('Filesystem.appendFile')
+    // 4 base64 chars = 3 bytes; an off-boundary split silently corrupts the file.
+    expect(ASSET_WRITE_CHUNK_CHARS % 4).toBe(0)
+    expect(ASSET_WRITE_CHUNK_CHARS).toBeLessThanOrEqual(8 * 1024 * 1024)
+  })
+
+  test('slicing base64 on the chunk size round-trips byte-identically', () => {
+    const bytes = Buffer.alloc(9_000_003)
+    for (let i = 0; i < bytes.length; i += 1) bytes[i] = i % 251
+    const b64 = bytes.toString('base64')
+
+    let out = Buffer.alloc(0)
+    for (let o = 0; o < b64.length; o += ASSET_WRITE_CHUNK_CHARS) {
+      out = Buffer.concat([out, Buffer.from(b64.slice(o, o + ASSET_WRITE_CHUNK_CHARS), 'base64')])
+    }
+    expect(out.equals(bytes)).toBe(true)
   })
 })

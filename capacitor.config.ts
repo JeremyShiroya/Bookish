@@ -12,6 +12,11 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
   },
+  // Capacitor's verbose bridge logging stringifies EVERY plugin argument into
+  // a log line — including a whole book's base64 when writing a PDF. That
+  // StringBuilder.toString() was itself a ~54MB allocation and crashed the app
+  // inside Capacitor's own Bridge. Nothing needs those megabytes echoed.
+  loggingBehavior: 'production',
   plugins: {
     // Routes window.fetch through the native HTTP stack, bypassing WebView
     // CORS so on-device metadata search can query Goodreads, Kobo, etc.
