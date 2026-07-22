@@ -44,6 +44,12 @@ export default defineNuxtConfig({
     public: {
       appVersion: packageJson.version,
       buildNumber: resolveBuildNumber(),
+      // Baked into the bundle at build time so on-device metadata lookups use
+      // our own Books quota instead of the shared anonymous project, which is
+      // exhausted daily by everyone using it. Public by necessity: the native
+      // app has no server to keep it behind. Restrict the key to the Books API
+      // (and to the Android package) so a leak can only spend Books quota.
+      googleBooksApiKey: process.env.GOOGLE_BOOKS_API_KEY || process.env.NUXT_GOOGLE_BOOKS_API_KEY || '',
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || process.env.BOOKISH_API_BASE_URL || '',
       // Where the native build looks for version.json (see
       // scripts/generate-version-manifest.mjs). Empty disables the update

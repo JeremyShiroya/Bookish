@@ -63,10 +63,21 @@ export function googleBooksCooldownFor(message: string) {
   return /per day/i.test(message) ? GOOGLE_BOOKS_DAY_COOLDOWN_MS : GOOGLE_BOOKS_MINUTE_COOLDOWN_MS;
 }
 
-// An API key moves us off the shared anonymous project entirely. Server-side
-// only: `process` does not exist in the WebView, so this must stay guarded or
-// the whole on-device metadata pipeline throws on import.
+// An API key moves us off the shared anonymous project entirely.
+//
+// Two ways in, because this module runs in two places. On the server `process`
+// exists and the key comes from the environment. In the WebView there is no
+// `process` at all — reading it unguarded would throw on import and take the
+// whole on-device metadata pipeline with it — so the native side injects the
+// key instead, from Nuxt's public runtime config.
+let injectedGoogleBooksKey = '';
+
+export function setGoogleBooksApiKey(key: string) {
+  injectedGoogleBooksKey = String(key || '').trim();
+}
+
 function googleBooksKey() {
+  if (injectedGoogleBooksKey) return injectedGoogleBooksKey;
   if (typeof process === 'undefined') return '';
   return process.env?.GOOGLE_BOOKS_API_KEY || process.env?.NUXT_GOOGLE_BOOKS_API_KEY || '';
 }

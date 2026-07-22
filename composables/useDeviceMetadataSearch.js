@@ -11,13 +11,32 @@
 // is too slow for a phone, the second would ship the API key in the APK.
 // This module is dynamically imported so the web bundle never carries cheerio.
 
+import { useRuntimeConfig } from '#app'
 import { searchGoodreads, scrapeGoodreadsBook, fetchGoodreadsSeriesBooks } from '~/server/utils/goodreadsScraper'
-import { searchGoogleBooks } from '~/server/utils/googleBooksApi'
+import { searchGoogleBooks, setGoogleBooksApiKey } from '~/server/utils/googleBooksApi'
 import { searchInternetArchive } from '~/server/utils/internetArchiveApi'
 import { searchOpenLibrary } from '~/server/utils/openLibraryApi'
 import { searchKobo, scrapeKoboBook } from '~/server/utils/koboScraper'
 import { buildMetadataResults } from '~/server/utils/metadataAggregator'
 import { searchKnownPublisherSites, searchPublisherMetadata } from '~/server/utils/publisherMetadata'
+
+// The providers live in server/utils and cannot read Nuxt's runtime config
+// themselves, so hand the Books key down before any lookup runs. Without this
+// the phone falls back to the shared anonymous project, whose daily quota is
+// routinely already spent by other callers.
+let _googleKeyApplied = false
+
+function applyGoogleBooksKey() {
+  if (_googleKeyApplied) return
+  try {
+    const key = useRuntimeConfig()?.public?.googleBooksApiKey
+    if (key) setGoogleBooksApiKey(key)
+    _googleKeyApplied = true
+  } catch {
+    // Outside a Nuxt context (tests, early startup) — the server-side
+    // process.env path still applies, and the next call retries.
+  }
+}
 
 async function withTimeout(task, fallback, timeoutMs) {
   let timeoutId
@@ -199,6 +218,7 @@ async function getPublisherSources(title, author, publisherCandidates, onProgres
 }
 
 export async function fetchBookMetadataOnDevice(title, author, publisher, options = {}) {
+  applyGoogleBooksKey()
   const onProgress = options.onProgress
   // Bulk/background lookups set this to skip the slowest, lowest-yield stage.
   const light = options.light === true

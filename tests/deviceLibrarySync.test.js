@@ -272,3 +272,28 @@ describe('Google Books quota handling', () => {
     expect(api).toContain("typeof process === 'undefined'")
   })
 })
+
+// The native app has no server to keep a key behind, so the Books key is baked
+// into the bundle at build time. Without it the phone falls back to the shared
+// anonymous Google project, whose daily quota is routinely already spent.
+describe('on-device Google Books key', () => {
+  test('the key is exposed through public runtime config', () => {
+    const config = read('nuxt.config.ts')
+    expect(config).toContain('googleBooksApiKey')
+    // Read from the environment, never hardcoded into the repo.
+    expect(config).toMatch(/googleBooksApiKey:\s*process\.env\./)
+  })
+
+  test('the device pipeline injects the key into the provider module', () => {
+    const device = read('composables/useDeviceMetadataSearch.js')
+    expect(device).toContain('setGoogleBooksApiKey')
+    expect(device).toContain('applyGoogleBooksKey()')
+
+    const api = read('server/utils/googleBooksApi.ts')
+    // An injected key must win, since `process` does not exist in the WebView.
+    expect(api).toContain('export function setGoogleBooksApiKey')
+    expect(api).toContain('if (injectedGoogleBooksKey) return injectedGoogleBooksKey')
+    // And the process read must stay guarded or the module throws on import.
+    expect(api).toContain("typeof process === 'undefined'")
+  })
+})
