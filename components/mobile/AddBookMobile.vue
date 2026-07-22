@@ -619,7 +619,9 @@ const fetchMetadata = async () => {
     );
   } catch (error) {
     console.error('Failed to fetch metadata:', error);
-    addToast('Failed to fetch metadata from the web.', 'error');
+    // Surface the real reason: a fixed string made every failure look
+    // identical and impossible to report or diagnose.
+    addToast(error?.message || 'Failed to fetch metadata from the web.', 'error');
   } finally {
     isFetchingMetadata.value = false;
   }

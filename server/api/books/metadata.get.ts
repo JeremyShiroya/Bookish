@@ -418,7 +418,15 @@ export default defineEventHandler(async (event) => {
       send({ type: 'result', results });
     } catch (error) {
       console.error('Streaming metadata lookup failed:', error);
-      send({ type: 'error', message: 'Failed to fetch metadata from the web.' });
+      // Pass the real reason on. A fixed generic string here meant every
+      // failure reached the user as "Failed to fetch metadata from the web"
+      // with the cause discarded on the server, which is unreportable and
+      // undiagnosable from the outside.
+      const reason = error instanceof Error ? error.message : String(error);
+      send({
+        type: 'error',
+        message: reason ? `Metadata lookup failed: ${reason}` : 'Failed to fetch metadata from the web.',
+      });
     } finally {
       res.end();
     }
