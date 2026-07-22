@@ -82,6 +82,24 @@ function googleBooksKey() {
   return process.env?.GOOGLE_BOOKS_API_KEY || process.env?.NUXT_GOOGLE_BOOKS_API_KEY || '';
 }
 
+// Google Books intermittently answers 503 "Service temporarily unavailable"
+// — observed repeatedly from both the phone and a desktop, on the same URL and
+// key, minutes apart. It is transient and unrelated to the transport: a run
+// that looked like CapacitorHttp being rejected reversed completely on the next
+// attempt. Treating a 503 like a permanent failure meant the provider silently
+// contributed nothing, so a short retry rides it out instead.
+const TRANSIENT_RETRIES = 2;
+const TRANSIENT_DELAY_MS = 1200;
+
+async function booksFetch(url: string) {
+  let res = await fetch(url);
+  for (let attempt = 0; attempt < TRANSIENT_RETRIES && res.status >= 500; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, TRANSIENT_DELAY_MS * (attempt + 1)));
+    res = await fetch(url);
+  }
+  return res;
+}
+
 export async function searchGoogleBooks(title: string, author?: string): Promise<GBResult[]> {
   if (googleBooksRateLimited()) return [];
 
@@ -92,7 +110,7 @@ export async function searchGoogleBooks(title: string, author?: string): Promise
 
     for (const url of buildGoogleBooksUrls(title, author)) {
       if (results.length >= ENOUGH_RESULTS) break;
-      const res = await fetch(key ? `${url}&key=${encodeURIComponent(key)}` : url);
+      const res = await booksFetch(key ? `${url}&key=${encodeURIComponent(key)}` : url);
       if (res.status === 429) {
         const body = await res.text().catch(() => '');
         const cooldown = googleBooksCooldownFor(body);

@@ -297,3 +297,16 @@ describe('on-device Google Books key', () => {
     expect(api).toContain("typeof process === 'undefined'")
   })
 })
+
+// Google Books intermittently answers 503 on the same URL and key minutes
+// apart, from both phone and desktop. Treating that as a permanent failure
+// meant the provider silently contributed nothing to the merge.
+describe('Google Books rides out transient 5xx', () => {
+  test('a 5xx is retried rather than skipped', () => {
+    const api = read('server/utils/googleBooksApi.ts')
+    expect(api).toContain('res.status >= 500')
+    expect(api).toContain('await booksFetch(')
+    // A 429 is a quota verdict, not a blip — it must NOT be retried here.
+    expect(api).toContain('res.status === 429')
+  })
+})
