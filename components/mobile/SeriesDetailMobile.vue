@@ -31,7 +31,7 @@
         v-model:view="viewMode"
       />
 
-      <div v-if="filteredBooks.length" :class="viewMode === 'list' ? 'book-list' : 'books-grid'">
+      <div v-if="seriesEntries.length" :class="viewMode === 'list' ? 'book-list' : 'books-grid'">
         <template v-for="entry in seriesEntries" :key="entry.key">
           <LibraryBookCard
             v-if="entry.kind === 'book'"
@@ -48,17 +48,31 @@
             @delete="handleDeleteBook(entry.book)"
           />
 
+          <!-- An installment the library doesn't have yet. Shows the real cover
+               and title once metadata resolves, muted so it reads as a gap on
+               the shelf; a numbered placeholder until then. -->
           <article
             v-else
             class="missing-book-card"
             :class="{ 'missing-book-card-list': viewMode === 'list' }"
           >
             <div class="missing-cover">
-              <i class="ri-add-line" aria-hidden="true"></i>
+              <img
+                v-if="entry.cover"
+                :src="entry.cover"
+                :alt="entry.title || `Book ${entry.installment}`"
+                loading="lazy"
+              />
+              <template v-else>
+                <i class="ri-add-line" aria-hidden="true"></i>
+              </template>
               <span class="missing-number">{{ entry.installment }}</span>
             </div>
             <div class="missing-info">
-              <h3>Book {{ entry.installment }}</h3>
+              <h3>{{ entry.title || `Book ${entry.installment}` }}</h3>
+              <p v-if="entry.author">
+                {{ entry.author }}<template v-if="entry.year"> • {{ entry.year }}</template>
+              </p>
               <p>Not in your library</p>
             </div>
           </article>
@@ -107,6 +121,7 @@ import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch';
 import { matchesFormatFilter, useBookishSettings } from '~/composables/useBookishSettings';
 import { useBooks } from '~/composables/useBooks';
 import { ensureSeriesTotal, formatSeriesCollectionProgress } from '~/composables/useSeriesProgress';
+import { useSeriesSuggestions } from '~/composables/useSeriesSuggestions';
 import { useTTS } from '~/composables/useTTS';
 import MobileSettingsNav from './MobileSettingsNav.vue';
 
@@ -182,14 +197,17 @@ const readCount = computed(() => seriesBooks.value.filter((book) => normalizedSt
 // ── Series suggestions (Settings → Preferences) ─────────────────────────────
 //
 // The hero already counts what you own against the whole series ("2/6 books").
-// With suggestions on, the installments behind that gap are shown as muted
-// cards sitting in their real place in the reading order. Only in the
-// unfiltered view: a placeholder has no reading status and no file format, so
-// it can't honestly answer either filter.
+// With suggestions on, the installments behind that gap are shown as cards
+// sitting in their real place in the reading order.
+//
+// A missing book has no file format, so the format filter must NOT hide it —
+// filtering by EPUB/PDF still shows the gaps, which is the whole point of
+// "which book should I look for". It is only hidden under the "Read" status
+// filter, since a book you don't own can't have been read.
 const suggestionsEnabled = computed(() => (
   settings.value.seriesSuggestions === true
-  && selectedStatus.value === 'all'
-  && (settings.value.formatFilter || 'all') === 'all'
+  && selectedStatus.value !== 'Read'
+  && selectedStatus.value !== 'Reading'
 ));
 
 const missingInstallments = computed(() => {
@@ -210,6 +228,23 @@ const missingInstallments = computed(() => {
   return missing;
 });
 
+// Cover/title/author/year for missing installments, resolved through the same
+// metadata engine as Add/Edit's Fetch Metadata (in light mode) and shared with
+// the background sweep — installmentMeta is a live view of the store, so slots
+// filled by the sweep appear here without reopening the page.
+const { installments: installmentMeta, fetchSeriesInstallments } = useSeriesSuggestions(seriesName);
+
+watch([missingInstallments, seriesBooks], async ([missing, books]) => {
+  if (!import.meta.client || !missing.length || !seriesName.value) return;
+  try {
+    // Passing the missing numbers lets the composable judge whether its cache
+    // actually covers them, instead of trusting any non-empty result.
+    await fetchSeriesInstallments(seriesName.value, books, missing);
+  } catch (error) {
+    console.warn('[series detail] Failed to load missing-book metadata:', error);
+  }
+}, { immediate: true });
+
 // Owned books and missing-installment placeholders as one ordered list. Books
 // with no installment number can't be placed against the series, so they sort
 // to the end exactly as they already did.
@@ -222,11 +257,16 @@ const seriesEntries = computed(() => {
   }));
 
   for (const installment of missingInstallments.value) {
+    const meta = installmentMeta.value[installment];
     entries.push({
       key: `missing-${installment}`,
       kind: 'missing',
       installment,
       order: installment,
+      title: meta?.title || null,
+      author: meta?.author || null,
+      year: meta?.year || null,
+      cover: meta?.cover || null,
     });
   }
 
@@ -324,13 +364,17 @@ watch(seriesBooks, async (books) => {
   padding: 0 var(--mobile-page-padding-inline) calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
 }
 
+/* The blurred cover runs up behind the page nav rather than stopping under it.
+   Ending at the nav left a hard horizontal seam across the top of the hero;
+   pulling the hero up by the nav's height lets the blur fade through it. */
 .detail-hero {
+  --detail-nav-height: 70px;
   position: relative;
   display: grid;
   gap: 0.9rem;
   overflow: hidden;
-  margin: 0 calc(-1 * var(--mobile-page-padding-inline)) 1.1rem;
-  padding: 1.4rem var(--mobile-page-padding-inline) 1.3rem;
+  margin: calc(-1 * var(--detail-nav-height)) calc(-1 * var(--mobile-page-padding-inline)) 1.1rem;
+  padding: calc(var(--detail-nav-height) + 1.4rem) var(--mobile-page-padding-inline) 1.3rem;
   border-radius: 0 0 24px 24px;
   text-align: center;
 }
@@ -450,12 +494,28 @@ watch(seriesBooks, async (books) => {
 .missing-cover {
   position: relative;
   display: grid;
+  overflow: hidden;
   aspect-ratio: 2 / 3;
   place-items: center;
   border: 1.5px dashed color-mix(in srgb, var(--color-text-muted) 55%, transparent);
   border-radius: var(--mobile-card-radius, 20px);
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
+}
+
+/* A resolved cover fills the card and drops the dashed placeholder look; the
+   whole card stays dimmed so it still reads as "not owned yet". */
+.missing-cover:has(img) {
+  border-style: solid;
+  border-color: transparent;
+}
+
+.missing-cover img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .missing-cover i {
@@ -466,6 +526,14 @@ watch(seriesBooks, async (books) => {
   position: absolute;
   right: 8px;
   bottom: 8px;
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-background-app) 82%, transparent);
+  color: var(--color-text-secondary);
   font-size: var(--mobile-caption-size);
   font-weight: 700;
 }

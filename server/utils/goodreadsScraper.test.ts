@@ -4,6 +4,7 @@ import {
   parseGoodreadsDiscoveryHtml,
   parseGoodreadsProxySearchText,
   parseGoodreadsSearchHtml,
+  parseGoodreadsSeriesBooks,
   parseGoodreadsSeriesTotal,
   parseSeriesFromText,
   scrapeGoodreadsBook,
@@ -389,5 +390,147 @@ describe('goodreadsScraper parsing helpers', () => {
 
     await expect(scrapeGoodreadsBook('https://example.com/book/show/1')).resolves.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('parseGoodreadsSeriesBooks', () => {
+  // Matches the REAL series-page shape (verified against a live page fetched
+  // on-device 2026-07-19): one SeriesList component per book, props
+  // { series: [{ isLibrarianView, readOnlyStars, book }] } with NO
+  // seriesHeader field; the "Book N" label is an <h3> sibling, and the
+  // installment also rides in the title parenthetical.
+  const component = (book: Record<string, unknown>) => {
+    const props = JSON.stringify({ series: [{ isLibrarianView: false, readOnlyStars: false, book }] })
+      .replace(/"/g, '&quot;');
+    return `<div data-react-class="ReactComponents.SeriesList" data-react-props="${props}"></div>`;
+  };
+
+  it('reads the roster from the real React series-list markup', () => {
+    const html = `
+      <h3 class="gr-h3">Book 1</h3>
+      ${component({
+        title: 'Red Rising (Red Rising Saga, #1)',
+        bookTitleBare: 'Red Rising',
+        bookUrl: '/book/show/15839976-red-rising',
+        imageUrl: 'https://images-na.ssl-images-amazon.com/books/1461354651l/15839976._SX318_.jpg',
+        author: { id: 4764, name: 'Pierce Brown' },
+        publicationDate: 'January 28, 2014',
+      })}
+      <h3 class="gr-h3">Book 2</h3>
+      ${component({
+        title: 'Golden Son',
+        bookTitleBare: 'Golden Son',
+        bookUrl: '/book/show/18966819-golden-son?from_search=true',
+        imageUrl: 'https://images-na.ssl-images-amazon.com/books/1394684475l/18966819.jpg',
+        author: { id: 4764, name: 'Pierce Brown' },
+        publicationDate: '2015',
+      })}`;
+
+    const books = parseGoodreadsSeriesBooks(html);
+
+    expect(books).toHaveLength(2);
+    expect(books[0]).toMatchObject({
+      installment: '1',
+      title: 'Red Rising',
+      author: 'Pierce Brown',
+      year: 2014,
+      url: 'https://www.goodreads.com/book/show/15839976-red-rising',
+    });
+    // Size suffix stripped so the cover renders full resolution.
+    expect(books[0].cover).not.toContain('_SX318_');
+    // No parenthetical on this one — the installment comes from the <h3>.
+    expect(books[1]).toMatchObject({ installment: '2', title: 'Golden Son', year: 2015 });
+    expect(books[1].url).toBe('https://www.goodreads.com/book/show/18966819-golden-son');
+  });
+
+  it('never lets box sets or split editions claim an installment slot', () => {
+    const html = `
+      <h3 class="gr-h3">Book 1-3</h3>
+      ${component({
+        title: 'The Red Rising Trilogy (Red Rising Saga, #1-3)',
+        bookTitleBare: 'The Red Rising Trilogy',
+        bookUrl: '/book/show/256716-trilogy',
+        imageUrl: 'https://images.gr-assets.com/books/box.jpg',
+        author: { name: 'Pierce Brown' },
+      })}
+      <h3 class="gr-h3">Book 1, part 1</h3>
+      ${component({
+        title: 'Red Rising, Part 1',
+        bookTitleBare: 'Red Rising, Part 1',
+        bookUrl: '/book/show/999-part',
+        imageUrl: 'https://images.gr-assets.com/books/part.jpg',
+        author: { name: 'Pierce Brown' },
+      })}`;
+
+    const books = parseGoodreadsSeriesBooks(html);
+    expect(books).toHaveLength(2);
+    expect(books[0].installment).toBeNull();
+    expect(books[1].installment).toBeNull();
+  });
+
+  it('falls back to the legacy list markup', () => {
+    const html = `
+      <div class="listWithDividers__item">
+        <h3>Book 1</h3>
+        <a class="gr-h3" href="/book/show/15839976-red-rising"><span itemprop="name">Red Rising</span></a>
+        <span itemprop="author"><a href="/author/1">Pierce Brown</a></span>
+        <img src="https://images.gr-assets.com/books/1461354651m/15839976.jpg" />
+      </div>`;
+
+    const books = parseGoodreadsSeriesBooks(html);
+
+    expect(books).toHaveLength(1);
+    expect(books[0]).toMatchObject({
+      installment: '1',
+      title: 'Red Rising',
+      author: 'Pierce Brown',
+      cover: 'https://images.gr-assets.com/books/1461354651m/15839976.jpg',
+    });
+  });
+
+  it('returns an empty roster for unrecognized markup', () => {
+    expect(parseGoodreadsSeriesBooks('<html><body><p>nothing</p></body></html>')).toEqual([]);
+  });
+});
+
+// Regression: on the native app CapacitorHttp reports every response.url as
+// https://localhost/_capacitor_http_interceptor_?u=<encoded>. Search results
+// built from response.url carried that localhost URL, scrapeGoodreadsBook
+// rejected them all as non-Goodreads, and the series roster never resolved on
+// a phone even though every network request succeeded.
+describe('CapacitorHttp interceptor URLs', () => {
+  it('title-redirect results use the page canonical URL, not the interceptor response.url', async () => {
+    const interceptor = 'https://localhost/_capacitor_http_interceptor_?u='
+      + encodeURIComponent('https://www.goodreads.com/book/title?id=Red%20Rising');
+    const bookHtml = `
+      <html><head>
+        <title>Red Rising</title>
+        <meta property="og:url" content="https://www.goodreads.com/book/show/15839976-red-rising" />
+      </head><body>
+        <h1 data-testid="bookTitle">Red Rising</h1>
+        <div class="RatingStatistics__rating">4.27</div>
+      </body></html>`;
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      const response = new Response(bookHtml, { status: 200 });
+      Object.defineProperty(response, 'url', { value: interceptor });
+      return response;
+    });
+
+    const results = await searchGoodreads(`interceptor-test-${Date.now()}`);
+    expect(results).toHaveLength(1);
+    expect(results[0].url).toBe('https://www.goodreads.com/book/show/15839976-red-rising');
+  });
+
+  it('scrapeGoodreadsBook unwraps interceptor URLs instead of rejecting them', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      expect(String(input)).toBe('https://www.goodreads.com/book/show/1-x');
+      return new Response('<html><body><h1>X</h1></body></html>', { status: 200 });
+    });
+
+    const wrapped = 'https://localhost/_capacitor_http_interceptor_?u='
+      + encodeURIComponent('https://www.goodreads.com/book/show/1-x');
+    await scrapeGoodreadsBook(wrapped);
+    expect(fetchMock).toHaveBeenCalled();
   });
 });

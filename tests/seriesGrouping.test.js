@@ -55,7 +55,41 @@ describe('series suggestion placeholders', () => {
     // book sits between the installments either side of it.
     expect(source).toContain('seriesEntries')
     expect(source).toContain('missing-book-card')
-    // Placeholders only in the unfiltered view: they have no status or format.
-    expect(source).toMatch(/selectedStatus\.value === 'all'/)
+    // A missing book has no file format, so the format filter must not hide
+    // it; only the Read/Reading status filters exclude suggestions.
+    expect(source).toMatch(/selectedStatus\.value !== 'Read'/)
+    expect(source).not.toMatch(/suggestionsEnabled[\s\S]{0,200}formatFilter/)
+  })
+
+  test('missing installments resolve through the Goodreads series roster', () => {
+    const source = read('components/mobile/SeriesDetailMobile.vue')
+    expect(source).toContain('fetchSeriesInstallments')
+    expect(source).toContain('installmentMeta')
+    // The suggestion card renders the four resolved fields: cover, name,
+    // author, and year.
+    expect(source).toMatch(/missing-cover[\s\S]{0,200}entry\.cover/)
+    expect(source).toContain('entry.author')
+    expect(source).toContain('entry.year')
+
+    const suggestions = read('composables/useSeriesSuggestions.js')
+    // The roster (which enumerates the whole series) is the resolver — the
+    // per-book metadata engine can't return a series' siblings.
+    expect(suggestions).toContain('fetchSeriesBooksOnDevice')
+    expect(suggestions).toContain('series-books')
+    // A shared reactive store lets the background sweep update an open page.
+    expect(suggestions).toContain("useState('series-suggestions-store'")
+    expect(suggestions).toContain('startSeriesSuggestionSweep')
+  })
+
+  test('the background sweep and silent device rescan are wired from the native plugin', () => {
+    const plugin = read('plugins/device-library-sync.client.js')
+    expect(plugin).toContain('startSeriesSuggestionSweep')
+    expect(plugin).toContain('setInterval')
+    expect(plugin).toContain("syncDeviceLibrary({ silent: true })")
+
+    const sync = read('composables/useDeviceLibrarySync.js')
+    // Silent rescans never toast and never prompt for permissions.
+    expect(sync).toContain('silent = false')
+    expect(sync).toMatch(/silent \? \(\) => \{\} : realToast/)
   })
 })

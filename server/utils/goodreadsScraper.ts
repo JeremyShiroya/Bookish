@@ -31,6 +31,9 @@ export interface GoodreadsBookDetails {
   seriesInstallment: string | null;
   seriesTotal: string | null;
   seriesUrl: string | null;
+  // The page's own canonical /book/show/ URL. The reliable identity when the
+  // request URL was a redirect endpoint (or a CapacitorHttp interceptor URL).
+  canonicalUrl: string | null;
   webReview: string | null;
   ratingValue: string | null;
   ratingCount: string | null;
@@ -53,8 +56,26 @@ function absoluteGoodreadsUrl(url?: string | null) {
   return ABSOLUTE.test(url) ? url : `https://www.goodreads.com${url}`;
 }
 
+// In the native app, CapacitorHttp proxies every fetch through
+// `https://localhost/_capacitor_http_interceptor_?u=<encoded real url>` — and
+// that interceptor URL is what `response.url` reports. Unwrap it before
+// validating or normalizing, or every on-device redirect looks like a
+// localhost URL: search results carried it, scrapeGoodreadsBook rejected them
+// all as "non-Goodreads", and the series roster could never be resolved.
+function unwrapNativeHttpUrl(url?: string | null) {
+  const value = String(url || '');
+  if (!value.includes('_capacitor_http_interceptor_')) return value;
+  const match = value.match(/[?&]u=([^&]+)/);
+  if (!match) return value;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return value;
+  }
+}
+
 function normalizeGoodreadsPageUrl(url?: string | null) {
-  const full = absoluteGoodreadsUrl(url);
+  const full = absoluteGoodreadsUrl(unwrapNativeHttpUrl(url));
   return full ? full.split('?')[0].split('#')[0] : null;
 }
 
@@ -148,6 +169,225 @@ export function parseGoodreadsSeriesTotal(html: string) {
 
   const total = Number(match[1].replace(/,/g, ''));
   return Number.isSafeInteger(total) && total > 0 ? String(total) : null;
+}
+
+export interface GoodreadsSeriesBook {
+  installment: string | null;
+  title: string | null;
+  author: string | null;
+  cover: string | null;
+  year: number | null;
+  url: string | null;
+}
+
+// The series page's book objects carry a free-form `publicationDate`
+// ("January 28, 2014", "2014", "first published 2014", …). Pull a plausible
+// 4-digit year out of it for the suggestion card's "Author • Year" line.
+function yearFromPublicationDate(value?: unknown): number | null {
+  const match = String(value || '').match(/\b(1[5-9]\d\d|20\d\d)\b/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  return year >= 1500 && year <= 2100 ? year : null;
+}
+
+// Parse the book list out of a Goodreads SERIES page (goodreads.com/series/…).
+// This is the canonical roster of a series — every installment with its
+// position, title, author, and the edition cover Goodreads shows for the
+// series — which is exactly what the series-suggestions feature needs for the
+// books the library doesn't own yet.
+//
+// Real page shape (verified against a live page fetched on-device 2026-07-19):
+// one `ReactComponents.SeriesList` component PER BOOK, whose props are
+// `{ series: [{ isLibrarianView, readOnlyStars, book }] }` — there is NO
+// seriesHeader field in the JSON. The "Book N" label is a plain <h3> sibling
+// preceding the component, and the installment also rides in the book title's
+// parenthetical ("Red Rising (Red Rising Saga, #1)"). The page additionally
+// lists box sets ("Book 1-3") and split editions ("Book 1, part 1"), which
+// must NOT claim an installment slot.
+
+// Accept only a clean single position — "Book 1" / "Book #2.5" — never ranges
+// ("Book 1-3") or parts ("Book 1, part 2").
+function singleInstallmentFrom(header?: string | null) {
+  const match = compact(header).match(/^book\s*#?\s*([\d.]+)$/i);
+  return match ? match[1] : null;
+}
+
+export function parseGoodreadsSeriesBooks(html: string): GoodreadsSeriesBook[] {
+  const $ = cheerio.load(html);
+  const books: GoodreadsSeriesBook[] = [];
+  const seen = new Set<string>();
+
+  const push = (entry: GoodreadsSeriesBook) => {
+    const key = entry.url || `${entry.title}::${entry.installment}`;
+    if (!entry.title || seen.has(key)) return;
+    seen.add(key);
+    books.push(entry);
+  };
+
+  $('[data-react-class="ReactComponents.SeriesList"]').each((_, el) => {
+    const raw = $(el).attr('data-react-props');
+    if (!raw) return;
+    let props: any;
+    try {
+      props = JSON.parse(raw);
+    } catch {
+      return;
+    }
+
+    // The <h3>Book N</h3> label sits just before the component (possibly
+    // wrapped one level up). Ranges/parts return null here by design.
+    const headerText = compact($(el).prevAll('h3').first().text())
+      || compact($(el).parent().prevAll('h3').first().text());
+    const headerInstallment = singleInstallmentFrom(headerText);
+
+    const entries = Array.isArray(props?.series) ? props.series : [];
+    for (const entry of entries) {
+      const book = entry?.book;
+      if (!book?.title) continue;
+
+      // Title parenthetical is the most reliable per-book source. Reject
+      // ranges ("#1-3"): a box set must not claim a real installment's slot.
+      const split = splitGoodreadsTitle(book.title);
+      const isRange = /#?\s*[\d.]+\s*-\s*[\d.]+/.test(split.rawSeriesTitle || '');
+      const titleInstallment = !isRange && split.seriesInstallment ? split.seriesInstallment : null;
+
+      push({
+        installment: titleInstallment ?? headerInstallment,
+        title: compact(book.bookTitleBare) || compact(split.title) || compact(book.title) || null,
+        author: compact(book?.author?.name) || null,
+        cover: normalizeGoodreadsImage(book.imageUrl) || null,
+        year: yearFromPublicationDate(book.publicationDate),
+        url: normalizeGoodreadsPageUrl(book.bookUrl),
+      });
+    }
+  });
+
+  if (books.length) return books;
+
+  // Legacy/desktop markup fallback: list items with an h3 "Book N" header, a
+  // titled link, and a cover img.
+  $('.listWithDividers__item').each((_, el) => {
+    const item = $(el);
+    const title = compact(item.find('a.gr-h3 span[itemprop="name"]').first().text())
+      || compact(item.find('a.gr-h3').first().text());
+    if (!title) return;
+    const split = splitGoodreadsTitle(title);
+    push({
+      installment: split.seriesInstallment ?? singleInstallmentFrom(item.find('h3').first().text()),
+      title: compact(split.title) || title,
+      author: compact(item.find('span[itemprop="author"] a').first().text())
+        || compact(item.find('a.authorName').first().text()) || null,
+      cover: normalizeGoodreadsImage(item.find('img').first().attr('src')) || null,
+      year: yearFromPublicationDate(item.find('[class*="publi"]').first().text()),
+      url: normalizeGoodreadsPageUrl(item.find('a.gr-h3').first().attr('href')),
+    });
+  });
+
+  return books;
+}
+
+export async function scrapeGoodreadsSeriesBooks(seriesUrl: string): Promise<GoodreadsSeriesBook[]> {
+  const targetUrl = unwrapNativeHttpUrl(seriesUrl);
+  if (!/^https:\/\/(?:www\.)?goodreads\.com\//i.test(targetUrl)) return [];
+
+  // Goodreads intermittently answers 202 (an anti-bot interstitial with no
+  // data) when several requests land close together — which is exactly the
+  // situation on a series page open, where the roster fetch runs alongside the
+  // metadata lookups. One paced retry rides out the throttle.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(targetUrl, { headers });
+      if (response.status === 200) {
+        const books = parseGoodreadsSeriesBooks(await response.text());
+        if (books.length) return books;
+      }
+    } catch {
+      // Fall through to the retry.
+    }
+    if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 1200));
+  }
+  return [];
+}
+
+// One-hop roster seed: the title-redirect endpoint serves the full book page
+// directly, so the series link can be read without trusting search-result URLs
+// — and with half the requests, halving the chances of the anti-bot 202
+// interrupting the chain.
+async function scrapeGoodreadsBookByTitle(title: string, author?: string): Promise<GoodreadsBookDetails | null> {
+  const query = encodeURIComponent(author ? `${title} ${author}` : title);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(`https://www.goodreads.com/book/title?id=${query}`, { headers });
+      if (response.status === 200) {
+        const details = parseGoodreadsBookHtml(await response.text());
+        if (details.title || details.seriesUrl) return details;
+      }
+    } catch {
+      // Fall through to the retry.
+    }
+    if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 1200));
+  }
+  return null;
+}
+
+// Resolve a series roster from a book the user OWNS: search Goodreads for the
+// seed book, follow it to its series page, and return every installment. The
+// covers come from the series page itself, so they belong to one consistent
+// edition run rather than a mix of publisher re-releases.
+//
+// When the book page is bot-walled (Goodreads answers some networks with a 202
+// stub), fall back to plain search results: their "(Series, #N)" titles carry
+// the series, installment, and a cover, which is enough for suggestion cards.
+export async function fetchGoodreadsSeriesBooks(seedTitle: string, author?: string, seriesName?: string): Promise<{
+  series: string | null;
+  books: GoodreadsSeriesBook[];
+}> {
+  // Try the direct title→book-page hop first: one request to the series link
+  // instead of search→scrape, so a throttled burst has fewer places to break
+  // the chain.
+  const direct = await scrapeGoodreadsBookByTitle(seedTitle, author);
+  if (direct?.seriesUrl) {
+    const books = await scrapeGoodreadsSeriesBooks(direct.seriesUrl);
+    if (books.length) {
+      return { series: direct.series ?? null, books };
+    }
+  }
+
+  const searchResults = await searchGoodreads(seedTitle, author);
+
+  for (const result of searchResults.slice(0, 3)) {
+    const details = await scrapeGoodreadsBook(result.url, result);
+    if (!details?.seriesUrl) continue;
+    const books = await scrapeGoodreadsSeriesBooks(details.seriesUrl);
+    if (books.length) {
+      return { series: details.series ?? null, books };
+    }
+  }
+
+  if (!seriesName) return { series: null, books: [] };
+
+  const seriesKey = compact(seriesName).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const fromSearch = new Map<string, GoodreadsSeriesBook>();
+  for (const query of [seriesName, `${seriesName} series`]) {
+    for (const result of await searchGoodreads(query, author)) {
+      const resultKey = compact(result.series).toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!resultKey || !result.seriesInstallment) continue;
+      if (resultKey !== seriesKey && !resultKey.includes(seriesKey) && !seriesKey.includes(resultKey)) continue;
+      if (fromSearch.has(result.seriesInstallment)) continue;
+      fromSearch.set(result.seriesInstallment, {
+        installment: result.seriesInstallment,
+        title: result.title || null,
+        author: result.author || null,
+        cover: result.cover || null,
+        url: result.url || null,
+      });
+    }
+    if (fromSearch.size) break;
+  }
+
+  return fromSearch.size
+    ? { series: seriesName, books: [...fromSearch.values()] }
+    : { series: null, books: [] };
 }
 
 export function splitGoodreadsTitle(rawTitle?: string | null) {
@@ -591,9 +831,14 @@ async function searchGoodreadsTitleRedirects(title: string, author?: string): Pr
       const details = parseGoodreadsBookHtml(await response.text());
       if (!details.title && !details.ratingValue) continue;
       const split = splitGoodreadsTitle(details.title || title);
-      seen.add(url);
+      // The redirect endpoint's own URL isn't the book page (and on the native
+      // app response.url is a CapacitorHttp interceptor URL) — the page's
+      // canonical /book/show/ URL is what later scrapes must be pointed at.
+      const pageUrl = details.canonicalUrl || url;
+      if (seen.has(pageUrl)) continue;
+      seen.add(pageUrl);
       results.push({
-        url,
+        url: pageUrl,
         title: split.title || details.title || title,
         rawTitle: details.title || title,
         author: details.author || author || null,
@@ -721,6 +966,11 @@ export function parseGoodreadsBookHtml(html: string, seed?: Partial<GoodreadsSea
     genres.add(value);
   });
 
+  const canonicalUrl = normalizeGoodreadsPageUrl(
+    firstAttr($, ['link[rel="canonical"]'], 'href')
+    || firstAttr($, ['meta[property="og:url"]'], 'content'),
+  );
+
   return {
     title,
     author,
@@ -730,6 +980,7 @@ export function parseGoodreadsBookHtml(html: string, seed?: Partial<GoodreadsSea
     seriesInstallment,
     seriesTotal,
     seriesUrl,
+    canonicalUrl: canonicalUrl && canonicalUrl.includes('/book/show/') ? canonicalUrl : null,
     webReview,
     ratingValue: ratingValue || null,
     ratingCount: ratingCount || null,
@@ -839,13 +1090,16 @@ export async function searchGoodreads(title: string, author?: string): Promise<G
 }
 
 export async function scrapeGoodreadsBook(bookUrl: string, seed?: Partial<GoodreadsSearchResult>): Promise<GoodreadsBookDetails | null> {
-  if (!/^https:\/\/(?:www\.)?goodreads\.com\//i.test(bookUrl)) {
-    console.warn('scrapeGoodreadsBook: rejected non-Goodreads URL', bookUrl);
+  // Unwrap first: a CapacitorHttp interceptor URL wraps a legitimate
+  // Goodreads target and must not be rejected as non-Goodreads.
+  const targetUrl = unwrapNativeHttpUrl(bookUrl);
+  if (!/^https:\/\/(?:www\.)?goodreads\.com\//i.test(targetUrl)) {
+    console.warn('scrapeGoodreadsBook: rejected non-Goodreads URL', targetUrl);
     return null;
   }
 
   try {
-    const response = await fetch(bookUrl, { headers });
+    const response = await fetch(targetUrl, { headers });
     if (!response.ok) return null;
     const details = parseGoodreadsBookHtml(await response.text(), seed);
     if (!details.seriesUrl) return details;
