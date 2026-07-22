@@ -18,6 +18,11 @@
           Use Pages to add books, group series, track what you are reading, listen from the
           player, and carry your backup with you through Storage import and export.
         </p>
+
+        <p>
+          Special thanks to <strong>Hope Makena Mutinda</strong>, who served as a key source of inspiration and provided 
+          invaluable support through beta testing and feedback during the creation of the project.
+        </p>
       </div>
 
       <p class="closing-copy">
