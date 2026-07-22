@@ -29,6 +29,9 @@
             <button type="button" class="title-action" title="Edit playlist" @click="editingPlaylist = playlist">
               <i class="ri-edit-line"></i>
             </button>
+            <button type="button" class="title-action danger" title="Delete playlist" @click="showDeletePlaylist = true">
+              <i class="ri-delete-bin-line"></i>
+            </button>
           </div>
           <span class="hero-meta">
             {{ playlistBooks.length }} {{ playlistBooks.length === 1 ? 'book' : 'books' }}<template v-if="playlistBooks.length"> · {{ readCount }} read</template>
@@ -102,6 +105,13 @@
       @close="showDeleteModal = false; bookToDelete = null"
       @confirm="confirmDeleteBook"
     />
+
+    <PlaylistDeleteModal
+      v-if="showDeletePlaylist && playlist"
+      :playlist="playlist"
+      @close="showDeletePlaylist = false"
+      @confirm="confirmDeletePlaylist"
+    />
   </div>
 </template>
 
@@ -113,6 +123,7 @@ import DeleteConfirmModal from '~/components/shared/DeleteConfirmModal.vue';
 import EmptyState from '~/components/shared/EmptyState.vue';
 import LibraryBookCard from '~/components/shared/LibraryBookCard.vue';
 import LibraryControlsRow from '~/components/shared/LibraryControlsRow.vue';
+import PlaylistDeleteModal from '~/components/shared/PlaylistDeleteModal.vue';
 import PlaylistEditModal from '~/components/shared/PlaylistEditModal.vue';
 import { matchesFormatFilter, useBookishSettings } from '~/composables/useBookishSettings';
 import { useBooks } from '~/composables/useBooks';
@@ -122,7 +133,7 @@ import MobileSettingsNav from './MobileSettingsNav.vue';
 
 const route = useRoute();
 const router = useRouter();
-const { books, collections, updatePlaylist, deleteBook, toggleFavourite, hideBook } = useBooks();
+const { books, collections, updatePlaylist, deletePlaylist, deleteBook, toggleFavourite, hideBook } = useBooks();
 const { settings } = useBookishSettings();
 const { addToast } = useToast();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
@@ -133,6 +144,7 @@ const editingPlaylist = ref(null);
 const savingPlaylist = ref(false);
 const showDeleteModal = ref(false);
 const bookToDelete = ref(null);
+const showDeletePlaylist = ref(false);
 
 const playlist = computed(() => (
   collections.value.find((item) => String(item.id) === String(route.params.id))
@@ -203,6 +215,19 @@ const savePlaylist = async (updatedPlaylist) => {
   }
 };
 
+const confirmDeletePlaylist = async () => {
+  const target = playlist.value;
+  showDeletePlaylist.value = false;
+  if (!target) return;
+  try {
+    await deletePlaylist(target.id);
+    addToast('Playlist deleted', 'success');
+    router.replace('/playlists');
+  } catch {
+    addToast('Could not delete playlist', 'error');
+  }
+};
+
 const generateCoverPlaceholder = (title) => {
   const colors = ['#8A2BE2', '#6A0DAD', '#2f7d62', '#b45309'];
   const safeTitle = String(title || 'Book');
@@ -247,13 +272,17 @@ const getStackStyle = (index, total = 3) => {
   padding: 0 var(--mobile-page-padding-inline) calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
 }
 
+/* The blurred cover runs up behind the page nav rather than stopping under it.
+   Ending at the nav left a hard horizontal seam across the top of the hero;
+   pulling the hero up by the nav's height lets the blur fade through it. */
 .detail-hero {
+  --detail-nav-height: 70px;
   position: relative;
   display: grid;
   gap: 0.9rem;
   overflow: hidden;
-  margin: 0 calc(-1 * var(--mobile-page-padding-inline)) 1.1rem;
-  padding: 1.4rem var(--mobile-page-padding-inline) 1.3rem;
+  margin: calc(-1 * var(--detail-nav-height)) calc(-1 * var(--mobile-page-padding-inline)) 1.1rem;
+  padding: calc(var(--detail-nav-height) + 1.4rem) var(--mobile-page-padding-inline) 1.3rem;
   border-radius: 0 0 24px 24px;
   text-align: center;
 }
@@ -378,6 +407,10 @@ const getStackStyle = (index, total = 3) => {
   color: var(--color-brand-primary);
   cursor: pointer;
   font-size: 1rem;
+}
+
+.title-action.danger {
+  color: var(--color-status-danger-bright, #dc2626);
 }
 
 /* Books, grid and list, exactly as the Books page renders them. */

@@ -486,6 +486,24 @@ export const useBooks = () => {
     }
   };
 
+  const removeBookFromPlaylist = async (playlistId, bookId) => {
+    try {
+      const store = useLibraryStore();
+      const storedPlaylist = collections.value.find(item => String(item.id) === String(playlistId));
+      await store.removeBookFromCollection(storedPlaylist?.id ?? playlistId, bookId);
+      await fetchAllData(true);
+    } catch (err) {
+      console.error('Failed to remove book from playlist:', err);
+      throw err;
+    }
+  };
+
+  // A book belongs to a playlist if any collection lists its id. Used to fill
+  // the playlist icon on library cards, the way isFavourite fills the heart.
+  const bookInAnyPlaylist = (bookId) => (
+    collections.value.some(playlist => (playlist.bookIds || []).some(id => String(id) === String(bookId)))
+  );
+
   const popularBooks = computed(() =>
     [...books.value]
       .sort((a, b) => {
@@ -523,6 +541,8 @@ export const useBooks = () => {
     updatePlaylist,
     deletePlaylist,
     addBookToPlaylist,
+    removeBookFromPlaylist,
+    bookInAnyPlaylist,
     fetchAllData,
     fetchBookById,
     cacheRemoteLibraryCovers,

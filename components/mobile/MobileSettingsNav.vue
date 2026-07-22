@@ -75,6 +75,10 @@ const goBack = () => {
 
 @media (width <= 768px) {
   .nav {
+    /* Detail pages run their blurred cover art up behind this bar, so it has to
+       stack above that backdrop to stay readable. */
+    position: relative;
+    z-index: 2;
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr) 44px;
     align-items: center;

@@ -265,7 +265,9 @@ describe('mobile UX batch', () => {
     expect(page).toContain('ResponsiveViewSwitch')
 
     const mobile = read('components/mobile/SettingsStorageMobile.vue')
-    expect(mobile).toContain('backfillLibraryMetadata')
+    // The run lives in the composable so it survives navigation; the page
+    // only starts it and observes shared progress.
+    expect(mobile).toContain('useLibraryBackfill')
     expect(mobile).toContain('backfill-bar')
     expect(mobile).toContain('View {{ backfill.failures.length }} unsuccessful')
     expect(mobile).toContain('failures-modal')
@@ -459,11 +461,13 @@ describe('mobile UX batch', () => {
     const playlist = read('components/shared/AddToPlaylistModal.vue')
     expect(playlist).toContain('playlist-sheet')
     expect(playlist).toMatch(/align-items:\s*flex-end/)
-    // One tap on a playlist row adds the book and closes — no second confirm.
-    expect(playlist).toContain('addToPlaylist')
-    expect(playlist).toContain("@click=\"addToPlaylist(playlist)\"")
+    // The book is already chosen when the sheet opens; a row tap toggles it in
+    // or out and the sheet stays open, so one book can go into many playlists.
+    expect(playlist).toContain('togglePlaylist')
+    expect(playlist).toContain("@click=\"togglePlaylist(playlist)\"")
+    expect(playlist).toContain('removeBookFromPlaylist')
     expect(playlist).not.toContain('save-button')
-    // Playlists already holding the book stay visible, marked "Added".
+    // Playlists already holding the book render as selected, not hidden.
     expect(playlist).toContain('alreadyHas')
   })
 

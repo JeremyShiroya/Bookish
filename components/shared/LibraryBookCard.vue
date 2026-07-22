@@ -69,8 +69,14 @@
         >
           <i :class="book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line'"></i>
         </button>
-        <button type="button" class="action-button" title="Add to playlist" @click.stop="emit('playlist', book)">
-          <i class="ri-play-list-2-line"></i>
+        <button
+          type="button"
+          class="action-button"
+          :class="{ 'in-playlist': inPlaylist }"
+          title="Add to playlist"
+          @click.stop="emit('playlist', book)"
+        >
+          <i :class="inPlaylist ? 'ri-play-list-fill' : 'ri-play-list-2-line'"></i>
         </button>
         <button type="button" class="action-button" title="Edit book" @click.stop="emit('edit', book)">
           <i class="ri-edit-line"></i>
@@ -91,6 +97,7 @@ import { computed } from 'vue'
 import GoodreadsIcon from './GoodreadsIcon.vue'
 import GoodreadsRatingDisplay from './GoodreadsRatingDisplay.vue'
 import { getGoodreadsRating } from '~/composables/useGoodreadsRating'
+import { useBooks } from '~/composables/useBooks'
 
 const props = defineProps({
   book: {
@@ -115,6 +122,12 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['open', 'play', 'favourite', 'playlist', 'edit', 'hide', 'delete'])
+
+// Whether this book sits in any playlist, so the playlist icon can fill the
+// way the favourite heart does. Reactive on the shared collections list, so
+// adding/removing in the sheet updates every card at once.
+const { bookInAnyPlaylist } = useBooks()
+const inPlaylist = computed(() => bookInAnyPlaylist(props.book.id))
 const progress = computed(() => Math.max(0, Math.min(100, Number(props.book.progress) || 0)))
 
 const generateCoverPlaceholder = (title) => {
@@ -424,6 +437,13 @@ const formatPersonalRating = (rating) => {
 .action-button.active,
 .action-button.active i {
   color: var(--color-status-danger-bright);
+}
+
+/* Filled when the book is in any playlist — brand purple, so it reads as
+   membership rather than borrowing the favourite heart's red. */
+.action-button.in-playlist,
+.action-button.in-playlist i {
+  color: var(--color-brand-primary);
 }
 
 .action-button.delete:hover {

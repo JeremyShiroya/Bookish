@@ -45,6 +45,13 @@
       @save="savePlaylist"
     />
 
+    <PlaylistDeleteModal
+      v-if="playlistToDelete"
+      :playlist="playlistToDelete"
+      @close="playlistToDelete = null"
+      @confirm="performDelete"
+    />
+
     <!-- Empty State -->
     <EmptyState
       v-if="playlistsWithBooks.length === 0 && !showSkeleton"
@@ -70,6 +77,7 @@ import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import { useToast } from "~/composables/useToast";
 import EmptyState from "../shared/EmptyState.vue";
+import PlaylistDeleteModal from "../shared/PlaylistDeleteModal.vue";
 import PlaylistEditModal from "../shared/PlaylistEditModal.vue";
 import SeriesCollageCard from "../shared/SeriesCollageCard.vue";
 import MobileBottomNav from "./MobileBottomNav.vue";
@@ -82,6 +90,7 @@ const { addToast } = useToast();
 const router = useRouter();
 const editingPlaylist = ref(null);
 const savingPlaylist = ref(false);
+const playlistToDelete = ref(null);
 const contextMenu = reactive({ playlist: null, x: 0, y: 0 });
 
 const openPlaylist = (playlist) => {
@@ -123,9 +132,15 @@ const savePlaylist = async (playlist) => {
   }
 };
 
-const confirmDelete = async (playlist) => {
+const confirmDelete = (playlist) => {
   closeContextMenu();
-  if (!window.confirm(`Delete the playlist "${playlist.name}"? The books will remain in your library.`)) return;
+  playlistToDelete.value = playlist;
+};
+
+const performDelete = async () => {
+  const playlist = playlistToDelete.value;
+  if (!playlist) return;
+  playlistToDelete.value = null;
   try {
     await deletePlaylist(playlist.id);
     addToast('Playlist deleted', 'success');

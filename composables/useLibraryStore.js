@@ -261,6 +261,31 @@ export const useLibraryStore = () => {
     })
   }
 
+  const removeBookFromCollection = async (collectionId, bookId) => {
+    const db = await openLibraryDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('collections', 'readwrite')
+      const store = tx.objectStore('collections')
+      const req = store.get(collectionId)
+      req.onsuccess = (e) => {
+        const collection = e.target.result
+        if (!collection) {
+          reject(new Error(`Collection ${collectionId} not found`))
+          tx.abort()
+          return
+        }
+        if (collection.bookIds.some((id) => String(id) === String(bookId))) {
+          collection.bookIds = collection.bookIds.filter((id) => String(id) !== String(bookId))
+          collection.updatedAt = nextTimestamp(collection.updatedAt)
+          store.put(collection)
+        }
+      }
+      tx.oncomplete = () => resolve()
+      tx.onerror = (e) => reject(e.target.error)
+      tx.onabort = (e) => reject(e.target.error ?? new DOMException('Transaction aborted'))
+    })
+  }
+
   const updateAuthorImage = async (authorName, imageUrl) => {
     const db = await openLibraryDB()
     await new Promise((resolve, reject) => {
@@ -338,6 +363,7 @@ export const useLibraryStore = () => {
     updateCollection,
     deleteCollection,
     addBookToCollection,
+    removeBookFromCollection,
     getProfile,
     saveProfile,
     updateAuthorImage,
