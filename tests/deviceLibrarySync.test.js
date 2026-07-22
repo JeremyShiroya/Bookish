@@ -4,8 +4,10 @@ import { describe, expect, test } from 'vitest'
 import {
   BOOKISH_DEVICE_IMPORTS_KEY,
   BOOKISH_SCAN_FOLDERS_KEY,
+  MAX_DEVICE_IMPORT_BYTES,
   cleanTitleFromFileName,
   fileInScanFolders,
+  isTooLargeError,
   mergeMetadataIntoBook,
   normalizeScanFolder,
   readImportRegistry,
@@ -137,5 +139,113 @@ describe('device library sync', () => {
     const nuxtPlugin = read('plugins/device-library-sync.client.js')
     expect(nuxtPlugin).toContain('syncDeviceLibrary')
     expect(nuxtPlugin).toContain('isNativeCapacitorPlatform')
+  })
+})
+
+// Regression: a library with hundreds of books almost always contains one huge
+// document. Base64-ing an 80MB book needed ~380MB against Android's 256MB heap
+// cap, and the OutOfMemoryError (an Error, not an Exception) escaped the
+// plugin's catch and killed the whole app on launch.
+describe('oversized device documents never crash the app', () => {
+  test('the import cap is small enough for the base64 bridge to survive', () => {
+    // Peak native cost is ~3.7x the file size; the cap must leave room inside
+    // a 256MB heap that the WebView is already using part of.
+    expect(MAX_DEVICE_IMPORT_BYTES).toBeLessThanOrEqual(64 * 1024 * 1024)
+    expect(selectNewDeviceFiles(
+      [{ path: '/storage/emulated/0/Books/huge.pdf', size: 81 * 1024 * 1024, modified: 1 }],
+      {},
+    )).toEqual([])
+  })
+
+  test('a file proven too large is never retried on later scans', () => {
+    const file = { path: '/storage/emulated/0/Books/big.epub', size: 40 * 1024 * 1024, modified: 7 }
+    const registry = { [file.path]: { size: file.size, modified: file.modified, failed: true, tooLarge: true } }
+    expect(selectNewDeviceFiles([file], registry)).toEqual([])
+
+    // …but a genuinely different file at that path is fair game again.
+    const replaced = { ...file, size: 2 * 1024 * 1024, modified: 9 }
+    expect(selectNewDeviceFiles([replaced], registry)).toEqual([replaced])
+  })
+
+  test('recognises the native too-large rejection by code and by message', () => {
+    expect(isTooLargeError({ code: 'FILE_TOO_LARGE' })).toBe(true)
+    expect(isTooLargeError({ message: 'Not enough memory to import a 90MB file' })).toBe(true)
+    expect(isTooLargeError({ message: 'Ran out of memory reading: /x.pdf' })).toBe(true)
+    expect(isTooLargeError({ message: 'File cannot be read: /x.pdf' })).toBe(false)
+    expect(isTooLargeError(undefined)).toBe(false)
+  })
+
+  test('the native plugin catches Throwable so an OOM can never be fatal', () => {
+    const plugin = read('android/app/src/main/java/com/bookish/app/DeviceBooksPlugin.java')
+    // Both bridge readers must catch Error, not just Exception.
+    expect(plugin.match(/catch \(OutOfMemoryError/g) || []).toHaveLength(2)
+    expect(plugin.match(/catch \(Throwable/g) || []).toHaveLength(2)
+    expect(plugin).not.toMatch(/catch \(Exception e\) \{\s*call\.reject\("Failed to read file/)
+    // And refuse a read up front when the heap cannot afford it.
+    expect(plugin).toContain('availableHeapBytes')
+    expect(plugin).toContain('FILE_TOO_LARGE')
+    // The doubling ByteArrayOutputStream is gone from the path-based read.
+    expect(plugin).toContain('byte[] bytes = new byte[(int) length]')
+  })
+})
+
+// Regression: metadata "not working" on a real 300-book phone. Live probes on
+// device showed Google Books returning 429 (anonymous quota burned by the
+// backfill + series sweep), Open Library unreachable, and Goodreads reachable
+// but ~9s per page — so the parallel detail scrapes blew their budget and the
+// timeout threw away the search results along with them.
+describe('metadata pipeline survives slow and rate-limited providers', () => {
+  test('Goodreads search results are kept even when detail scraping times out', () => {
+    const source = read('composables/useDeviceMetadataSearch.js')
+    // Search results are the baseline; scrapes only enrich them.
+    expect(source).toContain('goodreadsSourceFrom')
+    expect(source).toMatch(/if \(!searchResults\.length\) return \[\]/)
+    // Fewer parallel ~900KB page fetches, and a budget that fits a slow phone
+    // (a single Goodreads page measured ~9s on the affected device).
+    expect(source).toContain('searchResults.slice(0, 2)')
+    const getSources = source.slice(
+      source.indexOf('async function getGoodreadsSources'),
+      source.indexOf('async function getKoboSources'),
+    )
+    expect(getSources).not.toContain('15000')
+    expect(getSources).toContain('25000')
+  })
+
+  test('Google Books backs off instead of hammering an exhausted quota', () => {
+    const api = read('server/utils/googleBooksApi.ts')
+    expect(api).toContain('googleBooksRateLimited')
+    expect(api).toContain('res.status === 429')
+    expect(api).toMatch(/if \(googleBooksRateLimited\(\)\) return \[\]/)
+  })
+
+  test('the library backfill runs outside component scope so navigation cannot kill it', () => {
+    const composable = read('composables/useMetadataBackfill.js')
+    expect(composable).toContain('useLibraryBackfill')
+    expect(composable).toContain('startLibraryBackfill')
+
+    const page = read('components/mobile/SettingsStorageMobile.vue')
+    // The page observes shared state; it must not own the loop or its flags.
+    expect(page).toContain('useLibraryBackfill()')
+    expect(page).not.toContain('let _stopRequested = false')
+    expect(page).not.toMatch(/backfill\.running = true/)
+  })
+})
+
+// The publisher-site crawl measured as the bulk of a 35s on-device lookup and
+// almost never matched without a publisher name to aim at. At ~300 books that
+// alone turned a library backfill into a multi-hour job.
+describe('publisher crawling is not performed blind', () => {
+  test('bulk sweeps skip the blind crawl; interactive fetches keep it', () => {
+    const source = read('composables/useDeviceMetadataSearch.js')
+    expect(source).toContain('options.light === true')
+    expect(source).toContain('!publisherSources.length && (publisherCandidates.length || !light)')
+
+    // Every background caller opts into light mode; the Add/Edit screens do
+    // not, so a user watching a spinner still gets the richest result.
+    expect(read('composables/useMetadataBackfill.js')).toContain('{ light: true }')
+    expect(read('composables/useDeviceLibrarySync.js')).toContain('{ light: true }')
+    for (const page of ['components/mobile/EditBookMobile.vue', 'components/mobile/AddBookMobile.vue']) {
+      expect(read(page), page).not.toContain('light: true')
+    }
   })
 })

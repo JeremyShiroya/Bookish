@@ -1,3 +1,4 @@
+import { reactive, readonly } from 'vue'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
 import { mergeMetadataIntoBook } from '~/composables/useDeviceLibrarySync'
 
@@ -23,7 +24,9 @@ export async function backfillLibraryMetadata({ books, updateBook, onProgress, s
     onProgress?.({ current: index + 1, total: targets.length, title: book.title })
 
     try {
-      const results = await fetchBookMetadataResults(book.title, book.author || undefined, undefined, {})
+      // light: this is a bulk sweep over the whole library — skip the blind
+      // publisher-site crawl, which costs ~15s a book for occasional extras.
+      const results = await fetchBookMetadataResults(book.title, book.author || undefined, undefined, { light: true })
       const merged = mergeMetadataIntoBook(book, results?.[0])
       if (merged) {
         await updateBook(merged)
@@ -39,4 +42,78 @@ export async function backfillLibraryMetadata({ books, updateBook, onProgress, s
   }
 
   return { total: targets.length, updated, failures }
+}
+
+// ── Library-wide run that survives navigation ───────────────────────────────
+//
+// The Settings → Storage screen used to own this loop in component scope, so
+// leaving the page took its progress state with it and the run appeared to
+// stop. The run now lives at module scope: the page starts it and merely
+// OBSERVES shared state, so navigating away (or coming back) neither cancels
+// it nor loses the progress.
+
+const backfillState = reactive({
+  running: false,
+  finished: false,
+  current: 0,
+  total: 0,
+  currentTitle: '',
+  updated: 0,
+  failures: [],
+})
+
+let _stopRequested = false
+let _runPromise = null
+
+export const useLibraryBackfill = () => ({
+  state: readonly(backfillState),
+  start: startLibraryBackfill,
+  stop: stopLibraryBackfill,
+})
+
+export function stopLibraryBackfill() {
+  _stopRequested = true
+}
+
+export async function startLibraryBackfill({ books, updateBook, onDone } = {}) {
+  // Already running — hand back the in-flight run so a second visit to the
+  // page attaches to it instead of starting a competing sweep.
+  if (backfillState.running) return _runPromise
+
+  _stopRequested = false
+  Object.assign(backfillState, {
+    running: true,
+    finished: false,
+    current: 0,
+    total: 0,
+    currentTitle: '',
+    updated: 0,
+    failures: [],
+  })
+
+  _runPromise = (async () => {
+    try {
+      const result = await backfillLibraryMetadata({
+        books,
+        updateBook,
+        shouldStop: () => _stopRequested,
+        onProgress: ({ current, total, title }) => {
+          backfillState.current = current
+          backfillState.total = total
+          backfillState.currentTitle = title
+        },
+      })
+      backfillState.updated = result.updated
+      backfillState.total = result.total
+      backfillState.failures = result.failures
+      backfillState.finished = true
+      onDone?.({ ...result, stopped: _stopRequested })
+      return result
+    } finally {
+      backfillState.running = false
+      _runPromise = null
+    }
+  })()
+
+  return _runPromise
 }

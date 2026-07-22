@@ -255,7 +255,7 @@ import {
   useApiEndpoint,
   writeStoredApiBaseUrl,
 } from '~/composables/useApiEndpoint'
-import { backfillLibraryMetadata } from '~/composables/useMetadataBackfill'
+import { useLibraryBackfill } from '~/composables/useMetadataBackfill'
 import {
   DEFAULT_SCAN_FOLDERS,
   normalizeScanFolder,
@@ -304,17 +304,11 @@ const refreshStorageSummary = async () => {
 
 // ── Metadata backfill ───────────────────────────────────────────────────────
 
-const backfill = reactive({
-  running: false,
-  finished: false,
-  current: 0,
-  total: 0,
-  currentTitle: '',
-  updated: 0,
-  failures: [],
-})
+// The run itself lives in the composable, not here: this page only starts it
+// and watches. Owning the loop in component scope meant navigating away threw
+// the progress state (and the apparent run) away mid-sweep.
+const { state: backfill, start: runLibraryBackfill, stop: stopLibraryBackfill } = useLibraryBackfill()
 const showFailures = ref(false)
-let _stopRequested = false
 
 const backfillPercent = computed(() => (
   backfill.total ? Math.round((backfill.current / backfill.total) * 100) : 0
@@ -322,43 +316,26 @@ const backfillPercent = computed(() => (
 
 const startBackfill = async () => {
   if (backfill.running) return
-  _stopRequested = false
-  backfill.running = true
-  backfill.finished = false
-  backfill.failures = []
-  backfill.updated = 0
-  backfill.current = 0
-  backfill.total = 0
-
   try {
-    const result = await backfillLibraryMetadata({
+    // Keeps running if the user navigates away; the toast fires from the run
+    // itself so the result is reported even when this page is long gone.
+    await runLibraryBackfill({
       books: books.value,
       updateBook,
-      shouldStop: () => _stopRequested,
-      onProgress: ({ current, total, title }) => {
-        backfill.current = current
-        backfill.total = total
-        backfill.currentTitle = title
+      onDone: ({ total, updated, stopped }) => {
+        if (!total) addToast('All books already have their details.', 'success')
+        else if (stopped) addToast('Metadata fetch stopped.', 'info')
+        else addToast(`Metadata fetch complete — updated ${updated} of ${total} books.`, 'success')
       },
     })
-    backfill.updated = result.updated
-    backfill.total = result.total
-    backfill.failures = result.failures
-    backfill.finished = true
-
-    if (!result.total) addToast('All books already have their details.', 'success')
-    else if (_stopRequested) addToast('Metadata fetch stopped.', 'info')
-    else addToast(`Metadata fetch complete — updated ${result.updated} of ${result.total} books.`, 'success')
   } catch (error) {
     console.error('[Storage] Metadata backfill failed:', error)
     addToast('Metadata fetch failed — please try again.', 'error')
-  } finally {
-    backfill.running = false
   }
 }
 
 const stopBackfill = () => {
-  _stopRequested = true
+  stopLibraryBackfill()
 }
 
 // ── Offline covers ───────────────────────────────────────────────────────────

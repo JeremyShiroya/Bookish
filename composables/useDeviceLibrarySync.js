@@ -113,9 +113,23 @@ export function fileInScanFolders(path, folders) {
   ))
 }
 
-// Reading a file into the WebView goes through a base64 bridge — very large
-// documents would exhaust memory, so they are left for manual import.
-export const MAX_DEVICE_IMPORT_BYTES = 150 * 1024 * 1024
+// Reading a file into the WebView goes through a base64 bridge, which costs
+// several times the file size in native heap at peak. 150MB was far too
+// generous: an 80MB book alone needed more than Android's 256MB heap cap and
+// took the whole app down. The native side now refuses what it genuinely
+// cannot afford (it measures real free heap), and this is the coarse filter in
+// front of it — sized so ordinary books always pass and only outliers are left
+// for manual import.
+export const MAX_DEVICE_IMPORT_BYTES = 60 * 1024 * 1024
+
+// The native layer rejects a read it cannot afford with this code; it means
+// "never retry", not "try again later".
+export const TOO_LARGE_CODE = 'FILE_TOO_LARGE'
+
+export function isTooLargeError(error) {
+  return error?.code === TOO_LARGE_CODE
+    || /too large|out of memory|not enough memory/i.test(String(error?.message || ''))
+}
 
 // A device file needs importing when it was never imported, or when the file
 // on disk changed since (size or modification time differ).
@@ -133,6 +147,9 @@ export function selectNewDeviceFiles(files, registry) {
     // The user deleted this book. Never resurrect it, even if the file survived
     // (deletion can fail) or its timestamp changed.
     if (known.deletedByUser) return false
+    // Already proven too big for this device's heap — retrying it every scan
+    // just walks the app back up to the memory ceiling.
+    if (known.tooLarge && Number(known.size) === Number(file.size)) return false
     return Number(known.size) !== Number(file.size) || Number(known.modified) !== Number(file.modified)
   })
 }
@@ -335,7 +352,8 @@ async function backfillBookMetadata(importedBooks, { updateBook, addToast }) {
 
   for (const book of targets) {
     try {
-      const results = await fetchBookMetadataResults(book.title, book.author || undefined, undefined, {})
+      // light: background pass over freshly imported books — see backfill.
+      const results = await fetchBookMetadataResults(book.title, book.author || undefined, undefined, { light: true })
       const updated = mergeMetadataIntoBook(book, results?.[0])
       if (updated) {
         await updateBook(updated)
@@ -354,17 +372,26 @@ async function backfillBookMetadata(importedBooks, { updateBook, addToast }) {
   )
 }
 
-export async function syncDeviceLibrary() {
+// `silent: true` is the repeating background rescan: no toasts, and never any
+// permission prompting — if access isn't already granted it just waits for the
+// next foreground scan. Only the FIRST scan of an app session narrates.
+export async function syncDeviceLibrary({ silent = false } = {}) {
   if (!import.meta.client || !isNativeCapacitorPlatform() || _syncInFlight) return
   _syncInFlight = true
 
-  const { addToast } = useToast()
+  const { addToast: realToast } = useToast()
+  const addToast = silent ? () => {} : realToast
   const { addBook, updateBook, fetchAllData, initialized } = useBooks()
   const { saveBookContent } = useBookStorage()
   const { ask } = useDevicePermissionPrompt()
 
   try {
-    if (!(await ensureStoragePermission(addToast, ask))) return
+    if (silent) {
+      const { granted } = await DeviceBooks.check()
+      if (!granted) return
+    } else if (!(await ensureStoragePermission(addToast, ask))) {
+      return
+    }
 
     const scanFolders = readScanFolders()
     if (!scanFolders.length) {
@@ -388,6 +415,7 @@ export async function syncDeviceLibrary() {
     addToast(`Found ${newFiles.length} book${newFiles.length === 1 ? '' : 's'} on your device — importing…`, 'info')
 
     const importedBooks = []
+    let skippedTooLarge = 0
     for (const file of newFiles) {
       try {
         const saved = await importDeviceFile(file, { addBook, saveBookContent })
@@ -395,10 +423,32 @@ export async function syncDeviceLibrary() {
         registry[file.path] = { size: file.size, modified: file.modified, bookId: saved?.id ?? null }
       } catch (error) {
         console.warn('[DeviceSync] Could not import', file.path, error)
-        // Remember the failure so a corrupt file isn't re-parsed every open.
-        registry[file.path] = { size: file.size, modified: file.modified, failed: true }
+        // A file the device hasn't the memory to decode is not a transient
+        // failure — record it as too large so every later scan skips it
+        // instead of pushing the app to the edge of its heap again.
+        const tooLarge = isTooLargeError(error)
+        if (tooLarge) skippedTooLarge += 1
+        registry[file.path] = {
+          size: file.size,
+          modified: file.modified,
+          failed: true,
+          ...(tooLarge ? { tooLarge: true } : {}),
+        }
       }
       writeImportRegistry(registry)
+      // Yield between books. Importing hundreds back-to-back holds each one's
+      // base64 string, Blob and extracted content live across a single
+      // uninterrupted run of the event loop, so nothing is ever collected and
+      // the heap climbs until something dies. A macrotask gap lets the
+      // previous book's memory go and keeps the UI responsive mid-scan.
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+
+    if (skippedTooLarge) {
+      addToast(
+        `${skippedTooLarge} book${skippedTooLarge === 1 ? ' was' : 's were'} too large for this device to import.`,
+        'info',
+      )
     }
 
     if (!importedBooks.length) {

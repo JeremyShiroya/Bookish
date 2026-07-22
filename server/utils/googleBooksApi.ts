@@ -35,13 +35,36 @@ function buildGoogleBooksUrls(title: string, author?: string) {
   return urls;
 }
 
+// Google Books' anonymous quota is per-IP and small. A library backfill plus a
+// series sweep can burn through it in minutes, after which EVERY request is a
+// 429 — observed on a 300-book device where this provider returned nothing but
+// quota errors. Once rate-limited, stop asking for a while: further calls only
+// deepen the block and add latency to every lookup.
+const GOOGLE_BOOKS_COOLDOWN_MS = 10 * 60 * 1000;
+let googleBooksBlockedUntil = 0;
+
+export function googleBooksRateLimited() {
+  return Date.now() < googleBooksBlockedUntil;
+}
+
+export function resetGoogleBooksRateLimit() {
+  googleBooksBlockedUntil = 0;
+}
+
 export async function searchGoogleBooks(title: string, author?: string): Promise<GBResult[]> {
+  if (googleBooksRateLimited()) return [];
+
   try {
     const seen = new Set<string>();
     const results: GBResult[] = [];
 
     for (const url of buildGoogleBooksUrls(title, author)) {
       const res = await fetch(url);
+      if (res.status === 429) {
+        googleBooksBlockedUntil = Date.now() + GOOGLE_BOOKS_COOLDOWN_MS;
+        console.warn('[GoogleBooks] Quota exceeded — pausing this provider for 10 minutes');
+        return results;
+      }
       if (!res.ok) continue;
 
       const data: any = await res.json();

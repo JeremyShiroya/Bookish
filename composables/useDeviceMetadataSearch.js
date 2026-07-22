@@ -11,7 +11,7 @@
 // is too slow for a phone, the second would ship the API key in the APK.
 // This module is dynamically imported so the web bundle never carries cheerio.
 
-import { searchGoodreads, scrapeGoodreadsBook } from '~/server/utils/goodreadsScraper'
+import { searchGoodreads, scrapeGoodreadsBook, fetchGoodreadsSeriesBooks } from '~/server/utils/goodreadsScraper'
 import { searchGoogleBooks } from '~/server/utils/googleBooksApi'
 import { searchInternetArchive } from '~/server/utils/internetArchiveApi'
 import { searchOpenLibrary } from '~/server/utils/openLibraryApi'
@@ -51,34 +51,46 @@ const asSource = (source) => (result) => ({
   webReview: result.webReview ?? null,
 })
 
+const goodreadsSourceFrom = (search, details) => ({
+  id: search.url,
+  source: 'goodreads',
+  title: details?.title ?? search.title ?? null,
+  author: details?.author ?? search.author ?? null,
+  cover: details?.cover ?? search.cover ?? null,
+  blurb: details?.blurb ?? null,
+  series: details?.series ?? search.series ?? null,
+  seriesInstallment: details?.seriesInstallment ?? search.seriesInstallment ?? null,
+  seriesTotal: details?.seriesTotal ?? search.seriesTotal ?? null,
+  genre: details?.genre ?? null,
+  publishYear: details?.publishYear ?? null,
+  publisher: details?.publisher ?? null,
+  webReview: details?.webReview ?? search.webReview ?? null,
+})
+
+// Goodreads search results ALREADY carry title, author, cover and series; the
+// per-book scrape only adds blurb/genre/year. On a slow connection a book page
+// can take ~9s, so scraping several in parallel blew the old 15s budget and the
+// timeout discarded everything — including the perfectly good search results.
+// That was the main reason metadata "didn't work" on a real phone. Now the
+// search results are the baseline and detail scrapes only enrich them.
 async function getGoodreadsSources(title, author) {
-  const searchResults = await withTimeout(searchGoodreads(title, author), [], 15000)
+  const searchResults = await withTimeout(searchGoodreads(title, author), [], 25000)
+  if (!searchResults.length) return []
+
+  // Two, not four: each is a ~900KB page, and the extra pair added latency and
+  // memory pressure for fields the search already mostly provides.
+  const candidates = searchResults.slice(0, 2)
   const details = await withTimeout(
-    Promise.allSettled(searchResults.slice(0, 4).map(async (item) => ({
-      search: item,
-      details: await scrapeGoodreadsBook(item.url, item),
-    }))),
+    Promise.allSettled(candidates.map((item) => scrapeGoodreadsBook(item.url, item))),
     [],
-    15000,
+    25000,
   )
 
-  return details
-    .filter((entry) => entry.status === 'fulfilled')
-    .map(({ value }) => ({
-      id: value.search.url,
-      source: 'goodreads',
-      title: value.details?.title ?? value.search.title ?? null,
-      author: value.details?.author ?? value.search.author ?? null,
-      cover: value.details?.cover ?? value.search.cover ?? null,
-      blurb: value.details?.blurb ?? null,
-      series: value.details?.series ?? value.search.series ?? null,
-      seriesInstallment: value.details?.seriesInstallment ?? value.search.seriesInstallment ?? null,
-      seriesTotal: value.details?.seriesTotal ?? value.search.seriesTotal ?? null,
-      genre: value.details?.genre ?? null,
-      publishYear: value.details?.publishYear ?? null,
-      publisher: value.details?.publisher ?? null,
-      webReview: value.details?.webReview ?? value.search.webReview ?? null,
-    }))
+  return candidates.map((search, index) => {
+    const entry = details[index]
+    const scraped = entry?.status === 'fulfilled' ? entry.value : null
+    return goodreadsSourceFrom(search, scraped)
+  })
 }
 
 async function getKoboSources(title, author) {
@@ -144,7 +156,13 @@ async function getPublisherSources(title, author, publisherCandidates, onProgres
     ).then((results) => results.map(fromPublisher))
   }
 
-  if (!publisherSources.length) {
+  // The blind crawl of major publisher sites is the slowest stage by far: on a
+  // real phone it was the difference between a 20s and a 35s lookup. It does
+  // find extra options, so an interactive "Fetch Metadata" (where the user is
+  // watching and wants the best result) still runs it. Bulk/background work
+  // passes `light` and skips it — at ~300 books those 15s each are the
+  // difference between a ~2 hour and a ~3 hour sweep.
+  if (!publisherSources.length && (publisherCandidates.length || !light)) {
     onProgress?.({
       type: 'step',
       id: 'publisherSearch',
@@ -182,6 +200,8 @@ async function getPublisherSources(title, author, publisherCandidates, onProgres
 
 export async function fetchBookMetadataOnDevice(title, author, publisher, options = {}) {
   const onProgress = options.onProgress
+  // Bulk/background lookups set this to skip the slowest, lowest-yield stage.
+  const light = options.light === true
   onProgress?.({
     type: 'step',
     id: 'core',
@@ -254,6 +274,13 @@ export async function fetchBookMetadataOnDevice(title, author, publisher, option
   })
 
   return results
+}
+
+// On-device port of server/api/books/series-books.get.ts: resolve the whole
+// series roster (title/cover per installment) from an owned seed book. Runs in
+// the WebView through CapacitorHttp exactly like the metadata pipeline above.
+export async function fetchSeriesBooksOnDevice(seedTitle, author, seriesName) {
+  return withTimeout(fetchGoodreadsSeriesBooks(seedTitle, author, seriesName), { series: null, books: [] }, 30000)
 }
 
 // On-device port of server/api/books/series-total.get.ts.
