@@ -626,6 +626,14 @@ onMounted(() => {
   margin-top: 10px;
 }
 
+/* Two stacked full-width buttons. Without a gap they touched, and the purple
+   button's glow bled straight onto the one below it. */
+.hidden-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .failures-overlay {
   position: fixed;
   inset: 0;

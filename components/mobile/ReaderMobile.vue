@@ -3,11 +3,8 @@
     :ref="setReaderPage"
     class="reader-mobile-page"
     :class="[readerTheme, {
-      replaceBottomNav: dockReplacingBottomNav,
       sepia: prefs.background === 'sepia',
-      'is-paged': usePagedReader,
       'listen-blur': readerMode === 'listen' && listenBlurEnabled,
-      'chrome-hidden': chromeHidden,
     }]"
     :style="readerStyleVars"
   >
@@ -42,12 +39,11 @@
         </button>
       </div>
 
-      <div class="reader-top-actions">
-        <!-- The headphone icon opens the audio dock. In Listen mode the whole
-             player (speed, narrator, seek) is already on screen, so it's
-             redundant there and hidden. -->
+      <!-- Both controls belong to reading. Listen mode already has the whole
+           player on screen (speed, narrator, seek) and has no text to typeset,
+           so its top-right corner stays empty. -->
+      <div v-if="readerMode !== 'listen'" class="reader-top-actions">
         <button
-          v-if="readerMode !== 'listen'"
           type="button"
           class="reader-nav-btn"
           aria-label="Audio and voice options"
@@ -64,6 +60,7 @@
           <i class="ri-equalizer-line"></i>
         </button>
       </div>
+      <div v-else class="reader-top-actions"></div>
     </header>
 
     <div
@@ -340,7 +337,6 @@
           type="button"
           class="chapter-pill-step step-prev"
           aria-label="Previous page"
-          :tabindex="dockReplacingBottomNav ? -1 : 0"
           @click="dockStep(-1)"
         >
           <i class="ri-arrow-left-s-line"></i>
@@ -357,7 +353,6 @@
           type="button"
           class="chapter-pill-step step-next"
           aria-label="Next page"
-          :tabindex="dockReplacingBottomNav ? -1 : 0"
           @click="dockStep(1)"
         >
           <i class="ri-arrow-right-s-line"></i>
@@ -374,14 +369,6 @@
     >
       <i :class="isPlaying ? 'ri-pause-fill' : 'ri-play-fill'"></i>
     </button>
-
-    <div
-      v-show="readerMode === 'read' && !usePagedReader && !chromeHidden"
-      class="mobile-bottom-nav-wrap"
-      aria-hidden="true"
-    >
-      <MobileBottomNav />
-    </div>
 
     <Teleport to="body">
       <div v-if="mediaOpen" class="reader-media-layer">
@@ -750,7 +737,6 @@ import {
   saveAnnotation,
   useAnnotations,
 } from "~/composables/useAnnotations";
-import MobileBottomNav from "./MobileBottomNav.vue";
 import ReaderPagedEpub from "./ReaderPagedEpub.vue";
 import ReaderNoteEditor from "./ReaderNoteEditor.vue";
 import ReaderSelectionMenu from "./ReaderSelectionMenu.vue";
@@ -860,7 +846,6 @@ const chooseTocItem = (item) => {
   tocModalOpen.value = false;
   emit("jump-to-toc", item);
 };
-const replaceBottomNav = ref(false);
 const isOffline = ref(false);
 
 // ── Display preferences + paged reading (ReadEra-style) ─────────────────────
@@ -953,11 +938,35 @@ let _pageMapToken = 0;
 // publish site in buildPageMap for why this isn't every section.
 const PAGE_MAP_PUBLISH_EVERY = 8;
 
+// One slice of the measurer lays out an entire chapter twice and then forces
+// layout to read it back — hundreds of milliseconds of blocking main thread on
+// a long book. requestIdleCallback's `timeout` makes the browser run it even
+// when the thread is busy, and "busy" is precisely when the reader is being
+// scrolled, long-pressed or tapped. So measuring stands down while the reader
+// is under the finger, and for a beat afterwards.
+//
+// This is what made the reader feel like it was hanging: nothing was stuck, the
+// measurer was simply taking the thread back every half second.
+const INTERACTION_QUIET_MS = 700;
+let _lastInteractionAt = 0;
+
+const noteInteraction = () => {
+  _lastInteractionAt = Date.now();
+};
+
 const _idleSlice = () => new Promise((resolve) => {
+  const run = () => {
+    const quietFor = Date.now() - _lastInteractionAt;
+    if (quietFor < INTERACTION_QUIET_MS) {
+      setTimeout(run, INTERACTION_QUIET_MS - quietFor);
+      return;
+    }
+    resolve();
+  };
   if (typeof requestIdleCallback === "function") {
-    requestIdleCallback(() => resolve(), { timeout: 500 });
+    requestIdleCallback(run, { timeout: 1200 });
   } else {
-    setTimeout(resolve, 40);
+    setTimeout(run, 40);
   }
 });
 
@@ -1136,11 +1145,6 @@ const activeVoiceId = computed(() =>
   useOfflineVoice.value ? `native:${ttsNativeVoiceIdx.value}` : ttsVoiceId.value,
 );
 let lastScrollY = 0;
-let downTravel = 0;
-let upTravel = 0;
-
-const dockReplacingBottomNav = computed(() => replaceBottomNav.value);
-
 const isPlaying = computed(
   () => ttsBook.value?.id === props.book?.id && ttsStatus.value === "playing",
 );
@@ -1283,12 +1287,33 @@ const { annotations } = useAnnotations();
 
 // Repaint after any change, and whenever the reader re-renders — the paged
 // reader rebuilds its DOM on every page turn, so marks must be reapplied.
+const bookAnnotations = computed(() => (
+  annotations.value.filter((a) => String(a.bookId) === String(props.book?.id))
+));
+
+// Called on every page turn and every section mount, so the common case — a
+// book with no highlights at all — must not cost a tick and a DOM sweep.
+let _paintedAnything = false;
+
+// Where the book's text currently lives.
+//
+// `.paged-content` alone is NOT enough: the offscreen page-map measurer carries
+// that class too and is always in the DOM, so a bare selector matched the
+// measurer and painted every highlight into a hidden div. The live paged reader
+// is the one inside `.paged-reader`.
+const annotationRoot = () => (
+  document.querySelector(".paged-reader .paged-content")
+  || props.readerRefs?.chaptersContainerRef?.value
+  || document.querySelector(".reader-mobile-chapters")
+);
+
 const repaintAnnotations = async () => {
+  if (!bookAnnotations.value.length && !_paintedAnything) return;
   await nextTick();
-  const root = props.readerRefs?.chaptersContainerRef?.value
-    || document.querySelector(".paged-content");
+  const root = annotationRoot();
   if (!root) return;
-  paintAnnotations(root, annotations.value.filter((a) => String(a.bookId) === String(props.book?.id)));
+  paintAnnotations(root, bookAnnotations.value);
+  _paintedAnything = bookAnnotations.value.length > 0;
 };
 const listenBlurEnabled = computed(() => appSettings.value.listenCoverBlur !== false);
 
@@ -1318,7 +1343,35 @@ const onScrollTap = (event) => {
   toggleChrome();
 };
 
+// Where the reader is in SCROLL mode, as a chunk index.
+//
+// Sampled when Listen opens rather than tracked on every scroll: it is a DOM
+// probe, and only the Listen view ever reads it — paying for it per frame would
+// tax the one mode that has to stay smooth.
+const scrollChunkIdx = ref(-1);
+
+const sampleScrollChunk = () => {
+  if (usePagedReader.value || props.isPdfBook || typeof document === "undefined") {
+    scrollChunkIdx.value = -1;
+    return;
+  }
+  const x = Math.floor(window.innerWidth / 2);
+  // A few rows down the page: the very top edge often lands on padding or a
+  // chapter rule rather than on a sentence.
+  for (const y of [90, 170, 260, 360]) {
+    const span = document.elementFromPoint(x, y)?.closest?.("[data-tts-chunk]");
+    const idx = Number(span?.dataset?.ttsChunk);
+    if (Number.isFinite(idx)) {
+      scrollChunkIdx.value = idx;
+      return;
+    }
+  }
+  scrollChunkIdx.value = -1;
+};
+
 const setReaderMode = (mode) => {
+  // Sample before switching, while the reading page is still the one on screen.
+  if (mode === "listen") sampleScrollChunk();
   readerMode.value = mode;
   chromeHidden.value = mode === "read";
   try {
@@ -1396,7 +1449,11 @@ const listenEpubGlobalPage = computed(() => {
     return Number.isFinite(page) ? page : null;
   }
   if (usePagedReader.value) return pagedGlobalPage.value;
-  const chunk = sectionStartChunkLocal(listenSectionIdx.value);
+  // Scroll mode: the sentence nearest the top of the viewport is where the
+  // reader actually is; the section's first chunk is not.
+  const chunk = scrollChunkIdx.value >= 0
+    ? scrollChunkIdx.value
+    : sectionStartChunkLocal(listenSectionIdx.value);
   const page = map.chunkPages?.[chunk];
   if (Number.isFinite(page)) return page;
   return globalPageFor(map.counts, listenSectionIdx.value, 0);
@@ -1429,12 +1486,44 @@ const listenNextLabel = computed(() => {
   return `Page ${current + 1}`;
 });
 
-// First flat chunk index of the page/chapter on screen.
+// Which chunks belong to the EPUB page on screen.
+//
+// The stepper above already shows a real page number, so the text under it has
+// to be that page — not the chapter it happens to sit in. Reading the whole
+// section from its first sentence is what made Listen open on chapter one no
+// matter where the reader actually was.
+//
+// pageMap.chunkPages maps chunk -> global page and only ever increases, so the
+// page's slice is found by binary search rather than a walk over a book's worth
+// of chunks on every recompute.
+const firstChunkAtOrAfterPage = (chunkPages, page) => {
+  let lo = 0;
+  let hi = chunkPages.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (chunkPages[mid] < page) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+};
+
+const listenEpubPageRange = computed(() => {
+  const chunkPages = pageMap.value?.chunkPages;
+  const page = listenEpubGlobalPage.value;
+  if (!chunkPages?.length || page === null) return null;
+  const start = firstChunkAtOrAfterPage(chunkPages, page);
+  if (start >= chunkPages.length || chunkPages[start] !== page) return null;
+  const end = firstChunkAtOrAfterPage(chunkPages, page + 1);
+  return { start, count: Math.max(1, end - start) };
+});
+
+// First flat chunk index of the page on screen. Falls back to the chapter start
+// only while the page map is still being measured.
 const listenStartChunk = computed(() => {
   if (props.isPdfBook) {
     return firstChunkForPage(props.pdfManifest, listenPdfPage.value)?.id ?? 0;
   }
-  return sectionStartChunkLocal(listenSectionIdx.value);
+  return listenEpubPageRange.value?.start ?? sectionStartChunkLocal(listenSectionIdx.value);
 });
 
 const listenChunkCount = computed(() => {
@@ -1443,7 +1532,8 @@ const listenChunkCount = computed(() => {
       (item) => item.page === listenPdfPage.value,
     ).length;
   }
-  return (props.sectionCounts || [])[listenSectionIdx.value] || 0;
+  return listenEpubPageRange.value?.count
+    ?? ((props.sectionCounts || [])[listenSectionIdx.value] || 0);
 });
 
 const listenChunks = computed(() => (props.readableChunks || []).slice(
@@ -1621,7 +1711,7 @@ const openSelectionMenu = ({ anchor, rect, existing = null, startOnColors = fals
 // release rather than `selectionchange`, which fires continuously while the
 // handles are being dragged.
 const onSelectionSettled = () => {
-  if (readerMode.value !== "read") return;
+  if (readerMode.value !== "read" || noteEditor.value.visible) return;
   const selection = window.getSelection?.();
   if (!selection || selection.isCollapsed) {
     if (!noteEditor.value.visible) hideSelectionMenu();
@@ -1632,6 +1722,24 @@ const onSelectionSettled = () => {
   const rect = selection.getRangeAt(0).getBoundingClientRect();
   if (!rect || (!rect.width && !rect.height)) return;
   openSelectionMenu({ anchor, rect });
+};
+
+// Backup trigger for the menu.
+//
+// Pointer release alone was not enough: once Android's WebView enters selection
+// mode on a long press it can swallow the touchend that ended it, so the menu
+// sometimes never appeared at all. `selectionchange` fires continuously while
+// the handles are dragged, so a short quiet period is what "settled" means here.
+const SELECTION_SETTLE_MS = 180;
+let _selectionSettleTimer = null;
+
+const onSelectionChange = () => {
+  if (readerMode.value !== "read" || noteEditor.value.visible) return;
+  if (_selectionSettleTimer) clearTimeout(_selectionSettleTimer);
+  _selectionSettleTimer = setTimeout(() => {
+    _selectionSettleTimer = null;
+    onSelectionSettled();
+  }, SELECTION_SETTLE_MS);
 };
 
 // Tapping an existing highlight reopens it — the likely intent is recolouring
@@ -1720,7 +1828,9 @@ const selectionRemove = async () => {
 };
 
 const openNoteEditor = (existing = null) => {
-  const source = existing || selectionMenu.value;
+  // The anchor is already captured, and leaving the native selection up puts
+  // Android's own text toolbar over the sheet the keyboard is about to reveal.
+  clearNativeSelection();
   noteEditor.value = {
     visible: true,
     quote: existing?.text || selectionMenu.value.text,
@@ -1840,6 +1950,10 @@ const onScroll = () => {
   const delta = nextY - lastScrollY;
   lastScrollY = Math.max(0, nextY);
 
+  // A fling keeps scrolling long after the finger is gone, and that is exactly
+  // when a measuring slice is most visible as a stutter.
+  noteInteraction();
+
   if (selectionMenu.value.visible) hideSelectionMenu();
   cancelLongPress();
 
@@ -1850,22 +1964,6 @@ const onScroll = () => {
       mountNearbyPlaceholders();
     });
   }
-
-  if (delta > 0) {
-    downTravel += delta;
-    upTravel = 0;
-  } else if (delta < 0) {
-    upTravel -= delta;
-    downTravel = 0;
-  }
-
-  if (nextY < 64) {
-    replaceBottomNav.value = false;
-    return;
-  }
-
-  if (downTravel > 28) replaceBottomNav.value = true;
-  else if (upTravel > 14) replaceBottomNav.value = false;
 };
 
 const updateOnlineStatus = () => {
@@ -1886,6 +1984,9 @@ onMounted(async () => {
   }
   lastScrollY = window.scrollY || 0;
   window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("touchstart", noteInteraction, { passive: true });
+  window.addEventListener("touchmove", noteInteraction, { passive: true });
+  document.addEventListener("selectionchange", onSelectionChange);
   window.addEventListener("resize", updatePageGeometry);
   updateOnlineStatus();
   window.addEventListener("online", updateOnlineStatus);
@@ -1899,18 +2000,36 @@ onMounted(async () => {
 
 // The page fetches the book AFTER this component mounts, so the id is not
 // available in onMounted — load the annotations when it arrives instead.
-watch(() => props.book?.id, async (id) => {
-  if (!id) return;
-  await loadAnnotations(id);
-  await repaintAnnotations();
+watch(() => props.book?.id, (id) => {
+  if (id) loadAnnotations(id);
 }, { immediate: true });
 
-// Sections arrive progressively in scroll mode and are re-rendered per page
-// in paged mode, so anything painted has to be repainted when they change.
-watch(() => props.chapterList.length, () => { repaintAnnotations(); });
+// Repainting needs BOTH sides to be ready: the annotations, and the DOM they
+// are painted into. Either can arrive first — a small book is fully rendered
+// before the store finishes loading, a large one the other way round — so this
+// watches both rather than chaining the paint onto the load. Chaining it meant
+// a book whose sections were already mounted never got a second chance, and
+// nothing was ever painted.
+watch(
+  [
+    bookAnnotations,
+    () => props.chapterList.length,
+    usePagedReader,
+    // In scroll mode the sentences are wrapped in chunk spans over idle slices
+    // AFTER the section HTML lands. Painting on "content rendered" alone found
+    // no spans to anchor to and silently did nothing.
+    () => props.readerRefs?.chunkMapVersion?.value,
+  ],
+  () => { repaintAnnotations(); },
+  { immediate: true },
+);
 
 onUnmounted(() => {
   window.removeEventListener("scroll", onScroll);
+  window.removeEventListener("touchstart", noteInteraction);
+  window.removeEventListener("touchmove", noteInteraction);
+  document.removeEventListener("selectionchange", onSelectionChange);
+  if (_selectionSettleTimer) clearTimeout(_selectionSettleTimer);
   window.removeEventListener("resize", updatePageGeometry);
   window.removeEventListener("online", updateOnlineStatus);
   window.removeEventListener("offline", updateOnlineStatus);
@@ -1919,7 +2038,7 @@ onUnmounted(() => {
   _placeholderObserver?.disconnect();
   if (_mountScrollRaf !== null) cancelAnimationFrame(_mountScrollRaf);
   // Leave the DOM as we found it: marks wrap the book's own text nodes.
-  const root = props.readerRefs?.chaptersContainerRef?.value;
+  const root = annotationRoot();
   if (root) clearAnnotationMarks(root);
 });
 </script>
@@ -1933,9 +2052,9 @@ onUnmounted(() => {
   --mobile-reader-surface: #ffffff;
   --dock-swap-duration: 0.32s;
   --dock-swap-ease: cubic-bezier(0.33, 1, 0.68, 1);
-  --bottom-nav-space: calc(
-    var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom)
-  );
+  /* Read mode never renders the app's tab bar — in scroll mode or page mode
+     alike — so the chapter dock always sits at the screen edge. */
+  --bottom-nav-space: env(safe-area-inset-bottom);
   min-height: 100vh;
   background: var(--mobile-reader-bg);
   color: var(--mobile-reader-text);
@@ -1947,12 +2066,6 @@ onUnmounted(() => {
   --mobile-reader-text: var(--color-reader-dark-text);
   --mobile-reader-muted: var(--color-reader-dark-muted);
   --mobile-reader-surface: var(--color-reader-dark-page);
-}
-
-/* Page mode is a full-screen book: the app's bottom tab bar is hidden, so the
-   space it reserved collapses and the chapter dock sits at the screen edge. */
-.reader-mobile-page.is-paged {
-  --bottom-nav-space: env(safe-area-inset-bottom);
 }
 
 /* "Book brown" — warm paper background, chosen from Display settings.
@@ -2048,8 +2161,15 @@ onUnmounted(() => {
   font-size: 21px;
 }
 
+/* The book owns the whole screen. The top bar and chapter dock are fixed
+   layers that float OVER the text when summoned, so reserving space for them
+   here would leave a dead band above and below the page whenever the chrome is
+   hidden — which is its default state in Read mode. The bottom padding is the
+   one exception: it is scroll runway, not a gap, so the last lines of the book
+   can still be scrolled clear of the dock. */
 .reader-mobile-content {
-  padding: calc(60px + env(safe-area-inset-top)) 20px 150px;
+  padding: calc(env(safe-area-inset-top) + 10px) 20px
+    calc(env(safe-area-inset-bottom) + 96px);
 }
 
 /* ── Listen mode ──────────────────────────────────────────────────────────
@@ -2477,15 +2597,9 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* Always measure against PAGE-mode geometry (no app tab bar), regardless of the
-   current reading mode — otherwise a book's page count, and every page number
-   derived from it, would change when the user toggles scroll/page mode. */
-.page-map-measurer :deep(.paged-viewport) {
-  bottom: calc(env(safe-area-inset-bottom) + 66px);
-}
-
 .reader-mobile-content.is-pdf-reader {
-  padding: calc(60px + env(safe-area-inset-top)) 12px 150px;
+  padding: calc(env(safe-area-inset-top) + 10px) 12px
+    calc(env(safe-area-inset-bottom) + 96px);
 }
 
 .reader-mobile-pdf {
@@ -2816,59 +2930,30 @@ onUnmounted(() => {
   will-change: transform;
 }
 
-/* Docked: the pill row takes the full width so its title sits at the true
-   screen centre (the play button floats above this row and keeps its spot). */
-.reader-mobile-page.replaceBottomNav .reader-chapter-dock {
-  padding-right: 20px;
-}
-
 /* ── Immersive reading ──────────────────────────────────────────────────────
-   Read mode hides its own chrome so only the book is on screen; a tap in the
-   middle of the page brings it back. Translated out of view rather than
-   removed, so returning is a slide and the layout never reflows the text.
-   Opacity carries the hiding and the transform only adds the slide, so the
-   chrome still disappears on anything that does not composite transforms. */
-.reader-mobile-page.chrome-hidden .reader-mobile-topbar {
-  transform: translateY(-100%);
-  opacity: 0;
-  pointer-events: none;
-}
-
-.reader-mobile-page.chrome-hidden .reader-chapter-dock,
-.reader-mobile-page.chrome-hidden .mobile-bottom-nav-wrap {
-  transform: translateY(calc(100% + var(--bottom-nav-space)));
-  opacity: 0;
-  pointer-events: none;
-}
-
-.reader-mobile-page.chrome-hidden .chapter-play {
-  transform: translateY(calc(100% + var(--bottom-nav-space) + 24px));
-  opacity: 0;
-  pointer-events: none;
-}
-
-.reader-mobile-topbar,
-.chapter-play,
-.reader-chapter-dock,
-.mobile-bottom-nav-wrap {
-  transition:
-    transform var(--dock-swap-duration) var(--dock-swap-ease),
-    opacity var(--dock-swap-duration) var(--dock-swap-ease);
-}
-
+   Read mode starts with only the book on screen; a tap in the middle brings the
+   chrome back. Hiding is `v-show` alone: a class on the page root drove a style
+   recalculation of the entire book subtree on every toggle, which on a long
+   book was a visible stall. The chrome is fixed and opaque, so showing it never
+   moves a word of text. */
 /* ── Highlights and notes ──────────────────────────────────────────────────
    Painted as <mark> around the book's own text. `color: inherit` matters: a
    mark's default black would fight the dark and Book-brown reader themes. */
+/* Deliberately NOT `mix-blend-mode`. Multiply reads beautifully, but a blend
+   mode forces its whole stacking context off the compositor's fast path, so
+   every scroll tick and every page turn repainted the entire book column on the
+   CPU — one highlight was enough to make the reader stutter. A translucent tint
+   over the paper reaches the same legibility for free. */
 :deep(.annotation-mark) {
   border-radius: 3px;
+  background-color: transparent;
   color: inherit;
-  /* Multiply keeps the letters legible through the colour instead of washing
-     them out, and behaves on both light and dark pages. */
-  mix-blend-mode: multiply;
+  box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--annotation-tint, #ffd54f) 42%, transparent);
 }
 
+/* On a dark page the same tint needs to be lighter, not darker, to stay legible. */
 .reader-mobile-page.dark :deep(.annotation-mark) {
-  mix-blend-mode: screen;
+  box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--annotation-tint, #ffd54f) 30%, transparent);
 }
 
 /* A noted passage carries a small marker so it is findable without tapping
@@ -2947,12 +3032,6 @@ onUnmounted(() => {
   color: var(--mobile-reader-text);
 }
 
-/* Drop by the nav's full visible height (keeping the safe-area inset) so the
-   dock sits flush with the screen bottom — no leftover strip below the pill. */
-.reader-mobile-page.replaceBottomNav .reader-chapter-dock {
-  transform: translateY(calc(var(--bottom-nav-space) - env(safe-area-inset-bottom)));
-}
-
 .chapter-pill {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) 44px;
@@ -2997,22 +3076,6 @@ onUnmounted(() => {
   transition: font-size var(--dock-swap-duration) var(--dock-swap-ease);
 }
 
-.reader-mobile-page.replaceBottomNav .chapter-pill {
-  background: transparent;
-  box-shadow: none;
-  /* Collapse the arrow columns so the title glides to the true centre. */
-  grid-template-columns: 0px minmax(0, 1fr) 0px;
-}
-
-.reader-mobile-page.replaceBottomNav .chapter-pill-step {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.reader-mobile-page.replaceBottomNav .chapter-pill-title {
-  font-size: 16px;
-}
-
 .chapter-play {
   position: fixed;
   right: 20px;
@@ -3029,25 +3092,6 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 20px;
   box-shadow: 0 1px 5px rgba(15, 23, 42, 0.08);
-}
-
-/* The play button intentionally stays put while the dock drops into the nav
-   space — it anchors the reading controls in a consistent corner. */
-.reader-mobile-page.replaceBottomNav .chapter-play {
-  bottom: calc(var(--bottom-nav-space) + 10px);
-}
-
-.mobile-bottom-nav-wrap :deep(.mobile-bottom-nav) {
-  transition:
-    transform var(--dock-swap-duration) var(--dock-swap-ease),
-    opacity 0.22s ease;
-  will-change: transform;
-}
-
-.reader-mobile-page.replaceBottomNav .mobile-bottom-nav-wrap :deep(.mobile-bottom-nav) {
-  opacity: 0.4;
-  pointer-events: none;
-  transform: translateY(calc(100% + env(safe-area-inset-bottom)));
 }
 
 .reader-media-layer {

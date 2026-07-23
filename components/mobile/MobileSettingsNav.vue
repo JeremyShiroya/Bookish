@@ -8,8 +8,13 @@
       <h3 v-if="showTitle" :title="pageTitle">{{ compactPageTitle }}</h3>
     </div>
 
-    <div class="right" aria-hidden="true">
-      <i class="ri-arrow-left-line"></i>
+    <!-- Page-level actions belong opposite the back button, not crammed next to
+         the title where they push it off centre. Falls back to an invisible
+         mirror of the arrow so the title stays optically centred. -->
+    <div class="right" :class="{ 'has-actions': !!$slots.actions }">
+      <slot name="actions">
+        <i class="ri-arrow-left-line" aria-hidden="true"></i>
+      </slot>
     </div>
   </nav>
 </template>
@@ -87,7 +92,7 @@ const goBack = () => {
     position: relative;
     z-index: 2;
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
     align-items: center;
     padding: 0 16px;
     min-height: 70px;
@@ -130,11 +135,16 @@ const goBack = () => {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    width: 44px;
+    gap: 8px;
+    min-width: 44px;
     height: 44px;
     opacity: 0;
     font-size: 20px;
     line-height: 1;
+  }
+
+  .right.has-actions {
+    opacity: 1;
   }
 }
 </style>

@@ -426,14 +426,15 @@ describe('mobile UX batch', () => {
     expect(scroll).toMatch(/font-weight:\s*inherit\s*!important/)
   })
 
-  test('page mode hides the app tab bar and reclaims its space', () => {
+  test('read mode hides the app tab bar in BOTH reading modes', () => {
     const reader = read('components/mobile/ReaderMobile.vue')
-    // Also gated on chrome visibility now: Read mode hides its own furniture
-    // until a centre tap brings it back.
-    expect(reader).toContain(`v-show="readerMode === 'read' && !usePagedReader && !chromeHidden"`)
-    expect(reader).toMatch(/\.reader-mobile-page\.is-paged\s*\{[^}]*--bottom-nav-space:\s*env\(safe-area-inset-bottom\)/)
-    // The paged viewport measures from that variable, not the raw nav height.
-    expect(read('components/mobile/ReaderPagedEpub.vue')).toContain('var(--bottom-nav-space, 72px) + 66px')
+    // Scroll mode used to keep the app's tab bar and stack the chapter dock
+    // above it, so the same control sat somewhere different depending on the
+    // reading mode. Neither mode renders it now.
+    expect(reader).not.toContain('MobileBottomNav')
+    expect(reader).toMatch(/\.reader-mobile-page\s*\{[^}]*--bottom-nav-space:\s*env\(safe-area-inset-bottom\)/)
+    // And the paged viewport is full-bleed rather than reserving dock space.
+    expect(read('components/mobile/ReaderPagedEpub.vue')).not.toContain('var(--bottom-nav-space, 72px) + 66px')
   })
 
   test('reader mode pills are unobtrusive: glass over artwork, paper over the page', () => {

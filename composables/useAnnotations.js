@@ -196,7 +196,10 @@ export function paintAnnotations(root, list) {
         const mark = document.createElement('mark')
         mark.dataset.annotationId = annotation.id
         mark.className = annotation.note ? 'annotation-mark has-note' : 'annotation-mark'
-        mark.style.backgroundColor = annotation.note ? NOTE_COLOR : colorValue(annotation.color)
+        // The colour is handed to CSS as a custom property rather than painted
+        // on as a background: the reader tints it differently on light and dark
+        // paper, and an inline background-color would outrank either rule.
+        mark.style.setProperty('--annotation-tint', annotation.note ? NOTE_COLOR : colorValue(annotation.color))
         // The badge belongs on the first chunk only, so a note spanning
         // sentences is still marked once.
         if (annotation.note && chunk === annotation.startChunk) {

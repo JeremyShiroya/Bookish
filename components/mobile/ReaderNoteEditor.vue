@@ -1,5 +1,5 @@
 <template>
-  <div class="note-overlay" role="presentation" @click="$emit('close')">
+  <div class="note-overlay" :style="overlayStyle" role="presentation" @click="$emit('close')">
     <section
       class="note-sheet"
       role="dialog"
@@ -18,7 +18,7 @@
         ref="inputRef"
         v-model="draft"
         class="note-input"
-        rows="5"
+        rows="4"
         placeholder="What did you want to remember about this?"
       ></textarea>
 
@@ -47,7 +47,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps({
   quote: { type: String, default: '' },
@@ -60,16 +60,51 @@ defineEmits(['close', 'save', 'delete'])
 const draft = ref(props.initial || '')
 const inputRef = ref(null)
 
+// The sheet is anchored to the VISUAL viewport, not the layout viewport.
+//
+// `position: fixed; inset: 0` resolves against the layout viewport, which the
+// Android WebView does not always shrink when the keyboard opens — so the sheet
+// either sat behind the keyboard or, once the keyboard closed before the
+// WebView re-expanded, left a dead grey band under itself. visualViewport is
+// the only thing that reports the rectangle actually on screen.
+const viewport = ref({ top: 0, height: 0 })
+
+const overlayStyle = computed(() => (
+  viewport.value.height
+    ? { top: `${viewport.value.top}px`, height: `${viewport.value.height}px` }
+    : {}
+))
+
+const syncViewport = () => {
+  const vv = typeof window !== 'undefined' ? window.visualViewport : null
+  if (!vv) return
+  viewport.value = { top: vv.offsetTop, height: vv.height }
+}
+
 onMounted(async () => {
+  syncViewport()
+  window.visualViewport?.addEventListener('resize', syncViewport)
+  window.visualViewport?.addEventListener('scroll', syncViewport)
   await nextTick()
   inputRef.value?.focus()
+})
+
+onUnmounted(() => {
+  window.visualViewport?.removeEventListener('resize', syncViewport)
+  window.visualViewport?.removeEventListener('scroll', syncViewport)
 })
 </script>
 
 <style scoped>
+/* top/height come from the visual viewport (see syncViewport); the fallback
+   below is what a browser without visualViewport gets. */
 .note-overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: auto;
   z-index: 3500;
   display: flex;
   align-items: flex-end;
@@ -80,7 +115,11 @@ onMounted(async () => {
 .note-sheet {
   width: 100%;
   max-width: 520px;
-  padding: 0.75rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+  /* Never taller than the space the keyboard leaves: the actions must stay
+     reachable even on a short landscape viewport. */
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 0.75rem 1.25rem calc(1rem + env(safe-area-inset-bottom));
   border-radius: 20px 20px 0 0;
   background: var(--mobile-reader-surface, #fff);
   color: var(--mobile-reader-text, #222);

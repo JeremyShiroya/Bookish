@@ -295,10 +295,17 @@ const readerPageRef = ref(null)
 const chaptersContainerRef = ref(null)
 const pdfViewerRef = ref(null)
 const tocNavRef = ref(null)
+// Bumped every time a slice of the book's sentences gets wrapped in chunk
+// spans. Highlights are anchored to those spans, so the reader cannot paint
+// anything until they exist — and mapping is spread over idle slices, so
+// "content is rendered" is not the same moment as "content is anchorable".
+const chunkMapVersion = ref(0)
+
 const mobileReaderRefs = {
   readerPageRef,
   chaptersContainerRef,
   pdfViewerRef,
+  chunkMapVersion,
 }
 
 const book = ref(null)
@@ -1122,6 +1129,10 @@ function _stepChunkMap() {
     _chunkMapCursor += 1
   }
 
+  // Announce the slice: freshly wrapped sections are freshly anchorable, so
+  // any highlight living in them can now be painted.
+  chunkMapVersion.value += 1
+
   if (_chunkMapCursor < sectionCounts.length) {
     _chunkMapTimerId = setTimeout(_stepChunkMap, CHUNK_MAP_INTERVAL_MS)
   }
@@ -1509,6 +1520,18 @@ watch(rawContent, async () => {
   _scheduleChunkMapBuild()
   observeChapters()
   updateBookEdge()
+})
+
+// Switching between page and scroll mode swaps the entire reading surface: the
+// scroll container is built fresh with no chunk spans in it, and nothing else
+// schedules a rebuild. Narration highlighting and annotations both anchor to
+// those spans, so without this they had nothing to attach to until the book was
+// reopened.
+watch(chaptersContainerRef, async (el) => {
+  if (!el || isPdfBook.value) return
+  await nextTick()
+  _scheduleChunkMapBuild()
+  observeChapters()
 })
 
 watch(activeTtsChunkIndex, async (index) => {

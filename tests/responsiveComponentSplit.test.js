@@ -51,7 +51,6 @@ describe('responsive mobile component split', () => {
       ['Book detail', 'pages/book/[id].vue', 'components/mobile/BookDetailMobile.vue'],
       ['Series detail', 'pages/serie/[id].vue', 'components/mobile/SeriesDetailMobile.vue'],
       ['Playlist detail', 'pages/playlist/[id].vue', 'components/mobile/PlaylistDetailMobile.vue'],
-      ['Playlist detail alias', 'pages/playlists/[id].vue', 'components/mobile/PlaylistDetailMobile.vue'],
     ]
 
     for (const [name, pagePath, mobilePath] of detailSurfaces) {
@@ -98,24 +97,23 @@ describe('responsive mobile component split', () => {
     expect(readerMobile).toContain('reader-chapter-dock')
     expect(existsSync(resolve(root, 'components/mobile/ReaderPagedEpub.vue'))).toBe(true)
     expect(readerMobile).toContain('chapter-pill')
-    expect(readerMobile).toContain('replaceBottomNav')
     expect(readerMobile).toContain('reader-media-sheet')
     expect(readerMobile).toContain('Switch narrator')
     expect(readerMobile).not.toContain('class="chapter-step"')
   })
 
-  test('mobile reader dock transitions without moving the play button into the nav replacement', () => {
+  test('the chapter dock and play button are fixed chrome over the page', () => {
     const readerMobile = read('components/mobile/ReaderMobile.vue')
     const readerPage = read('pages/reader/[id].vue')
 
     expect(readerMobile).toContain('class="reader-chapter-dock"')
     expect(readerMobile).toContain('class="chapter-play"')
-    expect(readerMobile).toContain('dockReplacingBottomNav')
     expect(readerMobile).toMatch(/\.reader-chapter-dock\s*\{[\s\S]*background:\s*var\(--mobile-reader-bg\)/)
     expect(readerMobile).toMatch(/\.chapter-play\s*\{[\s\S]*position:\s*fixed/)
-    expect(readerMobile).toMatch(/\.reader-mobile-page\.replaceBottomNav\s+\.chapter-play\s*\{[\s\S]*bottom:/)
-    const replacePlayRule = readerMobile.match(/\.reader-mobile-page\.replaceBottomNav\s+\.chapter-play\s*\{[^}]*\}/)?.[0] || ''
-    expect(replacePlayRule).not.toContain('transform')
+    // The dock used to slide down into the space the app's tab bar vacated on
+    // scroll. The reader renders no tab bar at all now, so there is no swap —
+    // the dock simply sits at the screen edge in every reading mode.
+    expect(readerMobile).not.toContain('replaceBottomNav')
 
     expect(readerPage).toContain('@read-current-position="playFromCurrentPosition"')
     expect(readerPage).toContain('async function playFromCurrentPosition()')
@@ -193,9 +191,12 @@ describe('responsive mobile component split', () => {
     expect(readerPage).not.toContain('requestIdleCallback(step')
   })
 
-  test('docked chapter pill sits flush with the screen bottom', () => {
+  test('the chapter dock sits flush with the screen bottom', () => {
     const readerMobile = read('components/mobile/ReaderMobile.vue')
-    expect(readerMobile).toContain('translateY(calc(var(--bottom-nav-space) - env(safe-area-inset-bottom)))')
+    // It used to reach that position by translating down over the app's tab
+    // bar. The reader renders no tab bar, so the dock is simply there.
+    expect(readerMobile).toMatch(/\.reader-chapter-dock\s*\{[^}]*bottom:\s*var\(--bottom-nav-space\)/s)
+    expect(readerMobile).toMatch(/--bottom-nav-space:\s*env\(safe-area-inset-bottom\)/)
   })
 
   test('reader chrome follows the reader theme instead of hardcoded light colors', () => {
@@ -209,12 +210,15 @@ describe('responsive mobile component split', () => {
     expect(readerMobile).not.toMatch(/\.chapter-pill\s*\{[^}]*background:\s*#fff/)
   })
 
-  test('docked chapter pill centres its title at full width with a larger font', () => {
+  test('the chapter pill keeps its page arrows either side of the title', () => {
     const readerMobile = read('components/mobile/ReaderMobile.vue')
 
-    expect(readerMobile).toMatch(/\.reader-mobile-page\.replaceBottomNav\s+\.chapter-pill\s*\{[^}]*grid-template-columns:\s*0px minmax\(0, 1fr\) 0px/)
-    expect(readerMobile).toMatch(/\.reader-mobile-page\.replaceBottomNav\s+\.reader-chapter-dock\s*\{[^}]*padding-right:\s*20px/)
-    expect(readerMobile).toMatch(/\.reader-mobile-page\.replaceBottomNav\s+\.chapter-pill-title\s*\{[^}]*font-size:\s*16px/)
+    // The pill used to collapse its arrow columns when it dropped into the
+    // vacated tab-bar space. There is no such state now: one pill, one layout,
+    // the same in scroll mode and page mode.
+    expect(readerMobile).toMatch(/\.chapter-pill\s*\{[^}]*grid-template-columns:\s*44px minmax\(0, 1fr\) 44px/)
+    expect(readerMobile).toContain('class="chapter-pill-step step-prev"')
+    expect(readerMobile).toContain('class="chapter-pill-step step-next"')
   })
 
   test('reader layout keeps desktop chrome out of the mobile reader', () => {

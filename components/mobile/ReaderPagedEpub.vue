@@ -441,13 +441,16 @@ defineExpose({ nextPage, prevPage, goToSection, goToSectionPage, getPosition });
    injected via innerHTML (both here and in the parent's offscreen page-map
    measurer), so scoped attributes never reach it. Driven by the --mr-*
    display preferences set on the reader page root. */
+/* Full-bleed by design: the top bar and chapter dock are fixed layers that
+   float OVER the page, so a page is the whole screen minus the device insets.
+   Reserving space for chrome that is hidden by default left a dead band above
+   and below the text. The parent's offscreen page-map measurer reuses this same
+   rule, so global page numbers agree with what is on screen by construction. */
 .paged-viewport {
   position: absolute;
-  top: calc(64px + env(safe-area-inset-top));
+  top: calc(env(safe-area-inset-top) + 14px);
   right: 20px;
-  /* --bottom-nav-space collapses to the safe-area inset in page mode (the app's
-     tab bar is hidden there); +66px leaves room for the chapter dock. */
-  bottom: calc(var(--bottom-nav-space, 72px) + 66px);
+  bottom: calc(env(safe-area-inset-bottom) + 14px);
   left: 20px;
   overflow: hidden;
   touch-action: none;

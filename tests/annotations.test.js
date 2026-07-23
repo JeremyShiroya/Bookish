@@ -106,7 +106,9 @@ describe('annotation painting', () => {
     const mark = marksIn(host)[0]
     expect(mark.className).toContain('has-note')
     expect(mark.dataset.hasNote).toBe('true')
-    expect(mark.style.backgroundColor).toBe(NOTE_COLOR)
+    // Handed to CSS as a custom property: the reader tints light and dark
+    // paper differently, so an inline background-color would outrank both.
+    expect(mark.style.getPropertyValue('--annotation-tint')).toBe(NOTE_COLOR)
   })
 
   test('a selection spanning sentences is painted once per chunk, badged once', () => {
@@ -198,6 +200,28 @@ describe('annotation wiring', () => {
     const detail = read('components/mobile/BookDetailMobile.vue')
     expect(detail).toContain('/highlights/${book.id}')
     expect(detail).toContain('/notes/${book.id}')
+  })
+
+  test('painting targets the live reader, never the offscreen page measurer', () => {
+    const reader = read('components/mobile/ReaderMobile.vue')
+    // The measurer carries `.paged-content` too and is always in the DOM, so a
+    // bare selector matched it and painted every highlight into a hidden div.
+    expect(reader).toContain('.paged-reader .paged-content')
+    expect(reader).not.toMatch(/querySelector(".paged-content")/)
+  })
+
+  test('a repaint waits for the chunk spans, not just the rendered HTML', () => {
+    // Sentences are wrapped in chunk spans over idle slices AFTER the section
+    // HTML lands, so "content rendered" is not the same moment as "content
+    // anchorable" — painting on the former found nothing to anchor to.
+    expect(read('components/mobile/ReaderMobile.vue')).toContain('chunkMapVersion')
+    expect(read('pages/reader/[id].vue')).toContain('chunkMapVersion.value += 1')
+  })
+
+  test('switching between page and scroll mode rebuilds the chunk spans', () => {
+    // The scroll container is created fresh with no spans in it, and nothing
+    // else schedules a rebuild.
+    expect(read('pages/reader/[id].vue')).toContain('watch(chaptersContainerRef, async (el) => {')
   })
 
   test('the annotations store ships in the library database and its backup', () => {

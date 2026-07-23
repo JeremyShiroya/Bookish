@@ -463,11 +463,17 @@ const formatPersonalRating = (rating) => {
 
 /* Restore is the only action on a hidden book, so it is labelled and spans
    the row rather than sitting as one anonymous icon among five. */
+/* Restore is the one action on a hidden book, so it is labelled. It has to
+   drop the icon-button `display: grid`, which stacked the icon on top of the
+   word instead of setting them side by side. */
 .action-button.restore {
+  display: inline-flex;
+  align-items: center;
   width: auto;
   gap: 0.4rem;
   padding: 0 0.9rem;
   border-color: var(--color-brand-primary);
+  background: color-mix(in srgb, var(--color-brand-primary) 14%, transparent);
   color: var(--color-brand-primary);
 }
 
@@ -657,6 +663,13 @@ const formatPersonalRating = (rating) => {
     width: var(--mobile-touch-target);
     height: var(--mobile-touch-target);
     border-radius: var(--mobile-control-radius);
+  }
+
+  /* Restore carries a word, so it cannot be squared off to the icon-button
+     touch target the way the others are — the label overflowed the box. */
+  .library-book-card.mobile-list-book-card .action-button.restore {
+    width: auto;
+    padding: 0 0.9rem;
   }
 }
 </style>

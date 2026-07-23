@@ -1,6 +1,17 @@
 <template>
   <div class="group-detail-page">
-    <MobileSettingsNav :title="playlistNavTitle" back-to="/playlists" aria-label="Playlist navigation" />
+    <!-- No title: the hero below names the playlist in full. Edit and delete
+         ride in the bar opposite the back button, clear of the title. -->
+    <MobileSettingsNav :show-title="false" back-to="/playlists" aria-label="Playlist navigation">
+      <template v-if="playlist" #actions>
+        <button type="button" class="title-action" aria-label="Edit playlist" @click="editingPlaylist = playlist">
+          <i class="ri-edit-line"></i>
+        </button>
+        <button type="button" class="title-action danger" aria-label="Delete playlist" @click="showDeletePlaylist = true">
+          <i class="ri-delete-bin-line"></i>
+        </button>
+      </template>
+    </MobileSettingsNav>
 
     <section v-if="playlist" class="detail-shell">
       <header class="detail-hero">
@@ -24,15 +35,7 @@
 
         <div class="detail-copy">
           <p class="hero-eyebrow">Playlist</p>
-          <div class="title-row">
-            <h1>{{ playlist.name || 'Playlist' }}</h1>
-            <button type="button" class="title-action" title="Edit playlist" @click="editingPlaylist = playlist">
-              <i class="ri-edit-line"></i>
-            </button>
-            <button type="button" class="title-action danger" title="Delete playlist" @click="showDeletePlaylist = true">
-              <i class="ri-delete-bin-line"></i>
-            </button>
-          </div>
+          <h1>{{ playlist.name || 'Playlist' }}</h1>
           <span class="hero-meta">
             {{ playlistBooks.length }} {{ playlistBooks.length === 1 ? 'book' : 'books' }}<template v-if="playlistBooks.length"> · {{ readCount }} read</template>
           </span>
@@ -149,8 +152,6 @@ const showDeletePlaylist = ref(false);
 const playlist = computed(() => (
   collections.value.find((item) => String(item.id) === String(route.params.id))
 ));
-
-const playlistNavTitle = computed(() => playlist.value?.name || 'Playlist');
 
 const playlistBooks = computed(() => {
   const ids = playlist.value?.bookIds || [];
@@ -379,13 +380,6 @@ const getStackStyle = (index, total = 3) => {
   min-width: 0;
 }
 
-.title-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
 .detail-copy h1 {
   margin: 0;
   color: var(--color-text-primary);
@@ -395,10 +389,11 @@ const getStackStyle = (index, total = 3) => {
   overflow-wrap: anywhere;
 }
 
+/* Sits in the nav bar, so it matches the back button rather than the hero. */
 .title-action {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid var(--color-border-subtle);
