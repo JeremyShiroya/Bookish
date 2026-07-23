@@ -48,6 +48,9 @@ const props = defineProps({
   geometry: { type: Object, required: true },
   layoutHash: { type: String, default: "" },
   startSection: { type: Number, default: 0 },
+  // >= 0 means "Open in book" was used: start on the page holding this chunk
+  // rather than the reader's last saved position.
+  startChunk: { type: Number, default: -1 },
 });
 
 const emit = defineEmits([
@@ -207,6 +210,25 @@ const prevPage = () => {
 const goToSection = (index) => {
   if (index === section.value) return;
   renderSection(index, 0);
+};
+
+// Land on the page that holds a specific chunk. Used by "Open in book" from the
+// highlights and notes screens, so it turns to the passage rather than to the
+// last place the reader left off.
+const goToChunk = async (chunkIdx) => {
+  if (!Number.isFinite(chunkIdx) || chunkIdx < 0) return;
+  const targetSection = sectionForChunk(chunkIdx);
+  if (targetSection !== section.value || !chunkEls.size) {
+    await renderSection(targetSection, 0);
+  }
+  const chunkPage = pageForChunkEl(chunkEls.get(chunkIdx));
+  if (chunkPage === null) return;
+  // Land instantly, not with a page-turn animation: this is a jump to a
+  // passage, and the transition from the freshly rendered page-0 to a deep page
+  // could be caught mid-flight by the initial layout settling.
+  animate.value = false;
+  page.value = Math.max(0, Math.min(sectionPages.value - 1, chunkPage));
+  emitPosition();
 };
 
 const goToSectionPage = (targetSection, pageInSection) => {
@@ -378,21 +400,50 @@ const onClick = (event) => {
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────
 
+// "Open in book" from a highlight or note lands on that chunk rather than the
+// reader's last saved position.
+//
+// It is re-targeted on every re-render while pending — the sections arrive
+// after mount and the page geometry is measured a beat later (the first render
+// runs at the default width, so the page number is wrong until then). The flag
+// clears once the geometry has been re-measured, after which typography changes
+// and page turns are the user's, not ours.
+let _openJumpPending = props.startChunk >= 0;
+let _geometrySettled = false;
+
+const renderPendingOrSection = async (fallbackSection, fallbackPage) => {
+  if (_openJumpPending && props.sections.length) {
+    await goToChunk(props.startChunk);
+    // Once the geometry has settled, the landing page is final; stop overriding.
+    if (_geometrySettled) _openJumpPending = false;
+    return;
+  }
+  await renderSection(fallbackSection, fallbackPage);
+};
+
 watch(() => props.geometry, async () => {
-  // Viewport or typography change: re-lay-out the current section and keep
-  // the reader on the same section (page clamped to the new count).
-  await renderSection(section.value, page.value);
+  _geometrySettled = true;
+  // Viewport or typography change: re-lay-out the current section and keep the
+  // reader on the same page (clamped to the new count) — unless the open-jump
+  // is still pending, in which case land it now at the real geometry.
+  await renderPendingOrSection(section.value, page.value);
 }, { deep: true });
 
 watch(() => props.layoutHash, async () => {
-  await renderSection(section.value, page.value);
+  await renderPendingOrSection(section.value, page.value);
 });
 
 watch(() => props.sections.length, async (length) => {
-  if (length) await renderSection(Math.min(section.value, length - 1), page.value);
+  if (!length) return;
+  await renderPendingOrSection(Math.min(section.value, length - 1), page.value);
 });
 
 onMounted(async () => {
+  if (_openJumpPending && props.sections.length) {
+    await goToChunk(props.startChunk);
+    return;
+  }
+  if (_openJumpPending) return; // sections not ready; a watch will land it
   const restored = restorePosition();
   const startAt = restored?.section ?? props.startSection;
   await renderSection(startAt, restored?.page ?? 0);
@@ -403,7 +454,7 @@ onUnmounted(() => {
   renderToken += 1;
 });
 
-defineExpose({ nextPage, prevPage, goToSection, goToSectionPage, getPosition });
+defineExpose({ nextPage, prevPage, goToSection, goToSectionPage, goToChunk, getPosition });
 </script>
 
 <style scoped>

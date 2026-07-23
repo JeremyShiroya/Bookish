@@ -106,8 +106,8 @@ describe('appearance preferences', () => {
     const fav = read('components/mobile/FavouritesMobile.vue')
     expect(fav).toContain('favouritesCardLayout')
     expect(fav).toContain(':card-background="favouritesBackground"')
-    // Controls row (mirrors the Books page) owns the grid/list choice.
-    expect(fav).toContain('controls-row')
+    // The shared controls row owns the grid/list choice, same as every shelf.
+    expect(fav).toContain('LibraryControlsRow')
     expect(fav).toContain('setLayout')
 
     // Playlist cards render through the shared SeriesCollageCard (playlist

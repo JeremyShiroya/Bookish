@@ -4,19 +4,6 @@
     :class="{ 'no-backdrop': cardBackground === 'blank', selectable, selected }"
     @click="onCardClick"
   >
-    <!-- Selection mode: the tick replaces the per-card actions entirely, so the
-         only things offered are the ones that act on the whole selection. -->
-    <button
-      v-if="selectable"
-      type="button"
-      class="select-tick"
-      role="checkbox"
-      :aria-checked="selected"
-      :aria-label="selected ? `Deselect ${book.title}` : `Select ${book.title}`"
-      @click.stop="emit('toggle-select', book)"
-    >
-      <i v-if="selected" class="ri-check-line"></i>
-    </button>
 
     <template v-if="cardBackground !== 'blank'">
       <div class="card-background" :style="{ backgroundImage: `url(${coverUrl})` }"></div>
@@ -104,7 +91,7 @@
           title="Add to playlist"
           @click.stop="emit('playlist', book)"
         >
-          <i :class="inPlaylist ? 'ri-play-list-fill' : 'ri-play-list-2-line'"></i>
+          <i :class="inPlaylist ? 'ri-play-list-2-fill' : 'ri-play-list-2-line'"></i>
         </button>
         <button type="button" class="action-button" title="Edit book" @click.stop="emit('edit', book)">
           <i class="ri-edit-line"></i>
@@ -243,39 +230,31 @@ const formatPersonalRating = (rating) => {
 
 /* Blank background: a plain solid card. Remap the on-image text colours to the
    normal text colours so everything stays readable without the dark backdrop. */
-/* Selection mode. The card lifts into the brand colour so a picked book reads
-   at a glance across a full grid, and the per-card action row is removed so it
-   cannot compete with the bulk actions in the toolbar. */
-.library-book-card.selected {
-  border-color: var(--color-brand-primary);
-  box-shadow: 0 0 0 2px var(--color-brand-primary) inset;
-}
-
+/* Selection mode. A picked book is marked by a thick purple ring — in GRID
+   view it hugs the cover art (the card has no border of its own there), and in
+   LIST view it rings the whole card. The per-card action row is removed either
+   way so it cannot compete with the bulk actions in the toolbar. */
 .library-book-card.selectable .card-actions,
 .library-book-card.selectable .cover-actions {
   display: none !important;
 }
 
-.select-tick {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 3;
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border: 2px solid var(--color-brand-primary);
-  border-radius: 50%;
-  background: var(--color-surface-primary);
-  color: var(--color-text-on-brand);
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
+/* Grid: the ring is on the cover. */
+.library-book-card.selected .card-cover {
+  outline: 3px solid var(--color-brand-primary);
+  outline-offset: 2px;
 }
 
-.library-book-card.selected .select-tick {
-  background: var(--color-brand-primary);
+/* List: a full card, so the ring goes round the whole thing and the cover
+   keeps its plain edge. An outline (drawn inside via a negative offset) rather
+   than border-color, so the media-query border shorthand can't out-specify it. */
+.library-book-card.mobile-list-book-card.selected {
+  outline: 3px solid var(--color-brand-primary);
+  outline-offset: -3px;
+}
+
+.library-book-card.mobile-list-book-card.selected .card-cover {
+  outline: none;
 }
 
 .library-book-card.no-backdrop {

@@ -499,7 +499,9 @@ watch(seriesBooks, async (books) => {
   aspect-ratio: 2 / 3;
   place-items: center;
   border: 1.5px dashed color-mix(in srgb, var(--color-text-muted) 55%, transparent);
-  border-radius: var(--mobile-card-radius, 20px);
+  /* Match the real book covers (LibraryBookCard .card-cover), so a gap in the
+     shelf sits at the same corner radius as the books around it. */
+  border-radius: 8px;
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
 }

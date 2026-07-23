@@ -8,91 +8,14 @@
     </div>
 
     <template v-else-if="initialized">
-        <!-- Controls row — mirrors the Books page: status filter on the left,
-             grid/list toggle pinned right. -->
-        <div v-if="favourites.length > 0" class="controls-row">
-          <div class="controls-left">
-            <div ref="filterRef" class="filter-dropdown">
-              <button
-                type="button"
-                class="filter-button"
-                :class="{ open: filterOpen }"
-                @click="filterOpen = !filterOpen"
-              >
-                <i class="ri-filter-3-line"></i>
-                <span class="filter-label-text">Filter</span>
-                <span v-if="hasActiveFilter" class="filter-active-dot"></span>
-                <i class="ri-arrow-down-s-line dropdown-arrow" :class="{ rotated: filterOpen }"></i>
-              </button>
-
-              <div v-show="filterOpen" class="dropdown-menu filter-panel">
-                <div class="sfp-section">
-                  <div class="sfp-section-header">
-                    <i class="ri-bookmark-line"></i>
-                    Status
-                  </div>
-                  <div class="sfp-pills">
-                    <button
-                      type="button"
-                      class="sfp-pill"
-                      :class="{ active: selectedStatus === 'all' }"
-                      @click="setStatus('all')"
-                    >All</button>
-                    <button
-                      v-for="status in readingStatuses"
-                      :key="status"
-                      type="button"
-                      class="sfp-pill"
-                      :class="{ active: selectedStatus === status }"
-                      @click="setStatus(status)"
-                    >{{ status }}</button>
-                  </div>
-                </div>
-
-                <div class="sfp-section">
-                  <div class="sfp-section-header">
-                    <i class="ri-file-list-2-line"></i>
-                    Format
-                  </div>
-                  <div class="sfp-pills">
-                    <button
-                      v-for="format in formatFilters"
-                      :key="format.value"
-                      type="button"
-                      class="sfp-pill"
-                      :class="{ active: selectedFormat === format.value }"
-                      @click="setFormat(format.value)"
-                    >{{ format.label }}</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="controls-right">
-            <div class="view-chips">
-              <button
-                type="button"
-                class="view-chip-icon"
-                :class="{ active: favouritesLayout === 'grid' }"
-                aria-label="Grid view"
-                title="Grid view"
-                @click="setLayout('grid')"
-              >
-                <i class="ri-apps-2-line"></i>
-              </button>
-              <button
-                type="button"
-                class="view-chip-icon"
-                :class="{ active: favouritesLayout === 'list' }"
-                aria-label="List view"
-                title="List view"
-                @click="setLayout('list')"
-              >
-                <i class="ri-list-unordered"></i>
-              </button>
-            </div>
-          </div>
+        <!-- The same controls row every other shelf uses, so the filter and
+             view toggle look and behave identically here. -->
+        <div v-if="favourites.length > 0" class="favourites-controls">
+          <LibraryControlsRow
+            v-model:status="selectedStatus"
+            :view="favouritesLayout"
+            @update:view="setLayout"
+          />
         </div>
 
         <div
@@ -162,10 +85,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useBooks } from "~/composables/useBooks";
 import {
-  FORMAT_FILTER_CHOICES,
   matchesFormatFilter,
   useBookishSettings,
 } from '~/composables/useBookishSettings';
@@ -173,6 +95,7 @@ import { useToast } from '~/composables/useToast';
 import { useTTS } from '~/composables/useTTS';
 import EmptyState from "../shared/EmptyState.vue";
 import LibraryBookCard from '../shared/LibraryBookCard.vue';
+import LibraryControlsRow from '../shared/LibraryControlsRow.vue';
 import AddToPlaylistModal from '../shared/AddToPlaylistModal.vue';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal.vue';
 import MobileBottomNav from './MobileBottomNav.vue';
@@ -191,31 +114,13 @@ const showDeleteModal = ref(false);
 const selectedDeleteBook = ref(null);
 
 // ── Controls row: status + format filters, grid/list view ───────────────────
-const readingStatuses = ['Unread', 'Reading', 'Read'];
-const formatFilters = FORMAT_FILTER_CHOICES;
 const selectedStatus = ref('all');
 const selectedFormat = computed(() => settings.value.formatFilter || 'all');
-const filterRef = ref(null);
-const filterOpen = ref(false);
-
-const hasActiveFilter = computed(() => (
-  selectedStatus.value !== 'all' || selectedFormat.value !== 'all'
-));
 
 const displayedFavourites = computed(() => favourites.value.filter((book) => (
   matchesFormatFilter(book, selectedFormat.value)
   && (selectedStatus.value === 'all' || book.status === selectedStatus.value)
 )));
-
-const setStatus = (status) => {
-  selectedStatus.value = status;
-  filterOpen.value = false;
-};
-
-const setFormat = (format) => {
-  updateSettings({ formatFilter: format });
-  filterOpen.value = false;
-};
 
 const clearFilters = () => {
   selectedStatus.value = 'all';
@@ -225,13 +130,6 @@ const clearFilters = () => {
 // The view choice is the same setting the Preferences page used to own; the
 // controls row is where it actually belongs.
 const setLayout = (layout) => updateSettings({ favouritesCardLayout: layout });
-
-const closeFilterOnOutsideClick = (event) => {
-  if (!event.target.closest('.filter-dropdown')) filterOpen.value = false;
-};
-
-onMounted(() => document.addEventListener('click', closeFilterOnOutsideClick));
-onUnmounted(() => document.removeEventListener('click', closeFilterOnOutsideClick));
 
 const isBookActive = (book) => ttsBook.value?.id === book.id && ttsStatus.value !== 'idle';
 const handlePlay = (book) => {
@@ -262,185 +160,26 @@ const confirmDelete = async () => {
 </script>
 
 <style scoped>
+/* Inline padding lives on the rows and grids inside, exactly like the Series
+   and Playlists pages — favourites used to pad the container AND the controls
+   row on top of it, so its contents sat further in than every other shelf. */
 .favourites-container {
-  padding: calc(4.85rem + env(safe-area-inset-top)) 0rem calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
   margin: 0 auto;
+  padding-top: calc(4.85rem + env(safe-area-inset-top));
+  padding-bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
 }
 
-/* ── Controls row — mirrors the Books page ─────────────────────────────────── */
-.controls-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 1rem;
+.favourites-controls {
   padding: 0 var(--mobile-page-padding-inline);
+  margin-bottom: 1rem;
 }
-
-.filter-dropdown {
-  position: relative;
-}
-
-.filter-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border-card);
-  border-radius: var(--mobile-control-radius);
-  background: var(--color-surface-card);
-  color: var(--color-text-secondary);
-  font-family: inherit;
-  font-size: var(--mobile-caption-size);
-  cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
-}
-
-.filter-button.open {
-  border-color: var(--color-brand-primary);
-  background: var(--color-brand-primary-faint);
-  color: var(--color-text-primary);
-}
-
-.filter-button > i:first-child {
-  font-size: 1rem;
-  color: var(--color-text-secondary);
-}
-
-.filter-button.open > i:first-child {
-  color: var(--color-brand-primary);
-}
-
-.filter-label-text {
-  font-weight: 500;
-}
-
-.filter-active-dot {
-  width: 6px;
-  height: 6px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--color-brand-primary);
-}
-
-.filter-button .dropdown-arrow {
-  font-size: 1rem;
-  color: var(--color-text-muted);
-  transition: transform 0.2s ease;
-}
-
-.filter-button .dropdown-arrow.rotated {
-  transform: rotate(180deg);
-}
-
-.filter-panel {
-  position: absolute;
-  top: calc(100% + 0.35rem);
-  left: 0;
-  z-index: 50;
-  min-width: 240px;
-  padding: 0.5rem;
-  border: 1px solid var(--color-border-card);
-  border-radius: 14px;
-  background: var(--color-background-app);
-  box-shadow: var(--shadow-modal);
-}
-
-.sfp-section {
-  padding: 0.6rem 0.5rem;
-}
-
-.sfp-section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-bottom: 0.55rem;
-  color: var(--color-text-muted);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.sfp-section-header i {
-  color: var(--color-brand-primary);
-  font-size: 0.85rem;
-  opacity: 0.75;
-}
-
-.sfp-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-
-.sfp-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.32rem 0.8rem;
-  border: 1px solid var(--color-border-card);
-  border-radius: 20px;
-  background: transparent;
-  color: var(--color-text-muted);
-  font-family: inherit;
-  font-size: var(--mobile-caption-size);
-  line-height: 1.4;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.sfp-pill.active {
-  border-color: var(--color-brand-primary);
-  background: var(--color-surface-hover);
-  color: var(--color-brand-primary);
-  font-weight: 500;
-}
-
-.view-chips {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem;
-  background: var(--color-surface-hover);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 10px;
-}
-
-.view-chip-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.4rem 0.65rem;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: 1.05rem;
-  line-height: 1;
-}
-
-.view-chip-icon.active {
-  background: var(--color-surface-primary);
-  color: var(--color-brand-primary);
-  box-shadow: var(--shadow-card-subtle);
-}
-
-
-
-
-
-
 
 .books-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2rem;
+  gap: 16px 14px;
   justify-content: start;
+  padding: 0 var(--mobile-page-padding-inline);
 }
 
 /* List positioning option: one card per row, full width. */
@@ -450,17 +189,6 @@ const confirmDelete = async () => {
   gap: 16px;
   padding: 0 var(--mobile-page-padding-inline);
 }
-
-
-
-  .favourites-container {
-    padding: calc(4.85rem + env(safe-area-inset-top)) var(--mobile-page-padding-inline) calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
-  }
-
-  .books-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px 14px;
-  }
 
   .book-card {
     width: 100%;

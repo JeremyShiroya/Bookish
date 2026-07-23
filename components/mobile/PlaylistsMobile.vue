@@ -37,13 +37,14 @@
         :series="playlist"
         :selectable="selectionMode"
         :selected="isSelected(playlist.id)"
+        show-menu
         @toggle-select="toggleSelected"
+        @menu="(e) => openContextMenu(e, playlist)"
         @pointerdown="(event) => onPointerDown(event, playlist)"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
         @pointercancel="onPointerUp"
         @open="openPlaylist(playlist)"
-        @contextmenu="(e) => openContextMenu(e, playlist)"
       />
     </div>
 

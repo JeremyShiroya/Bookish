@@ -6,17 +6,22 @@
     @click="onCardClick"
     @contextmenu.prevent="$emit('contextmenu', $event)"
   >
-    <!-- Selection mode marker. A card that is one big <button> cannot nest
-         another, so this is a span the card's own click drives. -->
+    <!-- Overflow menu, top-right, opposite the title. Playlists only, and only
+         when not selecting — selection owns the whole card, so a stray menu
+         trigger would fight it. A <span role="button"> because the card itself
+         is a <button> and one cannot nest another. -->
     <span
-      v-if="selectable"
-      class="select-tick"
-      role="checkbox"
-      :aria-checked="selected"
-      aria-hidden="false"
+      v-if="showMenu && !selectable"
+      class="card-menu-btn"
+      role="button"
+      tabindex="0"
+      aria-label="Playlist options"
+      @click.stop="$emit('menu', $event)"
+      @keydown.enter.stop="$emit('menu', $event)"
     >
-      <i v-if="selected" class="ri-check-line"></i>
+      <i class="ri-more-2-fill"></i>
     </span>
+
     <!-- Optional blurred cover-image background. Uses a real <img> (the same
          technique as the series-detail hero backdrop) rather than a CSS
          background-image, so device/blob cover URLs render and a dead cover
@@ -96,9 +101,11 @@ const props = defineProps({
   // Multi-select, driven by the page that owns the grid.
   selectable: { type: Boolean, default: false },
   selected: { type: Boolean, default: false },
+  // Show the top-right overflow menu trigger (Playlists page).
+  showMenu: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["open", "contextmenu", "toggle-select"]);
+const emit = defineEmits(["open", "contextmenu", "toggle-select", "menu"]);
 
 // While selecting, a tap picks the card instead of opening it.
 const onCardClick = () => {
@@ -438,30 +445,28 @@ const fanStyle = (i, n) => {
   }
 }
 
-/* Selection mode. The ring is drawn inside the card so it survives whichever
-   layout and background the card preferences are set to. */
+/* Selection mode. A thick purple ring marks a picked card — drawn inside with
+   an inset box-shadow so it survives whichever layout and background the card
+   preferences are set to, and follows the card's rounded corners. */
 .series-card.selected {
-  box-shadow: 0 0 0 2px var(--color-brand-primary) inset;
+  box-shadow: 0 0 0 3px var(--color-brand-primary) inset;
 }
 
-.select-tick {
+.card-menu-btn {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 4;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
   display: grid;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   place-items: center;
-  border: 2px solid var(--color-brand-primary);
   border-radius: 50%;
   background: var(--color-surface-primary);
-  color: var(--color-text-on-brand);
-  font-size: 14px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: 18px;
   line-height: 1;
-}
-
-.series-card.selected .select-tick {
-  background: var(--color-brand-primary);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
 }
 </style>

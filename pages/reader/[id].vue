@@ -29,6 +29,7 @@
         :section-counts="epubSectionCounts"
         :full-sections="chapterList"
         :toc-items="displayTocItems"
+        :open-to-chunk="openToChunk"
         @back="router.back()"
         @open-toc="tocOpen = true"
         @page-change="handlePdfPageChange"
@@ -323,6 +324,14 @@ const zoomLevel = ref(settings.value.readerZoom)
 const readerTheme = ref(settings.value.readerTheme)
 const tocOpen = ref(false)
 const currentChapterIdx = ref(0)
+
+// "Open in book" from a highlight or note arrives as ?chunk=N. The mobile
+// reader lands on that chunk instead of the last saved position. Read once at
+// mount, not reactively: turning pages afterwards must not keep yanking back.
+const openToChunk = (() => {
+  const n = Number(route.query?.chunk)
+  return Number.isFinite(n) && n >= 0 ? n : -1
+})()
 const currentPdfPage = ref(1)
 const totalPages = ref(0)
 const restoredInitialPdfScroll = ref(false)

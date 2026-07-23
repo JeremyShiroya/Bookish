@@ -5,12 +5,33 @@ import { mergeMetadataIntoBook } from '~/composables/useDeviceLibrarySync'
 // Library-wide metadata backfill used by Settings → Storage. Walks every book
 // that is missing details, fetches metadata, and fills ONLY empty fields.
 
+// Every gap the details check looks for: an empty cover, author, blurb, genre,
+// year, or Goodreads rating — plus, for a book that belongs to a series, its
+// series name, installment number and total. Format ("book type") is set at
+// import from the file itself, so it is never missing and not checked here.
+export function missingMetadataFields(book) {
+  if (!book?.title) return []
+  const missing = []
+
+  for (const field of ['author', 'blurb', 'genre']) {
+    if (!String(book[field] ?? '').trim()) missing.push(field)
+  }
+  if (!book.publishYear) missing.push('publishYear')
+  if (!book.cover || String(book.cover).startsWith('data:image/svg+xml')) missing.push('cover')
+  // webReview carries the Goodreads star rating.
+  if (!book.webReview || !(Number(book.webReview.rating) > 0)) missing.push('goodreadsRating')
+
+  // Series details only count as gaps once we know the book is in a series.
+  if (String(book.series ?? '').trim()) {
+    if (!book.seriesInstallment) missing.push('seriesInstallment')
+    if (!(Number(book.seriesTotal) > 0)) missing.push('seriesTotal')
+  }
+
+  return missing
+}
+
 export function bookNeedsMetadata(book) {
-  if (!book?.title) return false
-  const missingText = ['blurb', 'genre', 'author'].some((field) => !String(book[field] ?? '').trim())
-  const missingYear = !book.publishYear
-  const placeholderCover = !book.cover || String(book.cover).startsWith('data:image/svg+xml')
-  return missingText || missingYear || placeholderCover
+  return missingMetadataFields(book).length > 0
 }
 
 export async function backfillLibraryMetadata({ books, updateBook, onProgress, shouldStop } = {}) {

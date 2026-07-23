@@ -34,9 +34,24 @@
         <i class="ri-file-search-line"></i>
         <div>
           <h2>Book details</h2>
-          <p>Fill missing covers, blurbs, genres, and years from the web.</p>
+          <p>Fill missing covers, authors, blurbs, genres, years, ratings and series details from the web.</p>
         </div>
       </div>
+
+      <!-- Automatic top-up runs on its own in the background; the manual button
+           below is for when the user wants it now. -->
+      <label class="auto-row">
+        <div class="auto-copy">
+          <h3>Keep details up to date automatically</h3>
+          <p>{{ autoStatusLabel }}</p>
+        </div>
+        <input
+          type="checkbox"
+          class="auto-switch"
+          :checked="settings.metadataAutoFill"
+          @change="setAutoMetadata($event.target.checked)"
+        />
+      </label>
 
       <div v-if="backfill.running" class="backfill-progress">
         <div class="backfill-progress-labels">
@@ -167,6 +182,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLibraryBackfill } from '~/composables/useMetadataBackfill'
+import { useAutoMetadata } from '~/composables/useAutoMetadata'
+import { useBookishSettings } from '~/composables/useBookishSettings'
 import {
   DEFAULT_SCAN_FOLDERS,
   normalizeScanFolder,
@@ -218,7 +235,19 @@ const refreshStorageSummary = async () => {
 // and watches. Owning the loop in component scope meant navigating away threw
 // the progress state (and the apparent run) away mid-sweep.
 const { state: backfill, start: runLibraryBackfill, stop: stopLibraryBackfill } = useLibraryBackfill()
+const { settings, updateSettings } = useBookishSettings()
+const { state: autoMeta } = useAutoMetadata()
 const showFailures = ref(false)
+
+const setAutoMetadata = (on) => updateSettings({ metadataAutoFill: !!on })
+
+// A plain-language read on what the background top-up is doing right now.
+const autoStatusLabel = computed(() => {
+  if (!settings.value.metadataAutoFill) return 'Off — details are only filled when you tap the button below.'
+  if (autoMeta.running) return 'Checking your library now…'
+  if (autoMeta.totalUpdated) return `On — filled ${autoMeta.totalUpdated} book${autoMeta.totalUpdated === 1 ? '' : 's'} so far this session.`
+  return 'On — checks your library in the background every few minutes.'
+})
 
 const backfillPercent = computed(() => (
   backfill.total ? Math.round((backfill.current / backfill.total) * 100) : 0
@@ -624,6 +653,39 @@ onMounted(() => {
 
 .scan-now {
   margin-top: 10px;
+}
+
+.auto-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 12px;
+  background: var(--color-surface-secondary);
+}
+
+.auto-copy h3 {
+  margin: 0 0 3px;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.auto-copy p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.auto-switch {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-brand-primary);
 }
 
 /* Two stacked full-width buttons. Without a gap they touched, and the purple

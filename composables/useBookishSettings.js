@@ -107,7 +107,7 @@ export function normalizeBookishSettings(value) {
     groupDetailView: ['grid', 'table'].includes(source.groupDetailView)
       ? source.groupDetailView
       : DEFAULT_BOOKISH_SETTINGS.groupDetailView,
-    librarySort: ['name', 'rating', 'year'].includes(source.librarySort)
+    librarySort: ['name', 'rating', 'year', 'added'].includes(source.librarySort)
       ? source.librarySort
       : DEFAULT_BOOKISH_SETTINGS.librarySort,
     librarySortDirection: ['asc', 'desc'].includes(source.librarySortDirection)

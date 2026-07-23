@@ -1,6 +1,7 @@
 package com.bookish.app;
 
 import android.content.Intent;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -9,6 +10,8 @@ import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebView;
 
 import androidx.annotation.RequiresApi;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
@@ -19,6 +22,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DeviceBooksPlugin.class);
         registerPlugin(MediaSessionPlugin.class);
         super.onCreate(savedInstanceState);
+        enableEdgeToEdge();
         installRenderProcessGoneHandler();
         // Cold start from the system "Open with" sheet: the web layer isn't
         // loaded yet, so just park the document until JS asks for it.
@@ -42,6 +46,34 @@ public class MainActivity extends BridgeActivity {
      * — the library and every import is already persisted, so the user lands
      * back where they were rather than watching the app vanish.
      */
+    /**
+     * Draw the app behind the status and navigation bars, and make those bars
+     * transparent, so the app's own background reaches the very top and bottom
+     * of the screen. Without this the system bars keep their own opaque colour
+     * and the app looks boxed inside them.
+     *
+     * The web layer already reserves the physical bar areas through the CSS
+     * env(safe-area-inset-*) values (enabled by viewport-fit=cover), so nothing
+     * important is ever hidden behind a bar.
+     *
+     * Bar ICONS follow the app's default light background: dark icons on the
+     * light chrome. If the reader/app is switched to a dark theme the icons stay
+     * dark, which is a known trade-off of setting this natively rather than
+     * pulling in the status-bar plugin.
+     */
+    private void enableEdgeToEdge() {
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+
+        WindowInsetsControllerCompat controller =
+            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (controller != null) {
+            controller.setAppearanceLightStatusBars(true);
+            controller.setAppearanceLightNavigationBars(true);
+        }
+    }
+
     private void installRenderProcessGoneHandler() {
         if (getBridge() == null || getBridge().getWebView() == null) return;
 

@@ -226,6 +226,7 @@
           :geometry="pageGeometry"
           :layout-hash="layoutHash"
           :start-section="currentChapterIdx"
+          :start-chunk="openToChunk"
           @position-change="onPagedPosition"
           @long-press="onPagedLongPress"
           @toggle-chrome="toggleChrome"
@@ -775,6 +776,9 @@ const props = defineProps({
   // Table-of-contents entries for the jump modal. EPUB: { title, index }.
   // PDF: { title, page, type: 'pdf' }.
   tocItems: { type: Array, default: () => [] },
+  // >= 0 when "Open in book" was used from a highlight or note: land on that
+  // chunk instead of the reader's last saved position.
+  openToChunk: { type: Number, default: -1 },
 });
 
 const emit = defineEmits([
@@ -2996,16 +3000,23 @@ onUnmounted(() => {
 }
 
 /* A noted passage carries a small marker so it is findable without tapping
-   every highlight to see which one has writing behind it. */
-:deep(.annotation-mark[data-has-note="true"])::after {
+   every highlight to see which one has writing behind it. It sits at the TOP
+   LEFT of the first word — anchored to the mark's own inline box, nudged just
+   outside it so it reads as a flag on the passage rather than punctuation. */
+:deep(.annotation-mark[data-has-note="true"]) {
+  position: relative;
+}
+
+:deep(.annotation-mark[data-has-note="true"])::before {
   content: "";
-  display: inline-block;
+  position: absolute;
+  top: -0.35em;
+  left: -0.15em;
   width: 6px;
   height: 6px;
-  margin-left: 3px;
   border-radius: 50%;
   background: var(--color-brand-primary, #8a2be2);
-  vertical-align: super;
+  pointer-events: none;
 }
 
 /* ── Resume-position sheet ─────────────────────────────────────────────── */

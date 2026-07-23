@@ -82,6 +82,48 @@
                       >{{ format.label }}</button>
                     </div>
                   </div>
+
+                  <div class="sfp-section">
+                    <div class="sfp-section-header">
+                      <i class="ri-calendar-line"></i>
+                      Date added
+                    </div>
+                    <div class="sfp-pills">
+                      <button
+                        type="button"
+                        class="sfp-pill"
+                        :class="{ active: sortBy === 'added' && sortDirection === 'desc' }"
+                        @click="setSort('added', 'desc')"
+                      >Newest first</button>
+                      <button
+                        type="button"
+                        class="sfp-pill"
+                        :class="{ active: sortBy === 'added' && sortDirection === 'asc' }"
+                        @click="setSort('added', 'asc')"
+                      >Oldest first</button>
+                    </div>
+                  </div>
+
+                  <div class="sfp-section">
+                    <div class="sfp-section-header">
+                      <i class="ri-sort-alphabet-asc"></i>
+                      Name
+                    </div>
+                    <div class="sfp-pills">
+                      <button
+                        type="button"
+                        class="sfp-pill"
+                        :class="{ active: sortBy === 'name' && sortDirection === 'asc' }"
+                        @click="setSort('name', 'asc')"
+                      >A &ndash; Z</button>
+                      <button
+                        type="button"
+                        class="sfp-pill"
+                        :class="{ active: sortBy === 'name' && sortDirection === 'desc' }"
+                        @click="setSort('name', 'desc')"
+                      >Z &ndash; A</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -434,6 +476,10 @@ const filteredBooks = computed(() => {
       comparison = getGoodreadsRating(a) - getGoodreadsRating(b);
     } else if (sortBy.value === "year") {
       comparison = (a.publishYear || 0) - (b.publishYear || 0);
+    } else if (sortBy.value === "added") {
+      // createdAt is the moment the book entered the library. Ascending is
+      // oldest first; the pills flip the direction.
+      comparison = new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
     }
     return sortDirection.value === "asc" ? comparison : -comparison;
   });
@@ -498,9 +544,21 @@ watch([activeViewIndex, viewHoverIndex], updateViewHighlight);
 // Mobile shows the full filtered library in one scrollable list — no paging.
 const displayedBooks = computed(() => filteredBooks.value);
 
+// The dot means "this list is not in its default order or scope" — default is
+// name A–Z, all statuses, all formats.
 const hasActiveFilter = computed(() => (
-  selectedStatus.value !== "all" || selectedFormat.value !== "all"
+  selectedStatus.value !== "all"
+  || selectedFormat.value !== "all"
+  || sortBy.value !== "name"
+  || sortDirection.value !== "asc"
 ));
+
+const setSort = (field, direction) => {
+  sortBy.value = field;
+  sortDirection.value = direction;
+  updateSettings({ librarySort: field, librarySortDirection: direction });
+  filterOpen.value = false;
+};
 
 // Methods
 const setStatus = (value) => {

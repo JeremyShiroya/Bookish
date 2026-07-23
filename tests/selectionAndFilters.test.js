@@ -72,8 +72,9 @@ describe('selection wiring', () => {
     // Otherwise the per-card buttons compete with the bulk actions that just
     // appeared in the toolbar.
     expect(card).toMatch(/\.library-book-card\.selectable \.card-actions[\s\S]*?display:\s*none/)
-    expect(card).toContain('select-tick')
-    expect(card).toContain("emit('toggle-select', book)")
+    // Selection is a thick purple ring now, not a radio tick.
+    expect(card).not.toContain('select-tick')
+    expect(card).toContain("emit('toggle-select', props.book)")
   })
 
   test('a tap during selection picks the item instead of opening it', () => {

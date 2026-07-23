@@ -79,9 +79,12 @@ describe('settings pages wiring', () => {
   })
 
   test('every library filter panel offers the shared Format pills', () => {
+    // The Books page still owns its inline filter; Favourites now delegates to
+    // the shared controls row, so it is checked for the delegation instead.
+    expect(read('components/mobile/FavouritesMobile.vue')).toContain('LibraryControlsRow')
+
     for (const path of [
       'components/mobile/BooksMobile.vue',
-      'components/mobile/FavouritesMobile.vue',
       'components/shared/LibraryControlsRow.vue',
     ]) {
       const source = read(path)

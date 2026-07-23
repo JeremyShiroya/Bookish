@@ -33,6 +33,13 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'Pages',
+      // viewport-fit=cover is what makes env(safe-area-inset-*) resolve to real
+      // values, so the app can draw edge-to-edge under the transparent Android
+      // status and navigation bars (see MainActivity) and its own background
+      // reaches the very top and bottom of the screen instead of a boxed strip.
+      meta: [
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
+      ],
       link: [
         { rel: 'icon', type: 'image/png', href: '/Images/Pages-Logo.png' },
         { rel: 'shortcut icon', type: 'image/png', href: '/Images/Pages-Logo.png' },

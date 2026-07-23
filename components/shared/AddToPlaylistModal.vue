@@ -64,7 +64,7 @@
           :aria-pressed="playlist.alreadyHas"
           @click="togglePlaylist(playlist)"
         >
-          <span class="row-icon"><i :class="playlist.alreadyHas ? 'ri-play-list-fill' : 'ri-play-list-2-line'"></i></span>
+          <span class="row-icon"><i :class="playlist.alreadyHas ? 'ri-play-list-2-fill' : 'ri-play-list-2-line'"></i></span>
           <span class="row-copy">
             <strong>{{ playlist.name }}</strong>
             <small>{{ playlist.bookIds?.length || 0 }} books</small>
