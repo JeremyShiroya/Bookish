@@ -360,6 +360,8 @@
       </article>
 
       <SettingsStoragePanel id="storage" />
+
+      <ConnectionTestPanel id="connection" />
     </section>
 
     <section class="about-section" aria-labelledby="about-title">
@@ -386,6 +388,7 @@ import {
 } from '~/composables/useBookishSettings'
 import { useToast } from '~/composables/useToast'
 import SettingsAudioPanel from '../shared/SettingsAudioPanel.vue'
+import ConnectionTestPanel from '../shared/ConnectionTestPanel.vue'
 import SettingsStoragePanel from '../shared/SettingsStoragePanel.vue'
 import ReadingPreview from '../shared/previews/ReadingPreview.vue'
 // Playlist cards offer the same two layouts as series cards, so they share the

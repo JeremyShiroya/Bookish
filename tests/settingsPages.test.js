@@ -102,3 +102,41 @@ describe('settings pages wiring', () => {
     }
   })
 })
+
+// A user-facing connection test: the point is that someone who does not read
+// stack traces can still tell us WHICH service is failing and why.
+describe('connection test page', () => {
+  const readFile = (p) => readFileSync(resolve(process.cwd(), p), 'utf8')
+
+  test('the page exists and is reachable from settings', () => {
+    expect(existsSync(resolve(process.cwd(), 'pages/settings/connection.vue'))).toBe(true)
+    expect(readFile('components/mobile/SettingsMobile.vue')).toContain("to: '/settings/connection'")
+    // Desktop settings shows the same panel rather than hiding the feature.
+    expect(readFile('components/desktop/SettingsDesktop.vue')).toContain('ConnectionTestPanel')
+  })
+
+  test('every online capability is covered by a check', () => {
+    const checks = readFile('composables/useConnectionChecks.js')
+    for (const id of ['internet', 'googleKey', 'googleSearch', 'openLibrary', 'archive', 'goodreads', 'metadata', 'series']) {
+      expect(checks, id).toContain(`id: '${id}'`)
+    }
+    // The headline check must run the REAL pipeline, not a simplified probe,
+    // or a pass would not mean the feature works.
+    expect(checks).toContain('fetchBookMetadataOnDevice')
+    expect(checks).toContain('/api/books/metadata')
+  })
+
+  test('failures are explained in plain language and stay reportable', () => {
+    const checks = readFile('composables/useConnectionChecks.js')
+    // Quota and key-restriction errors are the ones a user can act on.
+    expect(checks).toMatch(/per day/i)
+    expect(checks).toContain('Application restrictions')
+    expect(checks).toContain('buildDiagnosticsReport')
+
+    const panel = readFile('components/shared/ConnectionTestPanel.vue')
+    // Clipboard access is refused in some webviews, so there must be a
+    // fallback or the results cannot be got out at all.
+    expect(panel).toContain('showReportText')
+    expect(panel).toContain('textarea')
+  })
+})

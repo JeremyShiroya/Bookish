@@ -51,6 +51,7 @@ const mobileSettingsRows = [
   { label: 'Theme', icon: 'ri-moon-line', type: 'theme' },
   { label: 'Preferences', icon: 'ri-edit-box-line', to: '/settings/preferences' },
   { label: 'Storage', icon: 'ri-database-2-line', to: '/settings/storage' },
+  { label: 'Connection test', icon: 'ri-stethoscope-line', to: '/settings/connection' },
   { label: 'About', icon: 'ri-information-line', to: '/settings/about' },
   { label: 'Privacy Policy', icon: 'ri-lock-line', to: '/settings/privacy' },
   { label: 'Support the Project', icon: 'ri-hand-heart-line', comingSoon: true },
