@@ -87,6 +87,31 @@
         </button>
       </div>
 
+      <!-- Only offered once there is something to show: an empty screen is a
+           worse answer than no entry point. -->
+      <div v-if="highlightCount || noteCount" class="annotation-links">
+        <button
+          v-if="highlightCount"
+          type="button"
+          class="annotation-link"
+          @click="router.push(`/highlights/${book.id}`)"
+        >
+          <i class="ri-mark-pen-line"></i>
+          <span>View highlights</span>
+          <strong>{{ highlightCount }}</strong>
+        </button>
+        <button
+          v-if="noteCount"
+          type="button"
+          class="annotation-link"
+          @click="router.push(`/notes/${book.id}`)"
+        >
+          <i class="ri-sticky-note-line"></i>
+          <span>View notes</span>
+          <strong>{{ noteCount }}</strong>
+        </button>
+      </div>
+
       <section class="synopsis-section">
         <h2>Synopsis</h2>
         <p>{{ book.blurb || "No description available for this book." }}</p>
@@ -109,8 +134,9 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { loadAnnotations, useAnnotations } from "~/composables/useAnnotations";
 import { useBooks } from "~/composables/useBooks";
 import { useToast } from "~/composables/useToast";
 import { prewarmReaderContent } from "~/composables/useReaderPrewarm";
@@ -150,6 +176,14 @@ const book = computed(() => books.value.find((b) => String(b.id) === String(rout
 const progress = computed(() => Math.max(0, Math.min(100, Math.round(Number(book.value?.progress) || 0))));
 const isListening = computed(() => ttsBook.value?.id === book.value?.id && ttsStatus.value === "playing");
 const listenLabel = computed(() => (isListening.value ? "Pause" : "Listen"));
+
+// Highlights and notes made while reading this book.
+const { highlights, notes } = useAnnotations();
+const forThisBook = (list) => list.filter((a) => String(a.bookId) === String(route.params.id));
+const highlightCount = computed(() => forThisBook(highlights.value).length);
+const noteCount = computed(() => forThisBook(notes.value).length);
+
+onMounted(() => { if (route.params.id) loadAnnotations(route.params.id); });
 
 const generateCoverPlaceholder = (title) => {
   const colors = ["#8A2BE2", "#6A0DAD", "#2f7d62", "#b45309"];
@@ -388,6 +422,40 @@ watch(
   display: flex;
   gap: 0.6rem;
   margin-top: 1.1rem;
+}
+
+/* Secondary to Read/Listen: quieter than those, but still a real row rather
+   than a link buried in the synopsis. */
+.annotation-links {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.annotation-link {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.annotation-link i {
+  color: var(--color-brand-primary);
+  font-size: 18px;
+}
+
+.annotation-link strong {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .read-btn,

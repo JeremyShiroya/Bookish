@@ -3,11 +3,14 @@ import { BOOKISH_TTS_SESSION_KEY, readStoredTtsSession, writeStoredTtsSession } 
 
 const BACKUP_VERSION = 1
 const LIBRARY_DB_NAME = 'bookish-library'
-const LIBRARY_DB_VERSION = 2
+// Must track useLibraryStore's version. Opening with a lower one throws
+// VersionError once that store has upgraded, which takes backup/restore down
+// with it — so this constant and the schema below are kept in step by hand.
+const LIBRARY_DB_VERSION = 3
 const STORAGE_DB_NAME = 'bookish-storage'
 const STORAGE_DB_VERSION = 2
 
-const LIBRARY_STORES = ['books', 'collections', 'profiles']
+const LIBRARY_STORES = ['books', 'collections', 'profiles', 'annotations']
 const STORAGE_STORES = ['book-content', 'book-pdf-source']
 
 function openBookishDB(name, version) {
@@ -19,6 +22,10 @@ function openBookishDB(name, version) {
         if (!db.objectStoreNames.contains('books')) db.createObjectStore('books', { keyPath: 'id' })
         if (!db.objectStoreNames.contains('collections')) db.createObjectStore('collections', { keyPath: 'id' })
         if (!db.objectStoreNames.contains('profiles')) db.createObjectStore('profiles', { keyPath: 'id' })
+        if (!db.objectStoreNames.contains('annotations')) {
+          const store = db.createObjectStore('annotations', { keyPath: 'id' })
+          store.createIndex('bookId', 'bookId', { unique: false })
+        }
       }
       if (name === STORAGE_DB_NAME) {
         if (!db.objectStoreNames.contains('book-content')) db.createObjectStore('book-content')

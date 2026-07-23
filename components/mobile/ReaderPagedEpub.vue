@@ -8,6 +8,7 @@
       @touchend="onTouchEnd"
       @touchcancel="onTouchCancel"
       @click="onClick"
+      @mouseup="emit('selection-settled')"
       @contextmenu.prevent
     >
       <div ref="contentRef" class="paged-content paged-text" :style="contentStyle"></div>
@@ -49,7 +50,10 @@ const props = defineProps({
   startSection: { type: Number, default: 0 },
 });
 
-const emit = defineEmits(["position-change", "long-press", "toggle-chrome"]);
+const emit = defineEmits([
+  "position-change", "long-press", "toggle-chrome", "selection-settled",
+  "annotation-tap", "section-rendered",
+]);
 
 const viewportRef = ref(null);
 const contentRef = ref(null);
@@ -171,6 +175,9 @@ const renderSection = async (index, targetPage = 0) => {
 
   applyChunkHighlight();
   emitPosition();
+  // This section's DOM is brand new, so any highlights or notes in it have to
+  // be painted again — they live on chunk offsets, not on surviving nodes.
+  emit("section-rendered");
 };
 
 const setPage = (target) => {
@@ -310,8 +317,21 @@ const onTouchMove = (event) => {
   }
 };
 
+// A live selection means the finger was dragging a selection handle, not
+// turning a page — let the parent offer its actions instead of paging away
+// from the text just chosen.
+const hasLiveSelection = () => {
+  const selection = typeof window !== "undefined" ? window.getSelection?.() : null;
+  return !!selection && !selection.isCollapsed;
+};
+
 const onTouchEnd = (event) => {
   cancelLongPress();
+  if (hasLiveSelection()) {
+    touchStart = null;
+    emit("selection-settled");
+    return;
+  }
   if (!touchStart || longPressFired) {
     touchStart = null;
     return;
@@ -342,6 +362,12 @@ const onTouchCancel = () => {
 // without the top bar and dock over it.
 const onClick = (event) => {
   if (longPressFired) return;
+  // Tapping an existing highlight opens it rather than turning the page.
+  if (event.target?.closest?.("mark[data-annotation-id]")) {
+    emit("annotation-tap", event);
+    return;
+  }
+  if (hasLiveSelection()) return;
   const rect = viewportRef.value?.getBoundingClientRect();
   if (!rect) return;
   const ratio = (event.clientX - rect.left) / rect.width;
@@ -451,8 +477,9 @@ defineExpose({ nextPage, prevPage, goToSection, goToSectionPage, getPosition });
   -webkit-hyphens: auto;
   overflow-wrap: break-word;
   word-break: break-word;
-  -webkit-user-select: none;
-  user-select: none;
+  /* See ReaderMobile: native selection powers the highlight/note menu. */
+  -webkit-user-select: text;
+  user-select: text;
   -webkit-touch-callout: none;
 }
 

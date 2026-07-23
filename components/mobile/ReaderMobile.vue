@@ -189,10 +189,8 @@
         <div
           v-if="isPdfRenderable"
           class="reader-mobile-pdf"
-          @touchstart.passive="onReadingTouchStart"
-          @touchmove.passive="onReadingTouchMove"
-          @touchend="onReadingTouchEnd"
-          @touchcancel="onReadingTouchEnd"
+          @touchend="onSelectionSettled"
+          @mouseup="onSelectionSettled"
           @contextmenu.prevent
         >
           <PdfViewer
@@ -234,16 +232,17 @@
           @position-change="onPagedPosition"
           @long-press="onPagedLongPress"
           @toggle-chrome="toggleChrome"
+          @selection-settled="onSelectionSettled"
+          @annotation-tap="onAnnotationTap"
+          @section-rendered="repaintAnnotations"
         />
 
         <div
           v-else
           class="reader-mobile-chapters"
           :ref="setChaptersContainer"
-          @touchstart.passive="onReadingTouchStart"
-          @touchmove.passive="onReadingTouchMove"
-          @touchend="onReadingTouchEnd"
-          @touchcancel="onReadingTouchEnd"
+          @touchend="onSelectionSettled"
+          @mouseup="onSelectionSettled"
           @click="onScrollTap"
           @contextmenu.prevent
         >
@@ -309,18 +308,31 @@
       </section>
     </div>
 
-    <Transition name="read-here">
-      <div
-        v-if="readHereMenu.visible"
-        class="read-here-menu"
-        :style="readHereMenuStyle"
-      >
-        <button type="button" @click="confirmReadHere">
-          <i class="ri-play-circle-fill"></i>
-          Read from here
-        </button>
-      </div>
-    </Transition>
+    <ReaderSelectionMenu
+      v-if="selectionMenu.visible"
+      :x="selectionMenu.x"
+      :y="selectionMenu.y"
+      :active-color="selectionMenu.color"
+      :can-remove="!!selectionMenu.existingId"
+      :has-note="selectionMenu.hasNote"
+      :start-on-colors="selectionMenu.startOnColors"
+      @read="selectionRead"
+      @copy="selectionCopy"
+      @highlight="selectionHighlight"
+      @dictionary="selectionDictionary"
+      @note="openNoteEditor()"
+      @remove="selectionRemove"
+    />
+
+    <ReaderNoteEditor
+      v-if="noteEditor.visible"
+      :quote="noteEditor.quote"
+      :initial="noteEditor.initial"
+      :existing="!!noteEditor.id"
+      @close="closeNoteEditor"
+      @save="saveNote"
+      @delete="deleteNote"
+    />
 
     <div v-show="readerMode === 'read' && !chromeHidden" class="reader-chapter-dock">
       <div class="chapter-pill">
@@ -728,8 +740,20 @@ import {
   totalPagesInMap,
   writePageMapCache,
 } from "~/composables/useEpubPageMap";
+import { useToast } from "~/composables/useToast";
+import {
+  anchorFromSelection,
+  clearAnnotationMarks,
+  deleteAnnotation,
+  loadAnnotations,
+  paintAnnotations,
+  saveAnnotation,
+  useAnnotations,
+} from "~/composables/useAnnotations";
 import MobileBottomNav from "./MobileBottomNav.vue";
 import ReaderPagedEpub from "./ReaderPagedEpub.vue";
+import ReaderNoteEditor from "./ReaderNoteEditor.vue";
+import ReaderSelectionMenu from "./ReaderSelectionMenu.vue";
 
 const props = defineProps({
   readerRefs: { type: Object, required: true },
@@ -871,14 +895,14 @@ const pagedPos = ref({ section: 0, pageInSection: 0, sectionPages: 1 });
 
 const onPagedPosition = (pos) => {
   pagedPos.value = pos;
-  hideReadHereMenu();
+  hideSelectionMenu();
   emit("position-change", pos);
 };
 
-const onPagedLongPress = ({ chunkIdx, x, y }) => {
-  const menuX = Math.max(12, Math.min(x - 82, window.innerWidth - 176));
-  const menuY = Math.max(70, y - 64);
-  readHereMenu.value = { visible: true, x: menuX, y: menuY, chunkIdx };
+// The paged reader still reports its own long-press, but the browser now owns
+// selection there too — this only pre-warms the audio for the sentence under
+// the finger so "Read from here" is instant if the user picks it.
+const onPagedLongPress = ({ chunkIdx }) => {
   props.prewarmChunk?.(chunkIdx);
 };
 
@@ -1254,6 +1278,18 @@ const toggleMediaPlay = () => {
 const READER_MODE_KEY = "bookish:reader-mode";
 
 const { settings: appSettings } = useBookishSettings();
+const { addToast } = useToast();
+const { annotations } = useAnnotations();
+
+// Repaint after any change, and whenever the reader re-renders — the paged
+// reader rebuilds its DOM on every page turn, so marks must be reapplied.
+const repaintAnnotations = async () => {
+  await nextTick();
+  const root = props.readerRefs?.chaptersContainerRef?.value
+    || document.querySelector(".paged-content");
+  if (!root) return;
+  paintAnnotations(root, annotations.value.filter((a) => String(a.bookId) === String(props.book?.id)));
+};
 const listenBlurEnabled = computed(() => appSettings.value.listenCoverBlur !== false);
 
 const readerMode = ref("listen");
@@ -1273,7 +1309,9 @@ const toggleChrome = () => {
 // or a link toggles the chrome.
 const onScrollTap = (event) => {
   if (readerMode.value !== "read") return;
-  if (readHereMenu.value.visible) return;
+  // A tap on an existing highlight opens it instead of toggling the chrome.
+  if (onAnnotationTap(event)) return;
+  if (selectionMenu.value.visible) return;
   const selection = typeof window !== "undefined" ? window.getSelection?.() : null;
   if (selection && !selection.isCollapsed) return;
   if (event.target?.closest?.("a,button,input,textarea")) return;
@@ -1529,79 +1567,201 @@ watch(useOfflineVoice, (offline) => {
 
 // ── Long-press "Read from here" ────────────────────────────────────────────
 
-const LONG_PRESS_MS = 450;
-const LONG_PRESS_MOVE_TOLERANCE = 12;
+// Selection is the browser's own: long-pressing a word gives real selection
+// handles for free, and dragging them extends the range. A custom long-press
+// used to pre-empt that with a one-item "Read from here" bubble, which meant
+// no handles and no way to act on more than a sentence. Now the app only
+// watches for a settled selection and offers actions on it.
 
-const readHereMenu = ref({ visible: false, x: 0, y: 0, chunkIdx: -1 });
-let _longPressTimer = null;
-let _longPressStart = null;
+const selectionMenu = ref({
+  visible: false, x: 0, y: 0, chunkIdx: -1,
+  text: "", anchor: null, existingId: "", color: "", hasNote: false, startOnColors: false,
+});
+const noteEditor = ref({ visible: false, quote: "", initial: "", id: "", anchor: null });
 
-const readHereMenuStyle = computed(() => ({
-  left: `${readHereMenu.value.x}px`,
-  top: `${readHereMenu.value.y}px`,
-}));
-
-const hideReadHereMenu = () => {
-  readHereMenu.value = { visible: false, x: 0, y: 0, chunkIdx: -1 };
+const hideSelectionMenu = () => {
+  selectionMenu.value = { ...selectionMenu.value, visible: false, startOnColors: false };
 };
 
 const cancelLongPress = () => {
-  if (_longPressTimer) clearTimeout(_longPressTimer);
-  _longPressTimer = null;
-  _longPressStart = null;
+  // Kept as a no-op hook: scroll and unmount handlers call it, and the browser
+  // now owns the press itself.
+  hideSelectionMenu();
 };
 
-const triggerLongPress = (x, y) => {
-  _longPressTimer = null;
-  const chunkIdx = props.resolveChunkAtPoint ? props.resolveChunkAtPoint(x, y) : -1;
-  if (chunkIdx == null || chunkIdx < 0) return;
-
-  if (navigator.vibrate) navigator.vibrate(12);
-
-  // Clamp the menu inside the viewport, floating just above the finger.
-  const menuX = Math.max(12, Math.min(x - 82, window.innerWidth - 176));
-  const menuY = Math.max(70, y - 64);
-  readHereMenu.value = { visible: true, x: menuX, y: menuY, chunkIdx };
-
-  // Fetch the audio while the user reads the menu so playback starts instantly.
-  props.prewarmChunk?.(chunkIdx);
+// Where to float the menu: above the selection when there is room, below it
+// otherwise, so it never covers the words being acted on.
+const menuPointForRange = (rect) => {
+  const above = rect.top - 66;
+  return {
+    x: rect.left + rect.width / 2,
+    y: above > 80 ? above : Math.min(rect.bottom + 12, window.innerHeight - 120),
+  };
 };
 
-const onReadingTouchStart = (event) => {
-  hideReadHereMenu();
-  if (event.touches.length !== 1) return;
-  const touch = event.touches[0];
-  _longPressStart = { x: touch.clientX, y: touch.clientY };
-  cancelLongPressTimerOnly();
-  _longPressTimer = setTimeout(
-    () => triggerLongPress(touch.clientX, touch.clientY),
-    LONG_PRESS_MS,
-  );
+const openSelectionMenu = ({ anchor, rect, existing = null, startOnColors = false }) => {
+  const point = menuPointForRange(rect);
+  selectionMenu.value = {
+    visible: true,
+    x: point.x,
+    y: point.y,
+    chunkIdx: anchor?.startChunk ?? -1,
+    text: anchor?.text || existing?.text || "",
+    anchor: anchor || existing || null,
+    existingId: existing?.id || "",
+    color: existing?.color || "",
+    hasNote: !!existing?.note,
+    startOnColors,
+  };
+  // Warm the audio while the menu is open so "Read from here" starts instantly.
+  if (anchor?.startChunk >= 0) props.prewarmChunk?.(anchor.startChunk);
 };
 
-const cancelLongPressTimerOnly = () => {
-  if (_longPressTimer) clearTimeout(_longPressTimer);
-  _longPressTimer = null;
+// A settled selection inside the book text opens the menu. Fired from pointer
+// release rather than `selectionchange`, which fires continuously while the
+// handles are being dragged.
+const onSelectionSettled = () => {
+  if (readerMode.value !== "read") return;
+  const selection = window.getSelection?.();
+  if (!selection || selection.isCollapsed) {
+    if (!noteEditor.value.visible) hideSelectionMenu();
+    return;
+  }
+  const anchor = anchorFromSelection(selection);
+  if (!anchor) return;
+  const rect = selection.getRangeAt(0).getBoundingClientRect();
+  if (!rect || (!rect.width && !rect.height)) return;
+  openSelectionMenu({ anchor, rect });
 };
 
-const onReadingTouchMove = (event) => {
-  if (!_longPressStart) return;
-  const touch = event.touches[0];
-  const distance = Math.hypot(
-    touch.clientX - _longPressStart.x,
-    touch.clientY - _longPressStart.y,
-  );
-  if (distance > LONG_PRESS_MOVE_TOLERANCE) cancelLongPress();
+// Tapping an existing highlight reopens it — the likely intent is recolouring
+// or removing, so the menu opens straight on the colour row.
+const onAnnotationTap = (event) => {
+  const mark = event.target?.closest?.("mark[data-annotation-id]");
+  if (!mark) return false;
+  const existing = annotations.value.find((item) => item.id === mark.dataset.annotationId);
+  if (!existing) return false;
+  event.stopPropagation();
+  if (existing.note) {
+    openNoteEditor(existing);
+    return true;
+  }
+  openSelectionMenu({ anchor: null, rect: mark.getBoundingClientRect(), existing, startOnColors: true });
+  return true;
 };
 
-const onReadingTouchEnd = () => {
-  cancelLongPress();
+// ── Selection actions ───────────────────────────────────────────────────────
+
+const clearNativeSelection = () => {
+  try { window.getSelection?.()?.removeAllRanges(); } catch {}
 };
 
-const confirmReadHere = () => {
-  const { chunkIdx } = readHereMenu.value;
-  hideReadHereMenu();
-  if (chunkIdx >= 0) emit("read-from-chunk", chunkIdx);
+const selectionRead = () => {
+  const chunk = selectionMenu.value.chunkIdx;
+  hideSelectionMenu();
+  clearNativeSelection();
+  if (chunk >= 0) emit("read-from-chunk", chunk);
+};
+
+const selectionCopy = async () => {
+  const text = selectionMenu.value.text;
+  hideSelectionMenu();
+  try {
+    await navigator.clipboard.writeText(text);
+    addToast("Copied.", "success");
+  } catch {
+    addToast("Could not copy that text.", "error");
+  }
+  clearNativeSelection();
+};
+
+const selectionDictionary = () => {
+  const term = selectionMenu.value.text.trim();
+  hideSelectionMenu();
+  clearNativeSelection();
+  if (!term) return;
+  // "define" biases Google straight to its dictionary card for single words
+  // while still returning sensible results for a phrase.
+  const url = `https://www.google.com/search?q=${encodeURIComponent(`define ${term}`)}`;
+  window.open(url, "_blank", "noopener");
+};
+
+const persistAnnotation = async (patch) => {
+  const base = selectionMenu.value.anchor;
+  if (!base) return null;
+  return saveAnnotation({
+    id: selectionMenu.value.existingId || undefined,
+    bookId: props.book?.id,
+    startChunk: base.startChunk,
+    startOffset: base.startOffset,
+    endChunk: base.endChunk,
+    endOffset: base.endOffset,
+    text: base.text,
+    ...patch,
+  });
+};
+
+const selectionHighlight = async (colorId) => {
+  const existingNote = selectionMenu.value.hasNote
+    ? annotations.value.find((a) => a.id === selectionMenu.value.existingId)?.note
+    : undefined;
+  await persistAnnotation({ color: colorId, ...(existingNote ? { note: existingNote } : {}) });
+  hideSelectionMenu();
+  clearNativeSelection();
+  await repaintAnnotations();
+};
+
+const selectionRemove = async () => {
+  const id = selectionMenu.value.existingId;
+  hideSelectionMenu();
+  clearNativeSelection();
+  if (id) await deleteAnnotation(id);
+  await repaintAnnotations();
+};
+
+const openNoteEditor = (existing = null) => {
+  const source = existing || selectionMenu.value;
+  noteEditor.value = {
+    visible: true,
+    quote: existing?.text || selectionMenu.value.text,
+    initial: existing?.note || "",
+    id: existing?.id || selectionMenu.value.existingId || "",
+    anchor: existing || selectionMenu.value.anchor,
+  };
+  hideSelectionMenu();
+};
+
+const closeNoteEditor = () => {
+  noteEditor.value = { visible: false, quote: "", initial: "", id: "", anchor: null };
+  clearNativeSelection();
+};
+
+const saveNote = async (text) => {
+  const anchor = noteEditor.value.anchor;
+  if (anchor) {
+    await saveAnnotation({
+      id: noteEditor.value.id || undefined,
+      bookId: props.book?.id,
+      startChunk: anchor.startChunk,
+      startOffset: anchor.startOffset,
+      endChunk: anchor.endChunk,
+      endOffset: anchor.endOffset,
+      text: anchor.text,
+      color: anchor.color || "yellow",
+      note: text,
+    });
+  }
+  closeNoteEditor();
+  await repaintAnnotations();
+  addToast("Note saved.", "success");
+};
+
+const deleteNote = async () => {
+  const id = noteEditor.value.id;
+  closeNoteEditor();
+  if (id) await deleteAnnotation(id);
+  await repaintAnnotations();
+  addToast("Note deleted.", "info");
 };
 
 // ── Progressive section mounting ───────────────────────────────────────────
@@ -1680,7 +1840,7 @@ const onScroll = () => {
   const delta = nextY - lastScrollY;
   lastScrollY = Math.max(0, nextY);
 
-  if (readHereMenu.value.visible) hideReadHereMenu();
+  if (selectionMenu.value.visible) hideSelectionMenu();
   cancelLongPress();
 
   // Throttled fallback mount so fast scrolling never reveals a blank page.
@@ -1734,7 +1894,20 @@ onMounted(async () => {
   await nextTick();
   updatePageGeometry();
   buildPageMap();
+
 });
+
+// The page fetches the book AFTER this component mounts, so the id is not
+// available in onMounted — load the annotations when it arrives instead.
+watch(() => props.book?.id, async (id) => {
+  if (!id) return;
+  await loadAnnotations(id);
+  await repaintAnnotations();
+}, { immediate: true });
+
+// Sections arrive progressively in scroll mode and are re-rendered per page
+// in paged mode, so anything painted has to be repainted when they change.
+watch(() => props.chapterList.length, () => { repaintAnnotations(); });
 
 onUnmounted(() => {
   window.removeEventListener("scroll", onScroll);
@@ -1745,6 +1918,9 @@ onUnmounted(() => {
   _pageMapToken += 1;
   _placeholderObserver?.disconnect();
   if (_mountScrollRaf !== null) cancelAnimationFrame(_mountScrollRaf);
+  // Leave the DOM as we found it: marks wrap the book's own text nodes.
+  const root = props.readerRefs?.chaptersContainerRef?.value;
+  if (root) clearAnnotationMarks(root);
 });
 </script>
 
@@ -2374,9 +2550,11 @@ onUnmounted(() => {
   -webkit-hyphens: auto;
   overflow-wrap: break-word;
   word-break: break-word;
-  /* Long-press opens "Read from here" instead of native text selection. */
-  -webkit-user-select: none;
-  user-select: none;
+  /* Selection is deliberately ENABLED: long-pressing a word gives the
+     browser's own selection handles, which is what lets a reader extend the
+     range before choosing highlight, note, copy or dictionary. */
+  -webkit-user-select: text;
+  user-select: text;
   -webkit-touch-callout: none;
 }
 
@@ -2676,6 +2854,34 @@ onUnmounted(() => {
   transition:
     transform var(--dock-swap-duration) var(--dock-swap-ease),
     opacity var(--dock-swap-duration) var(--dock-swap-ease);
+}
+
+/* ── Highlights and notes ──────────────────────────────────────────────────
+   Painted as <mark> around the book's own text. `color: inherit` matters: a
+   mark's default black would fight the dark and Book-brown reader themes. */
+:deep(.annotation-mark) {
+  border-radius: 3px;
+  color: inherit;
+  /* Multiply keeps the letters legible through the colour instead of washing
+     them out, and behaves on both light and dark pages. */
+  mix-blend-mode: multiply;
+}
+
+.reader-mobile-page.dark :deep(.annotation-mark) {
+  mix-blend-mode: screen;
+}
+
+/* A noted passage carries a small marker so it is findable without tapping
+   every highlight to see which one has writing behind it. */
+:deep(.annotation-mark[data-has-note="true"])::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 3px;
+  border-radius: 50%;
+  background: var(--color-brand-primary, #8a2be2);
+  vertical-align: super;
 }
 
 /* ── Resume-position sheet ─────────────────────────────────────────────── */

@@ -1,6 +1,8 @@
 export const LIBRARY_DB_NAME = 'bookish-library'
 const DB_NAME = LIBRARY_DB_NAME
-const DB_VERSION = 2
+// v3 adds `annotations` (highlights and notes). Version bumps must only ever
+// ADD stores here — existing ones hold the user's whole library.
+const DB_VERSION = 3
 export const PROFILE_ID = 'local'
 export const DEFAULT_PROFILE = Object.freeze({
   id: PROFILE_ID,
@@ -35,7 +37,9 @@ export function nextTimestamp(previousTimestamp) {
   return new Date(previous + 1).toISOString()
 }
 
-function openLibraryDB() {
+// Exported so other stores (annotations) share this connection and its
+// upgrade path instead of opening the same database with their own version.
+export function openLibraryDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
     request.onupgradeneeded = (e) => {
@@ -48,6 +52,11 @@ function openLibraryDB() {
       }
       if (!db.objectStoreNames.contains('profiles')) {
         db.createObjectStore('profiles', { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains('annotations')) {
+        const store = db.createObjectStore('annotations', { keyPath: 'id' })
+        // Every read is "the annotations for this book", so index the book.
+        store.createIndex('bookId', 'bookId', { unique: false })
       }
     }
     request.onsuccess = (e) => resolve(e.target.result)

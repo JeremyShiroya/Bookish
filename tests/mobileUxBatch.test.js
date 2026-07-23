@@ -141,7 +141,9 @@ describe('mobile UX batch', () => {
     const reader = read('components/mobile/ReaderMobile.vue')
     expect(reader).toMatch(/\.reader-mobile-text\s*\{[^}]*text-align:\s*var\(--mr-text-align, justify\)/)
     expect(reader).toMatch(/\.reader-mobile-text\s*\{[^}]*hyphens:\s*auto/)
-    expect(reader).toMatch(/reader-mobile-pdf[\s\S]{0,140}onReadingTouchStart/)
+    // PDF pane shares the reader's selection detection (the old bespoke
+    // long-press bubble was replaced by native selection + an action menu).
+    expect(reader).toMatch(/reader-mobile-pdf[\s\S]{0,160}onSelectionSettled/)
 
     const readerPage = read('pages/reader/[id].vue')
     expect(readerPage).toContain("closest?.('[data-page]')")

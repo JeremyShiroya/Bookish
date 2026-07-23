@@ -1562,6 +1562,19 @@ onMounted(async () => {
   _syncViewport()
   _viewportQuery.addEventListener('change', _syncViewport)
   await loadBook(route.params.id)
+
+  // ?chunk=N — "Open in book" from the highlights/notes screens. Chunks are
+  // the reader's own unit of position, so this lands on the exact sentence
+  // rather than the top of a chapter.
+  const target = Number(route.query?.chunk)
+  if (Number.isFinite(target) && target >= 0) {
+    await nextTick()
+    const section = sectionForChunk(target)
+    currentChapterIdx.value = section
+    mountSection(section)
+    await nextTick()
+    _highlightChunk(target)
+  }
 })
 
 onUnmounted(async () => {
