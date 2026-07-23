@@ -49,7 +49,7 @@ const props = defineProps({
   startSection: { type: Number, default: 0 },
 });
 
-const emit = defineEmits(["position-change", "long-press"]);
+const emit = defineEmits(["position-change", "long-press", "toggle-chrome"]);
 
 const viewportRef = ref(null);
 const contentRef = ref(null);
@@ -337,7 +337,9 @@ const onTouchCancel = () => {
   touchStart = null;
 };
 
-// Tap zones (also serves mouse/dev): left third = back, right third = forward.
+// Tap zones (also serves mouse/dev): left third = back, right third =
+// forward, and the middle toggles the reader chrome so the page can be read
+// without the top bar and dock over it.
 const onClick = (event) => {
   if (longPressFired) return;
   const rect = viewportRef.value?.getBoundingClientRect();
@@ -345,6 +347,7 @@ const onClick = (event) => {
   const ratio = (event.clientX - rect.left) / rect.width;
   if (ratio >= 0.62) nextPage();
   else if (ratio <= 0.38) prevPage();
+  else emit("toggle-chrome");
 };
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────

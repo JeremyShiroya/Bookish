@@ -1,6 +1,7 @@
 <template>
   <div class="group-detail-page">
-    <MobileSettingsNav :title="seriesNavTitle" back-to="/series" aria-label="Series navigation" />
+    <!-- The hero names the series; the bar carries only the back button. -->
+    <MobileSettingsNav :show-title="false" back-to="/series" aria-label="Series navigation" />
 
     <section v-if="seriesBooks.length" class="detail-shell">
       <header class="detail-hero">

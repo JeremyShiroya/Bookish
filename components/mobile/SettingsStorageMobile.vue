@@ -14,12 +14,12 @@
       </div>
       <div class="stat-row">
         <div class="stat">
-          <strong>{{ storageSummary.contentCount }}</strong>
-          <span>Readable books</span>
+          <strong>{{ totalBookCount }}</strong>
+          <span>Total books</span>
         </div>
         <div class="stat">
-          <strong>{{ storageSummary.sourceCount }}</strong>
-          <span>PDF files</span>
+          <strong>{{ hiddenCount }}</strong>
+          <span>Hidden books</span>
         </div>
         <div class="stat">
           <strong>{{ formattedStorageSize }}</strong>
@@ -64,43 +64,6 @@
           >
             View {{ backfill.failures.length }} unsuccessful
           </button>
-        </p>
-      </template>
-    </section>
-
-    <!-- Offline covers -->
-    <section class="card">
-      <div class="card-head">
-        <i class="ri-image-2-line"></i>
-        <div>
-          <h2>Offline covers</h2>
-          <p>Save every book cover to this device so they always show — even without a connection.</p>
-        </div>
-      </div>
-
-      <div v-if="covers.running" class="backfill-progress">
-        <div class="backfill-progress-labels">
-          <span class="backfill-title">{{ covers.currentTitle }}</span>
-          <span class="backfill-count">{{ covers.current }} / {{ covers.total }}</span>
-        </div>
-        <div class="backfill-bar">
-          <div class="backfill-fill" :style="{ width: `${coversPercent}%` }"></div>
-        </div>
-        <button class="ghost-btn" type="button" @click="stopCovers">Stop</button>
-      </div>
-
-      <template v-else>
-        <button class="primary-btn" type="button" @click="saveCoversOffline">
-          <i class="ri-download-cloud-2-line"></i>
-          Save covers for offline
-        </button>
-        <p v-if="covers.finished" class="backfill-summary">
-          <template v-if="covers.total === 0">All covers are already saved on this device.</template>
-          <template v-else>
-            Saved {{ covers.cached }} of {{ covers.total }} cover{{ covers.total === 1 ? '' : 's' }}.
-            <template v-if="covers.failed"> {{ covers.failed }} couldn't be reached.</template>
-            <template v-if="covers.repaired"> {{ covers.repaired }} lost their source — tap “Fetch metadata for my library” above to restore them.</template>
-          </template>
         </p>
       </template>
     </section>
@@ -164,65 +127,18 @@
           <p>{{ hiddenCount ? `${hiddenCount} book${hiddenCount === 1 ? '' : 's'} hidden from your library.` : 'No books are hidden.' }}</p>
         </div>
       </div>
-      <button v-if="hiddenCount" class="secondary-btn" type="button" @click="restoreHidden">
-        <i class="ri-eye-line"></i>
-        Restore hidden books
-      </button>
-    </section>
-
-    <!-- Backup -->
-    <section class="card">
-      <div class="card-head">
-        <i class="ri-archive-2-line"></i>
-        <div>
-          <h2>Backup</h2>
-          <p>Move your full library, playlists, progress, and settings.</p>
-        </div>
-      </div>
-      <div class="backup-actions">
-        <button class="secondary-btn" :disabled="backupLoading" type="button" @click="exportData">
-          <i :class="backupLoading ? 'ri-loader-4-line spin' : 'ri-download-2-line'"></i>
-          Export
+      <div v-if="hiddenCount" class="hidden-actions">
+        <!-- Reviewing them one by one is the common case; restoring the lot at
+             once is the blunt instrument, so it comes second. -->
+        <button class="primary-btn" type="button" @click="router.push('/settings/hidden')">
+          <i class="ri-eye-line"></i>
+          View hidden books
         </button>
-        <button class="secondary-btn" :disabled="backupLoading" type="button" @click="openImportPicker">
-          <i class="ri-upload-2-line"></i>
-          Import
-        </button>
-        <button class="secondary-btn danger" :disabled="wipeLoading" type="button" @click="wipeData">
-          <i :class="wipeLoading ? 'ri-loader-4-line spin' : 'ri-delete-bin-6-line'"></i>
-          Wipe
+        <button class="secondary-btn" type="button" @click="restoreHidden">
+          <i class="ri-refresh-line"></i>
+          Restore all
         </button>
       </div>
-      <input
-        ref="importInputRef"
-        class="sr-only"
-        type="file"
-        accept="application/json,.json"
-        @change="importData"
-      />
-    </section>
-
-    <!-- Server connection -->
-    <section class="card">
-      <div class="card-head">
-        <i class="ri-server-line"></i>
-        <div>
-          <h2>Server connection</h2>
-          <p>Optional Pages server for publisher research and AI checks.</p>
-        </div>
-      </div>
-      <form class="server-row" @submit.prevent="saveServerUrl">
-        <input
-          v-model="serverUrlInput"
-          class="server-input"
-          type="url"
-          inputmode="url"
-          placeholder="https://your-bookish-server.example"
-          aria-label="Pages server URL"
-        />
-        <button class="primary-btn compact" type="submit">Save</button>
-      </form>
-      <p class="server-hint">{{ serverHint }}</p>
     </section>
 
     <!-- Unsuccessful lookups modal -->
@@ -248,13 +164,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
-import {
-  normalizeApiBaseUrl,
-  readStoredApiBaseUrl,
-  useApiEndpoint,
-  writeStoredApiBaseUrl,
-} from '~/composables/useApiEndpoint'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useLibraryBackfill } from '~/composables/useMetadataBackfill'
 import {
   DEFAULT_SCAN_FOLDERS,
@@ -264,19 +175,18 @@ import {
   writeScanFolders,
 } from '~/composables/useDeviceLibrarySync'
 import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
-import { useBookishSettings } from '~/composables/useBookishSettings'
 import { useBooks } from '~/composables/useBooks'
 import { useBookStorage } from '~/composables/useBookStorage'
-import { useLibraryBackup } from '~/composables/useLibraryBackup'
-import { useTTS } from '~/composables/useTTS'
 import { useToast } from '~/composables/useToast'
 
-const { books, updateBook, fetchAllData, restoreHiddenBooks, countHiddenBooks, cacheRemoteLibraryCovers } = useBooks()
-const { loadSettings } = useBookishSettings()
+const { books, updateBook, restoreHiddenBooks, countHiddenBooks } = useBooks()
 const { getStorageSummary } = useBookStorage()
-const { createDownload, importBookishData, wipeBookishData } = useLibraryBackup()
-const { stop: stopTTS } = useTTS()
 const { addToast } = useToast()
+const router = useRouter()
+
+// Every book in the library, hidden ones included — the two stats below it
+// then read as a whole and a part of that whole.
+const totalBookCount = computed(() => (books.value?.length || 0) + hiddenCount.value)
 
 // ── Storage summary ─────────────────────────────────────────────────────────
 
@@ -338,68 +248,6 @@ const stopBackfill = () => {
   stopLibraryBackfill()
 }
 
-// ── Offline covers ───────────────────────────────────────────────────────────
-
-const covers = reactive({
-  running: false,
-  finished: false,
-  current: 0,
-  total: 0,
-  currentTitle: '',
-  cached: 0,
-  failed: 0,
-  repaired: 0,
-})
-let _coversStopRequested = false
-
-const coversPercent = computed(() => (
-  covers.total ? Math.round((covers.current / covers.total) * 100) : 0
-))
-
-const saveCoversOffline = async () => {
-  if (covers.running) return
-  _coversStopRequested = false
-  covers.running = true
-  covers.finished = false
-  covers.current = 0
-  covers.total = 0
-  covers.cached = 0
-  covers.failed = 0
-  covers.repaired = 0
-
-  try {
-    const result = await cacheRemoteLibraryCovers({
-      shouldStop: () => _coversStopRequested,
-      onProgress: ({ current, total, title }) => {
-        covers.current = current
-        covers.total = total
-        covers.currentTitle = title
-      },
-    })
-    covers.total = result.total
-    covers.cached = result.cached
-    covers.failed = result.failed
-    covers.repaired = result.repaired || 0
-    covers.finished = true
-    await refreshStorageSummary()
-
-    if (!result.total) addToast('All covers are already saved on this device.', 'success')
-    else if (_coversStopRequested) addToast('Saving covers stopped.', 'info')
-    else if (result.repaired) addToast(`Saved ${result.cached} covers — ${result.repaired} lost their source; run "Fetch metadata" to restore them.`, 'info')
-    else if (result.failed) addToast(`Saved ${result.cached} covers — ${result.failed} couldn't be reached.`, 'info')
-    else addToast(`Saved ${result.cached} cover${result.cached === 1 ? '' : 's'} for offline.`, 'success')
-  } catch (error) {
-    console.error('[Storage] Saving covers offline failed:', error)
-    addToast('Could not save covers — please try again.', 'error')
-  } finally {
-    covers.running = false
-  }
-}
-
-const stopCovers = () => {
-  _coversStopRequested = true
-}
-
 // ── Scanned folders ─────────────────────────────────────────────────────────
 
 const scanFolders = ref(readScanFolders())
@@ -453,109 +301,6 @@ const restoreHidden = async () => {
   const restored = await restoreHiddenBooks()
   await refreshHiddenCount()
   addToast(restored ? `Restored ${restored} hidden book${restored === 1 ? '' : 's'}.` : 'No hidden books to restore.', 'success')
-}
-
-// ── Backup ──────────────────────────────────────────────────────────────────
-
-const backupLoading = ref(false)
-const wipeLoading = ref(false)
-const importInputRef = ref(null)
-
-const exportData = async () => {
-  backupLoading.value = true
-  let url = null
-  try {
-    const download = await createDownload()
-    url = download.url
-    const link = document.createElement('a')
-    link.href = download.url
-    link.download = download.filename
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    addToast('Pages backup exported', 'success')
-  } catch (error) {
-    console.error('[Storage] Failed to export Pages data:', error)
-    addToast(error?.message || 'Could not export Pages data', 'error')
-  } finally {
-    if (url) setTimeout(() => URL.revokeObjectURL(url), 0)
-    backupLoading.value = false
-  }
-}
-
-const openImportPicker = () => {
-  importInputRef.value?.click()
-}
-
-const importData = async (event) => {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (!file) return
-
-  const confirmed = window.confirm('Importing a backup will replace the current Pages data on this device. Continue?')
-  if (!confirmed) return
-
-  backupLoading.value = true
-  try {
-    const backup = JSON.parse(await file.text())
-    stopTTS()
-    await importBookishData(backup)
-    loadSettings()
-    await fetchAllData(true)
-    await refreshStorageSummary()
-    await refreshHiddenCount()
-    addToast('Pages backup imported', 'success')
-  } catch (error) {
-    console.error('[Storage] Failed to import Pages data:', error)
-    addToast(error?.message || 'Could not import Pages backup', 'error')
-  } finally {
-    backupLoading.value = false
-  }
-}
-
-const wipeData = async () => {
-  const confirmed = window.confirm('This permanently removes all Pages books, playlists, progress, and settings from this device. Continue?')
-  if (!confirmed) return
-
-  wipeLoading.value = true
-  try {
-    stopTTS()
-    await wipeBookishData()
-    loadSettings()
-    await fetchAllData(true)
-    await refreshStorageSummary()
-    await refreshHiddenCount()
-    addToast('Pages data wiped from this device', 'success')
-  } catch (error) {
-    console.error('[Storage] Failed to wipe Pages data:', error)
-    addToast(error?.message || 'Could not wipe Pages data', 'error')
-  } finally {
-    wipeLoading.value = false
-  }
-}
-
-// ── Server connection ───────────────────────────────────────────────────────
-
-const { apiBaseUrl: effectiveApiBaseUrl } = useApiEndpoint()
-const serverUrlInput = ref(readStoredApiBaseUrl())
-const savedServerUrl = ref(serverUrlInput.value)
-
-const serverHint = computed(() => {
-  if (savedServerUrl.value) return `Using ${savedServerUrl.value} for web features.`
-  if (effectiveApiBaseUrl) return `Using the built-in server address ${effectiveApiBaseUrl}.`
-  return 'No server set — searches run directly on this device.'
-})
-
-const saveServerUrl = () => {
-  const normalized = normalizeApiBaseUrl(serverUrlInput.value)
-  if (normalized && !/^https?:\/\//i.test(normalized)) {
-    addToast('Server URL must start with http:// or https://', 'error')
-    return
-  }
-  writeStoredApiBaseUrl(normalized)
-  savedServerUrl.value = normalized
-  serverUrlInput.value = normalized
-  addToast(normalized ? 'Server URL saved' : 'Server URL cleared', 'success')
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

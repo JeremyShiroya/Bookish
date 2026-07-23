@@ -5,7 +5,7 @@
     </div>
 
     <div class="center">
-      <h3 :title="pageTitle">{{ compactPageTitle }}</h3>
+      <h3 v-if="showTitle" :title="pageTitle">{{ compactPageTitle }}</h3>
     </div>
 
     <div class="right" aria-hidden="true">
@@ -27,6 +27,13 @@ const props = defineProps({
   ariaLabel: {
     type: String,
     default: 'Page navigation',
+  },
+  // Detail pages name the item in their own hero, so the bar carries only the
+  // back button. An empty `title` cannot express this: it falls through to the
+  // route-derived fallback, which on /book/<id> is the id itself.
+  showTitle: {
+    type: Boolean,
+    default: true,
   },
 })
 

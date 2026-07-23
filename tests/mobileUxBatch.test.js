@@ -167,7 +167,19 @@ describe('mobile UX batch', () => {
     // playFromHere must branch on "is this book loaded into the narrator"
     // (playing OR paused), not on "is it playing" — otherwise pressing play
     // after a pause re-reads from the first chunk of the visible page.
-    expect(reader).toMatch(/const playFromHere = \(\) => \{[\s\S]{0,300}?if \(isThisBookNarrating\.value\) \{\s*togglePlay\(\);/)
+    expect(reader).toMatch(/const playFromHere = \(\) => \{[\s\S]{0,400}?if \(isThisBookNarrating\.value\) \{/)
+    // Resuming in place stays the default…
+    expect(reader).toMatch(/if \(movedAway\) \{[\s\S]{0,160}?\}\s*togglePlay\(\);/)
+  })
+
+  test('resuming after turning to another page asks instead of guessing', () => {
+    const reader = read('components/mobile/ReaderMobile.vue')
+    expect(reader).toContain('resumeChoice')
+    expect(reader).toContain('playFromShownPage')
+    expect(reader).toContain('resumeWhereLeftOff')
+    // Only when PAUSED and genuinely elsewhere — scrolling around the passage
+    // being narrated must not trigger it.
+    expect(reader).toMatch(/const movedAway = paused/)
   })
 
   test('mobile library pages show a per-page empty-state illustration, not an icon', () => {
@@ -272,7 +284,12 @@ describe('mobile UX batch', () => {
     expect(mobile).toContain('View {{ backfill.failures.length }} unsuccessful')
     expect(mobile).toContain('failures-modal')
     expect(mobile).toContain('restoreHiddenBooks')
-    expect(mobile).toContain('Server connection')
+    // Server connection, Backup and the manual "save covers offline" button
+    // were removed: the first two are meaningless to most readers, and covers
+    // are cached automatically on every library load.
+    expect(mobile).not.toContain('Server connection')
+    expect(mobile).not.toContain('Save covers for offline')
+    expect(mobile).not.toMatch(/<h2>Backup<\/h2>/)
 
     const backfill = read('composables/useMetadataBackfill.js')
     expect(backfill).toContain('bookNeedsMetadata')
@@ -409,7 +426,9 @@ describe('mobile UX batch', () => {
 
   test('page mode hides the app tab bar and reclaims its space', () => {
     const reader = read('components/mobile/ReaderMobile.vue')
-    expect(reader).toContain(`v-show="readerMode === 'read' && !usePagedReader"`)
+    // Also gated on chrome visibility now: Read mode hides its own furniture
+    // until a centre tap brings it back.
+    expect(reader).toContain(`v-show="readerMode === 'read' && !usePagedReader && !chromeHidden"`)
     expect(reader).toMatch(/\.reader-mobile-page\.is-paged\s*\{[^}]*--bottom-nav-space:\s*env\(safe-area-inset-bottom\)/)
     // The paged viewport measures from that variable, not the raw nav height.
     expect(read('components/mobile/ReaderPagedEpub.vue')).toContain('var(--bottom-nav-space, 72px) + 66px')
@@ -563,5 +582,34 @@ describe('mobile UX batch', () => {
     const map = read('composables/useEpubPageMap.js')
     expect(map).toContain('PAGE_MAP_VERSION = 2')
     expect(map).toContain('heights')
+  })
+})
+
+// Read mode is a full-page book: nothing sits over the text until asked for.
+describe('immersive read mode', () => {
+  const readFile = (p) => readFileSync(resolve(process.cwd(), p), 'utf8')
+
+  test('a centre tap toggles the reader chrome in both reading modes', () => {
+    const reader = readFile('components/mobile/ReaderMobile.vue')
+    expect(reader).toContain('chromeHidden')
+    expect(reader).toContain('toggleChrome')
+    // Entering Read mode starts immersive; leaving it must restore the chrome
+    // so Listen mode is never left without controls.
+    expect(reader).toMatch(/chromeHidden\.value = mode === "read"/)
+    // Scroll mode has no page-turn zones, so it gets its own tap handler.
+    expect(reader).toContain('onScrollTap')
+    // …which must not fight text selection.
+    expect(reader).toContain('selection.isCollapsed')
+
+    // Paged mode routes its dead centre zone to the same toggle.
+    const paged = readFile('components/mobile/ReaderPagedEpub.vue')
+    expect(paged).toContain('emit("toggle-chrome")')
+  })
+
+  test('the Listen view opens on the page you were reading, not chapter one', () => {
+    const reader = readFile('components/mobile/ReaderMobile.vue')
+    // props.currentChapterIdx lags the paged reader's own position, so it must
+    // not be the first choice when paged.
+    expect(reader).toMatch(/usePagedReader\.value && Number\.isFinite\(pagedPos\.value\?\.section\)/)
   })
 })

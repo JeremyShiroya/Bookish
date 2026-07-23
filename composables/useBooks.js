@@ -296,6 +296,27 @@ export const useBooks = () => {
     return allBooks.filter(b => b.isHidden).length;
   };
 
+  // Hidden books never enter `books.value`, so the Hidden Books screen reads
+  // them straight from storage rather than filtering the in-memory library.
+  const listHiddenBooks = async () => {
+    const store = useLibraryStore();
+    const allBooks = await store.getBooks();
+    return allBooks
+      .filter(b => b.isHidden)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  };
+
+  // Restore one book. Reloads the library so it reappears everywhere at once.
+  const restoreHiddenBook = async (bookId) => {
+    const store = useLibraryStore();
+    const allBooks = await store.getBooks();
+    const book = allBooks.find(b => String(b.id) === String(bookId));
+    if (!book) return false;
+    await store.updateBook({ ...book, isHidden: false });
+    await fetchAllData(true);
+    return true;
+  };
+
   const fetchAndStoreAuthorDetails = async (authorName, { force = false } = {}) => {
     if (!authorName || !import.meta.client) return false
     try {
@@ -534,6 +555,8 @@ export const useBooks = () => {
     hideBook,
     restoreHiddenBooks,
     countHiddenBooks,
+    listHiddenBooks,
+    restoreHiddenBook,
     addBook,
     updateBook,
     deleteBook,

@@ -59,7 +59,17 @@
         <span>{{ formatPersonalRating(book.rating) }}</span>
       </div>
 
-      <div class="card-actions">
+      <!-- Restore-only: the Hidden Books screen has exactly one thing to do
+           with a book, and favourite/playlist/edit/delete would all act on
+           something the user cannot currently see. -->
+      <div v-if="restoreOnly" class="card-actions">
+        <button type="button" class="action-button restore" title="Restore book" @click.stop="emit('restore', book)">
+          <i class="ri-eye-line"></i>
+          <span class="restore-label">Restore</span>
+        </button>
+      </div>
+
+      <div v-else class="card-actions">
         <button
           type="button"
           class="action-button"
@@ -119,9 +129,14 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  // Hidden Books view: swap the whole action row for a single Restore.
+  restoreOnly: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['open', 'play', 'favourite', 'playlist', 'edit', 'hide', 'delete'])
+const emit = defineEmits(['open', 'play', 'favourite', 'playlist', 'edit', 'hide', 'delete', 'restore'])
 
 // Whether this book sits in any playlist, so the playlist icon can fill the
 // way the favourite heart does. Reactive on the shared collections list, so
@@ -444,6 +459,21 @@ const formatPersonalRating = (rating) => {
 .action-button.in-playlist,
 .action-button.in-playlist i {
   color: var(--color-brand-primary);
+}
+
+/* Restore is the only action on a hidden book, so it is labelled and spans
+   the row rather than sitting as one anonymous icon among five. */
+.action-button.restore {
+  width: auto;
+  gap: 0.4rem;
+  padding: 0 0.9rem;
+  border-color: var(--color-brand-primary);
+  color: var(--color-brand-primary);
+}
+
+.restore-label {
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .action-button.delete:hover {

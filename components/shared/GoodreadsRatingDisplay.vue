@@ -11,10 +11,9 @@
       </div>
       <strong class="goodreads-score">{{ ratingInfo.rating.toFixed(2) }}</strong>
     </div>
-    <div class="goodreads-count-line">
-      <span v-if="ratingInfo.ratingsCount" class="goodreads-count">{{ ratingInfo.ratingsCount }} ratings</span>
-      <span v-if="ratingInfo.reviewsCount" class="goodreads-count">· {{ ratingInfo.reviewsCount }} reviews</span>
-    </div>
+    <!-- Stars and the score only. The raw "976 ratings · 67 reviews" counts
+         were noise on a personal shelf — the score already carries the signal,
+         and dropping them keeps cards readable at small sizes. -->
   </div>
   <div v-else-if="showEmpty" class="goodreads-rating empty" :class="{ compact, stacked }">
     <div class="goodreads-score-line">

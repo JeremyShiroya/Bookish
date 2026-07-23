@@ -7,10 +7,11 @@
       sepia: prefs.background === 'sepia',
       'is-paged': usePagedReader,
       'listen-blur': readerMode === 'listen' && listenBlurEnabled,
+      'chrome-hidden': chromeHidden,
     }]"
     :style="readerStyleVars"
   >
-    <header class="reader-mobile-topbar">
+    <header v-show="!chromeHidden" class="reader-mobile-topbar">
       <button
         type="button"
         class="reader-nav-btn"
@@ -232,6 +233,7 @@
           :start-section="currentChapterIdx"
           @position-change="onPagedPosition"
           @long-press="onPagedLongPress"
+          @toggle-chrome="toggleChrome"
         />
 
         <div
@@ -242,6 +244,7 @@
           @touchmove.passive="onReadingTouchMove"
           @touchend="onReadingTouchEnd"
           @touchcancel="onReadingTouchEnd"
+          @click="onScrollTap"
           @contextmenu.prevent
         >
           <section v-if="hasCover" id="ch-cover" class="reader-mobile-cover">
@@ -281,6 +284,31 @@
       </template>
     </main>
 
+    <!-- Resuming after turning to a different page: ask rather than guess. -->
+    <div v-if="resumeChoice.visible" class="resume-overlay" role="presentation" @click="closeResumeChoice">
+      <section
+        class="resume-sheet"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="resume-title"
+        @click.stop
+      >
+        <span class="sheet-grabber" aria-hidden="true"></span>
+        <h2 id="resume-title">You've moved to a different page</h2>
+        <p>Where would you like the narration to continue from?</p>
+        <div class="resume-actions">
+          <button type="button" class="resume-primary" @click="playFromShownPage">
+            <i class="ri-play-circle-line"></i>
+            Read from this page
+          </button>
+          <button type="button" class="resume-secondary" @click="resumeWhereLeftOff">
+            <i class="ri-history-line"></i>
+            Continue where I left off
+          </button>
+        </div>
+      </section>
+    </div>
+
     <Transition name="read-here">
       <div
         v-if="readHereMenu.visible"
@@ -294,7 +322,7 @@
       </div>
     </Transition>
 
-    <div v-show="readerMode === 'read'" class="reader-chapter-dock">
+    <div v-show="readerMode === 'read' && !chromeHidden" class="reader-chapter-dock">
       <div class="chapter-pill">
         <button
           type="button"
@@ -326,7 +354,7 @@
     </div>
 
     <button
-      v-show="readerMode === 'read'"
+      v-show="readerMode === 'read' && !chromeHidden"
       type="button"
       class="chapter-play"
       aria-label="Play chapter"
@@ -336,7 +364,7 @@
     </button>
 
     <div
-      v-show="readerMode === 'read' && !usePagedReader"
+      v-show="readerMode === 'read' && !usePagedReader && !chromeHidden"
       class="mobile-bottom-nav-wrap"
       aria-hidden="true"
     >
@@ -1137,20 +1165,73 @@ const setPdfViewer = (el) => {
   props.readerRefs.pdfViewerRef.value = el;
 };
 
+// The chunk the visible page starts at, whichever reading mode is in use.
+const chunkAtVisiblePage = () => {
+  if (usePagedReader.value) {
+    const chunk = pagedRef.value?.getPosition()?.firstChunkOfPage;
+    return Number.isFinite(chunk) && chunk >= 0 ? chunk : null;
+  }
+  const section = Number(props.currentChapterIdx);
+  if (!Number.isFinite(section)) return null;
+  return sectionStartChunkLocal(section);
+};
+
+// Paused, then turned to a different page, then pressed play: continuing from
+// where the voice stopped and starting from the page in front of you are both
+// reasonable, and guessing wrong is annoying either way — so ask.
+const resumeChoice = ref({ visible: false, chunk: -1 });
+
+const closeResumeChoice = () => {
+  resumeChoice.value = { visible: false, chunk: -1 };
+};
+
+const resumeWhereLeftOff = () => {
+  closeResumeChoice();
+  togglePlay();
+};
+
+const playFromShownPage = () => {
+  const chunk = resumeChoice.value.chunk;
+  closeResumeChoice();
+  if (Number.isFinite(chunk) && chunk >= 0) emit("read-from-chunk", chunk);
+  else emit("read-current-position");
+};
+
 const playFromHere = () => {
   // Already loaded into the narrator — including when paused. Resuming must pick
   // up mid-sentence, so never fall through to the "read from this page" path,
   // which would rewind to the first chunk of the visible page.
   if (isThisBookNarrating.value) {
+    const paused = ttsStatus.value === "paused";
+    const pageChunk = chunkAtVisiblePage();
+    const playingSection = ttsPlayingChunkIdx.value >= 0
+      ? sectionForChunkLocal(ttsPlayingChunkIdx.value)
+      : null;
+    const shownSection = Number.isFinite(pageChunk) && pageChunk !== null
+      ? sectionForChunkLocal(pageChunk)
+      : null;
+
+    // Only ask when resuming from a pause and the page really is elsewhere —
+    // comparing the page's own chunk range, so scrolling within the passage
+    // being narrated is not treated as a move.
+    const movedAway = paused
+      && pageChunk !== null
+      && playingSection !== null
+      && shownSection !== null
+      && (shownSection !== playingSection
+        || Math.abs(pageChunk - ttsPlayingChunkIdx.value) > (props.sectionCounts?.[shownSection] || 1));
+
+    if (movedAway) {
+      resumeChoice.value = { visible: true, chunk: pageChunk };
+      return;
+    }
     togglePlay();
     return;
   }
-  if (usePagedReader.value) {
-    const chunk = pagedRef.value?.getPosition()?.firstChunkOfPage;
-    if (Number.isFinite(chunk) && chunk >= 0) {
-      emit("read-from-chunk", chunk);
-      return;
-    }
+  const chunk = chunkAtVisiblePage();
+  if (usePagedReader.value && chunk !== null) {
+    emit("read-from-chunk", chunk);
+    return;
   }
   emit("read-current-position");
 };
@@ -1177,8 +1258,31 @@ const listenBlurEnabled = computed(() => appSettings.value.listenCoverBlur !== f
 
 const readerMode = ref("listen");
 
+// Read mode is a full-page book: the top bar and chapter dock hide so nothing
+// sits over the text, and a tap in the middle of the page brings them back.
+// Entering Read mode always starts hidden; leaving it restores the chrome so
+// Listen mode is never left without controls.
+const chromeHidden = ref(false);
+
+const toggleChrome = () => {
+  if (readerMode.value !== "read") return;
+  chromeHidden.value = !chromeHidden.value;
+};
+
+// Scroll mode has no page-turn zones, so any tap that is not a text selection
+// or a link toggles the chrome.
+const onScrollTap = (event) => {
+  if (readerMode.value !== "read") return;
+  if (readHereMenu.value.visible) return;
+  const selection = typeof window !== "undefined" ? window.getSelection?.() : null;
+  if (selection && !selection.isCollapsed) return;
+  if (event.target?.closest?.("a,button,input,textarea")) return;
+  toggleChrome();
+};
+
 const setReaderMode = (mode) => {
   readerMode.value = mode;
+  chromeHidden.value = mode === "read";
   try {
     localStorage.setItem(READER_MODE_KEY, mode);
   } catch {}
@@ -1220,9 +1324,18 @@ const sectionStartChunkLocal = (sectionIndex) => {
 
 // While narrating, the playing chunk — not the scroll position — decides which
 // page/chapter the Listen view shows, so the text always matches the voice.
+//
+// When NOT narrating, the paged reader's own position wins over
+// props.currentChapterIdx. The parent only learns the section through a
+// position-change event, so on switching Read → Listen it could still hold the
+// previous (often first) section for a tick: the Listen view rendered chapter
+// one and then visibly jumped to the right place.
 const listenSectionIdx = computed(() => {
   if (!props.isPdfBook && isThisBookNarrating.value && ttsPlayingChunkIdx.value >= 0) {
     return sectionForChunkLocal(ttsPlayingChunkIdx.value);
+  }
+  if (!props.isPdfBook && usePagedReader.value && Number.isFinite(pagedPos.value?.section)) {
+    return pagedPos.value.section;
   }
   return props.currentChapterIdx;
 });
@@ -2529,6 +2642,103 @@ onUnmounted(() => {
    screen centre (the play button floats above this row and keeps its spot). */
 .reader-mobile-page.replaceBottomNav .reader-chapter-dock {
   padding-right: 20px;
+}
+
+/* ── Immersive reading ──────────────────────────────────────────────────────
+   Read mode hides its own chrome so only the book is on screen; a tap in the
+   middle of the page brings it back. Translated out of view rather than
+   removed, so returning is a slide and the layout never reflows the text.
+   Opacity carries the hiding and the transform only adds the slide, so the
+   chrome still disappears on anything that does not composite transforms. */
+.reader-mobile-page.chrome-hidden .reader-mobile-topbar {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reader-mobile-page.chrome-hidden .reader-chapter-dock,
+.reader-mobile-page.chrome-hidden .mobile-bottom-nav-wrap {
+  transform: translateY(calc(100% + var(--bottom-nav-space)));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reader-mobile-page.chrome-hidden .chapter-play {
+  transform: translateY(calc(100% + var(--bottom-nav-space) + 24px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reader-mobile-topbar,
+.chapter-play,
+.reader-chapter-dock,
+.mobile-bottom-nav-wrap {
+  transition:
+    transform var(--dock-swap-duration) var(--dock-swap-ease),
+    opacity var(--dock-swap-duration) var(--dock-swap-ease);
+}
+
+/* ── Resume-position sheet ─────────────────────────────────────────────── */
+.resume-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3400;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.resume-sheet {
+  width: 100%;
+  max-width: 520px;
+  padding: 0.75rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+  border-radius: 20px 20px 0 0;
+  background: var(--mobile-reader-surface);
+  color: var(--mobile-reader-text);
+}
+
+.resume-sheet h2 {
+  margin: 0.5rem 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.resume-sheet p {
+  margin: 0 0 1rem;
+  color: var(--mobile-reader-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.resume-actions {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.resume-primary,
+.resume-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.85rem;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.resume-primary {
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+}
+
+.resume-secondary {
+  border: 1px solid color-mix(in srgb, var(--mobile-reader-text) 20%, transparent);
+  background: transparent;
+  color: var(--mobile-reader-text);
 }
 
 /* Drop by the nav's full visible height (keeping the safe-area inset) so the

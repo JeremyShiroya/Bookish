@@ -140,3 +140,49 @@ describe('connection test page', () => {
     expect(panel).toContain('textarea')
   })
 })
+
+// Hidden books get their own screen: restoring them one at a time is the
+// common case, and "Restore all" alone made that impossible.
+describe('hidden books screen', () => {
+  const readFile = (p) => readFileSync(resolve(process.cwd(), p), 'utf8')
+
+  test('the page exists and Storage links to it', () => {
+    expect(existsSync(resolve(process.cwd(), 'pages/settings/hidden.vue'))).toBe(true)
+    const storage = readFile('components/mobile/SettingsStorageMobile.vue')
+    expect(storage).toContain("/settings/hidden")
+    expect(storage).toContain('View hidden books')
+  })
+
+  test('it reads hidden books from storage, not the in-memory library', () => {
+    // Hidden books are filtered out of books.value by design, so the screen
+    // cannot be built from it.
+    const books = readFile('composables/useBooks.js')
+    expect(books).toContain('listHiddenBooks')
+    expect(books).toContain('restoreHiddenBook')
+
+    const page = readFile('components/mobile/HiddenBooksMobile.vue')
+    expect(page).toContain('listHiddenBooks')
+    expect(page).toContain('grid')
+    expect(page).toContain('list')
+  })
+
+  test('a hidden book offers restore and nothing else', () => {
+    const card = readFile('components/shared/LibraryBookCard.vue')
+    expect(card).toContain('restoreOnly')
+    expect(card).toContain("emit('restore', book)")
+    const page = readFile('components/mobile/HiddenBooksMobile.vue')
+    expect(page).toContain('restore-only')
+    // Favourite/playlist/edit/delete would act on something not visible.
+    expect(page).not.toContain('@favourite=')
+    expect(page).not.toContain('@delete=')
+  })
+
+  test('the device summary counts books, not file types', () => {
+    const storage = readFile('components/mobile/SettingsStorageMobile.vue')
+    expect(storage).toContain('Total books')
+    expect(storage).toContain('Hidden books')
+    expect(storage).toContain('Space used')
+    expect(storage).not.toContain('Readable books')
+    expect(storage).not.toContain('PDF files')
+  })
+})

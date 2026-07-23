@@ -1,6 +1,8 @@
 <template>
   <div class="book-detail-page">
-    <MobileSettingsNav :title="book?.title || 'Book'" back-to="/books" aria-label="Book navigation" />
+    <!-- No title: the hero below already names the book, and a long title
+         crowded the bar. Back button only. -->
+    <MobileSettingsNav :show-title="false" back-to="/books" aria-label="Book navigation" />
 
     <div v-if="loading && !book" class="state-panel">
       <i class="ri-loader-4-line spinner"></i>
