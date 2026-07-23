@@ -86,9 +86,19 @@
               </div>
             </div>
 
-            <!-- View toggle pinned to the right end of the same row -->
+            <!-- View toggle pinned to the right end of the same row — replaced
+                 by the bulk actions while books are being selected, because a
+                 grid/list choice is beside the point mid-selection. -->
             <div class="controls-right">
+              <SelectionActionsBar
+                v-if="selectionMode"
+                :count="selectedCount"
+                :actions="bulkActions"
+                @action="runBulkAction"
+                @clear="clearSelection"
+              />
               <div
+                v-else
                 class="view-chips"
                 ref="viewChipsRef"
                 @mouseleave="viewHoverIndex = -1"
@@ -130,7 +140,14 @@
             :key="book.id"
             :book="book"
             :active="isBookActive(book)"
-            @open="router.push(`/book/${book.id}`)"
+            :selectable="selectionMode"
+            :selected="isSelected(book.id)"
+            @toggle-select="toggleSelected"
+            @pointerdown="(event) => onPointerDown(event, book)"
+            @pointermove="onPointerMove"
+            @pointerup="onPointerUp"
+            @pointercancel="onPointerUp"
+            @open="openBook(book)"
             @play="handlePlay"
             @favourite="toggleFavourite(book.id)"
             @playlist="selectedPlaylistBook = book"
@@ -149,7 +166,14 @@
             class="mobile-list-book-card"
             :book="book"
             :active="isBookActive(book)"
-            @open="router.push(`/book/${book.id}`)"
+            :selectable="selectionMode"
+            :selected="isSelected(book.id)"
+            @toggle-select="toggleSelected"
+            @pointerdown="(event) => onPointerDown(event, book)"
+            @pointermove="onPointerMove"
+            @pointerup="onPointerUp"
+            @pointercancel="onPointerUp"
+            @open="openBook(book)"
             @play="handlePlay"
             @favourite="toggleFavourite(book.id)"
             @playlist="selectedPlaylistBook = book"
@@ -179,9 +203,10 @@
 
 
     <AddToPlaylistModal
-      v-if="selectedPlaylistBook"
+      v-if="selectedPlaylistBook || bulkPlaylistBooks"
       :book="selectedPlaylistBook"
-      @close="selectedPlaylistBook = null"
+      :books="bulkPlaylistBooks"
+      @close="selectedPlaylistBook = null; bulkPlaylistBooks = null"
     />
 
 
@@ -191,6 +216,14 @@
       :book="selectedBook"
       @close="closeDeleteModal"
       @confirm="deleteBook"
+    />
+
+    <DeleteConfirmModal
+      v-if="bulkDeleteBooks?.length"
+      :book="bulkDeleteBooks[0]"
+      :count="bulkDeleteBooks.length"
+      @close="bulkDeleteBooks = null"
+      @confirm="confirmBulkDelete"
     />
 
     <!-- Floating add button — stays put while the list scrolls, and lifts
@@ -214,6 +247,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import DeleteConfirmModal from "../shared/DeleteConfirmModal.vue";
 import LibraryBookCard from "../shared/LibraryBookCard.vue";
 import AddToPlaylistModal from "../shared/AddToPlaylistModal.vue";
+import SelectionActionsBar from "../shared/SelectionActionsBar.vue";
 import MobileBottomNav from "./MobileBottomNav.vue";
 import MobileSkeleton from "./MobileSkeleton.vue";
 import MobileTopNav from "./MobileTopNav.vue";
@@ -227,6 +261,7 @@ import {
   useBookishSettings,
 } from "~/composables/useBookishSettings";
 import { useToast } from "~/composables/useToast";
+import { useLongPress, useMultiSelect } from "~/composables/useMultiSelect";
 
 // Reactive data
 import EmptyState from "../shared/EmptyState.vue";
@@ -284,6 +319,102 @@ const viewMode = ref(settings.value.libraryView);
 const showDeleteModal = ref(false);
 const selectedBook = ref(null);
 const selectedPlaylistBook = ref(null);
+const bulkPlaylistBooks = ref(null);
+
+// ── Bulk selection ──────────────────────────────────────────────────────────
+//
+// Press and hold any book to start picking; every card grows a tick, the view
+// toggle steps aside for the bulk actions, and the per-card action rows go away
+// so there is exactly one place to act from. Deselecting the last book ends the
+// mode by itself.
+const {
+  selectedIds,
+  selectionMode,
+  selectedCount,
+  isSelected,
+  toggle: toggleSelect,
+  start: startSelection,
+  clear: clearSelection,
+  retain: retainSelection,
+} = useMultiSelect();
+
+const { onPointerDown, onPointerMove, onPointerUp, consumedTap } = useLongPress((book) => {
+  startSelection(book.id);
+});
+
+const toggleSelected = (book) => toggleSelect(book.id);
+
+// The hold that opened selection mode must not also count as a tap on the book.
+const openBook = (book) => {
+  if (consumedTap()) return;
+  if (selectionMode.value) {
+    toggleSelect(book.id);
+    return;
+  }
+  router.push(`/book/${book.id}`);
+};
+
+const selectedBooks = computed(() => books.value.filter((book) => isSelected(book.id)));
+
+const bulkActions = [
+  { key: 'favourite', icon: 'ri-heart-line', label: 'Favourite' },
+  { key: 'playlist', icon: 'ri-play-list-2-line', label: 'Add to playlist' },
+  { key: 'hide', icon: 'ri-eye-off-line', label: 'Hide' },
+  { key: 'delete', icon: 'ri-delete-bin-line', label: 'Delete', danger: true },
+];
+
+const runBulkAction = async (key) => {
+  const chosen = selectedBooks.value;
+  if (!chosen.length) return;
+
+  if (key === 'playlist') {
+    // The sheet stays open across several playlists, so the selection is left
+    // intact until the user dismisses it.
+    bulkPlaylistBooks.value = chosen;
+    return;
+  }
+
+  if (key === 'delete') {
+    bulkDeleteBooks.value = chosen;
+    return;
+  }
+
+  if (key === 'favourite') {
+    // One tap should mean the same thing for every book, so a mixed selection
+    // becomes all-favourite rather than flipping each independently.
+    const makeFavourite = chosen.some((book) => !book.isFavourite);
+    for (const book of chosen) {
+      if (!!book.isFavourite !== makeFavourite) await toggleFavourite(book.id);
+    }
+    addToast(
+      makeFavourite
+        ? `${chosen.length} book${chosen.length === 1 ? '' : 's'} added to favourites.`
+        : `${chosen.length} book${chosen.length === 1 ? '' : 's'} removed from favourites.`,
+      'success',
+    );
+    clearSelection();
+    return;
+  }
+
+  if (key === 'hide') {
+    for (const book of chosen) await hideBook(book.id);
+    addToast(`${chosen.length} book${chosen.length === 1 ? '' : 's'} hidden.`, 'info');
+    clearSelection();
+  }
+};
+
+const bulkDeleteBooks = ref(null);
+
+const confirmBulkDelete = async () => {
+  const chosen = bulkDeleteBooks.value || [];
+  bulkDeleteBooks.value = null;
+  for (const book of chosen) await removeBookFromStore(book.id);
+  addToast(`${chosen.length} book${chosen.length === 1 ? '' : 's'} permanently deleted.`, 'success');
+  clearSelection();
+};
+
+// A hidden or deleted book takes its tick with it.
+watch(books, () => retainSelection(books.value.map((book) => book.id)));
 
 // Computed filtered books
 const filteredBooks = computed(() => {

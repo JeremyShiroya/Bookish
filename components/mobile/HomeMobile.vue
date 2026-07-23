@@ -41,11 +41,20 @@
       <section class="mobile-search-section">
         <label class="mobile-search-bar">
           <i class="ri-search-line"></i>
+          <!-- Deliberately NOT v-model. Vue's v-model suppresses input events
+               while an IME is composing, and Gboard treats every word as a
+               composition — so results only appeared once a word was committed
+               with a space. Binding the event directly updates per keystroke,
+               which is what the ranking in useLibrarySearch is built for. -->
           <input
-            v-model="homeSearch"
+            :value="homeSearch"
             type="search"
             placeholder="Search books"
             autocomplete="off"
+            autocorrect="off"
+            autocapitalize="none"
+            spellcheck="false"
+            @input="homeSearch = $event.target.value"
           />
           <button
             v-if="homeSearch"

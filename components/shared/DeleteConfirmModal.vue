@@ -13,14 +13,14 @@
       <div class="delete-book">
         <img :src="book.cover" :alt="book.title" class="delete-cover" @error="onCoverError($event, book.title)" />
         <div class="delete-book-meta">
-          <strong>{{ book.title }}</strong>
-          <span>{{ book.author || 'Unknown author' }}</span>
+          <strong>{{ isBulk ? `${count} books` : book.title }}</strong>
+          <span>{{ isBulk ? 'Selected in your library' : (book.author || 'Unknown author') }}</span>
         </div>
       </div>
 
-      <h2 id="delete-title">Delete this book?</h2>
+      <h2 id="delete-title">{{ isBulk ? `Delete these ${count} books?` : 'Delete this book?' }}</h2>
       <p id="delete-description" class="delete-description">
-        This permanently removes the book from Pages. It cannot be undone.
+        This permanently removes {{ isBulk ? 'them' : 'the book' }} from Pages. It cannot be undone.
       </p>
 
       <!-- Spell out exactly what disappears, so "delete" is never mistaken for
@@ -28,7 +28,7 @@
       <ul class="delete-effects">
         <li>
           <i class="ri-book-2-line"></i>
-          <span>Its place in your library, progress and bookmarks</span>
+          <span>{{ isBulk ? 'Their' : 'Its' }} place in your library, progress and bookmarks</span>
         </li>
         <li v-if="removesDeviceFile" class="danger">
           <i class="ri-smartphone-line"></i>
@@ -68,9 +68,18 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  // Bulk delete reuses this sheet with the first selected book as the face of
+  // the pile: the warning and its list of consequences are identical, and a
+  // second near-copy of them would be the thing that drifts.
+  count: {
+    type: Number,
+    default: 1,
+  },
 })
 
 const emit = defineEmits(['close', 'confirm'])
+
+const isBulk = computed(() => props.count > 1)
 
 const formatLabel = computed(() => (props.book.format || 'book').toUpperCase())
 

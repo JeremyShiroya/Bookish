@@ -701,6 +701,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { onCoverError } from "~/composables/useCoverFallback";
+import { shouldAskWhereToResume } from "~/composables/useResumePrompt";
 import { firstChunkForPage, pageForChunk } from "~/composables/usePdfManifest";
 import PdfViewer from "~/components/shared/PdfViewer.vue";
 import SkeletonLoader from "~/components/shared/SkeletonLoader.vue";
@@ -1194,11 +1195,26 @@ const setPdfViewer = (el) => {
 };
 
 // The chunk the visible page starts at, whichever reading mode is in use.
+// Which measured page a flat chunk index falls on, or null while the page map
+// is still being built.
+const pageForChunkLocal = (chunk) => {
+  const pages = pageMap.value?.chunkPages;
+  if (!pages || !Number.isFinite(chunk) || chunk < 0) return null;
+  const page = pages[chunk];
+  return Number.isFinite(page) ? page : null;
+};
+
 const chunkAtVisiblePage = () => {
   if (usePagedReader.value) {
     const chunk = pagedRef.value?.getPosition()?.firstChunkOfPage;
     return Number.isFinite(chunk) && chunk >= 0 ? chunk : null;
   }
+  // Scroll mode: probe where the viewport actually is. The chapter's first
+  // chunk is not it, and using it meant "read from this page" always rewound to
+  // the top of the chapter. This runs on a press of play, not per frame, so a
+  // DOM probe is affordable here.
+  sampleScrollChunk();
+  if (scrollChunkIdx.value >= 0) return scrollChunkIdx.value;
   const section = Number(props.currentChapterIdx);
   if (!Number.isFinite(section)) return null;
   return sectionStartChunkLocal(section);
@@ -1239,15 +1255,14 @@ const playFromHere = () => {
       ? sectionForChunkLocal(pageChunk)
       : null;
 
-    // Only ask when resuming from a pause and the page really is elsewhere —
-    // comparing the page's own chunk range, so scrolling within the passage
-    // being narrated is not treated as a move.
-    const movedAway = paused
-      && pageChunk !== null
-      && playingSection !== null
-      && shownSection !== null
-      && (shownSection !== playingSection
-        || Math.abs(pageChunk - ttsPlayingChunkIdx.value) > (props.sectionCounts?.[shownSection] || 1));
+    const movedAway = shouldAskWhereToResume({
+      paused,
+      shownChunk: pageChunk,
+      shownPage: pageForChunkLocal(pageChunk),
+      playingPage: pageForChunkLocal(ttsPlayingChunkIdx.value),
+      shownSection,
+      playingSection,
+    });
 
     if (movedAway) {
       resumeChoice.value = { visible: true, chunk: pageChunk };
@@ -1616,17 +1631,31 @@ const listenTextStyle = computed(() => ({
   transform: `translateY(-${listenTextOffset.value}px)`,
 }));
 
-watch([activeListenChunk, listenStartChunk, listenChunks], async () => {
+const syncListenOffset = async ({ resetEls = false } = {}) => {
+  if (resetEls) listenChunkEls = [];
   await nextTick();
   const relative = activeListenChunk.value - listenStartChunk.value;
   const el = relative >= 0 && relative < listenChunks.value.length
     ? listenChunkEls[relative]
     : null;
   listenTextOffset.value = el ? el.offsetTop : 0;
+};
+
+// ONE watcher, not two.
+//
+// A second watcher used to clear the element list when listenChunks changed,
+// and because this one yields on nextTick first, the clear landed in between —
+// wiping the refs it was about to measure. The offset fell back to 0, so Listen
+// opened at the top of the page and only snapped to the sentence being narrated
+// on the following tick. That is the "waits, then jumps" the reader sees.
+watch([activeListenChunk, listenStartChunk, listenChunks], (next, prev) => {
+  syncListenOffset({ resetEls: next[2] !== prev?.[2] });
 });
 
-watch(listenChunks, () => {
-  listenChunkEls = [];
+// Opening Listen changes none of the above, so nothing recomputed the offset
+// and the panel appeared parked at the top of the page even mid-narration.
+watch(readerMode, (mode) => {
+  if (mode === "listen") syncListenOffset({ resetEls: true });
 });
 
 const chooseVoice = (voiceId) => {
@@ -2140,6 +2169,16 @@ onUnmounted(() => {
   background: var(--mobile-reader-surface);
   color: var(--mobile-reader-text);
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.14);
+}
+
+/* On dark paper the raised surface (#27262d) is barely a shade off the page
+   (#18171c), so the selected mode read as no selection at all — and a dark drop
+   shadow adds nothing on a dark background. Lift the pill with the reader's own
+   text colour instead. */
+.reader-mobile-page.dark .reader-mode-toggle button.active {
+  background: color-mix(in srgb, var(--mobile-reader-text) 26%, var(--mobile-reader-bg));
+  color: #fff;
+  box-shadow: none;
 }
 
 .reader-top-actions {

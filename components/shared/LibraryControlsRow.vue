@@ -15,43 +15,20 @@
         </button>
 
         <div v-show="filterOpen" class="dropdown-menu filter-panel">
-          <div class="sfp-section">
+          <div v-for="section in resolvedSections" :key="section.key" class="sfp-section">
             <div class="sfp-section-header">
-              <i class="ri-bookmark-line"></i>
-              Status
+              <i :class="section.icon"></i>
+              {{ section.label }}
             </div>
             <div class="sfp-pills">
               <button
+                v-for="option in section.options"
+                :key="option.value"
                 type="button"
                 class="sfp-pill"
-                :class="{ active: status === 'all' }"
-                @click="setStatus('all')"
-              >All</button>
-              <button
-                v-for="option in readingStatuses"
-                :key="option"
-                type="button"
-                class="sfp-pill"
-                :class="{ active: status === option }"
-                @click="setStatus(option)"
-              >{{ option }}</button>
-            </div>
-          </div>
-
-          <div class="sfp-section">
-            <div class="sfp-section-header">
-              <i class="ri-file-list-2-line"></i>
-              Format
-            </div>
-            <div class="sfp-pills">
-              <button
-                v-for="format in formatFilters"
-                :key="format.value"
-                type="button"
-                class="sfp-pill"
-                :class="{ active: selectedFormat === format.value }"
-                @click="setFormat(format.value)"
-              >{{ format.label }}</button>
+                :class="{ active: valueFor(section) === option.value }"
+                @click="select(section, option.value)"
+              >{{ option.label }}</button>
             </div>
           </div>
         </div>
@@ -59,7 +36,11 @@
     </div>
 
     <div class="controls-right">
-      <div class="view-chips">
+      <!-- Bulk selection takes this corner over: the view toggle is meaningless
+           while books are being picked, and the actions belong where the eye
+           already is. -->
+      <slot name="actions">
+      <div v-if="!hideView" class="view-chips">
         <button
           type="button"
           class="view-chip-icon"
@@ -81,6 +62,7 @@
           <i class="ri-list-unordered"></i>
         </button>
       </div>
+      </slot>
     </div>
   </div>
 </template>
@@ -101,9 +83,33 @@ const props = defineProps({
     type: String,
     default: 'grid',
   },
+  // Extra filter groups, appended after the built-in Status/Format pair:
+  //   [{ key, label, icon, options: [{ value, label }], default }]
+  // Their current values live in `values`, so a page can name its own filters
+  // (Series has "Books collected", Playlists sorts by name) without every page
+  // growing its own copy of this control.
+  sections: {
+    type: Array,
+    default: () => [],
+  },
+  values: {
+    type: Object,
+    default: () => ({}),
+  },
+  // Series groups are not books, so the library-wide Status/Format pair does
+  // not apply to them.
+  builtInFilters: {
+    type: Boolean,
+    default: true,
+  },
+  // Series cards have one layout, so there is nothing to toggle between.
+  hideView: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-const emit = defineEmits(['update:status', 'update:view']);
+const emit = defineEmits(['update:status', 'update:view', 'update:values']);
 
 const { settings, updateSettings } = useBookishSettings();
 
@@ -115,19 +121,51 @@ const filterOpen = ref(false);
 // same value rather than keeping its own copy.
 const selectedFormat = computed(() => settings.value.formatFilter || 'all');
 
-const hasActiveFilter = computed(() => (
-  props.status !== 'all' || selectedFormat.value !== 'all'
+const STATUS_KEY = '__status';
+const FORMAT_KEY = '__format';
+
+const builtInSections = computed(() => (props.builtInFilters
+  ? [
+    {
+      key: STATUS_KEY,
+      label: 'Status',
+      icon: 'ri-bookmark-line',
+      options: [
+        { value: 'all', label: 'All' },
+        ...readingStatuses.map((option) => ({ value: option, label: option })),
+      ],
+    },
+    {
+      key: FORMAT_KEY,
+      label: 'Format',
+      icon: 'ri-file-list-2-line',
+      options: formatFilters.map((format) => ({ value: format.value, label: format.label })),
+    },
+  ]
+  : []));
+
+const resolvedSections = computed(() => [...builtInSections.value, ...props.sections]);
+
+const defaultFor = (section) => section.default ?? section.options?.[0]?.value;
+
+const valueFor = (section) => {
+  if (section.key === STATUS_KEY) return props.status;
+  if (section.key === FORMAT_KEY) return selectedFormat.value;
+  return props.values[section.key] ?? defaultFor(section);
+};
+
+const select = (section, value) => {
+  if (section.key === STATUS_KEY) emit('update:status', value);
+  else if (section.key === FORMAT_KEY) updateSettings({ formatFilter: value });
+  else emit('update:values', { ...props.values, [section.key]: value });
+  filterOpen.value = false;
+};
+
+// The dot means "this list is not showing you everything", so it lights for any
+// section sitting away from its default.
+const hasActiveFilter = computed(() => resolvedSections.value.some(
+  (section) => valueFor(section) !== defaultFor(section),
 ));
-
-const setStatus = (value) => {
-  emit('update:status', value);
-  filterOpen.value = false;
-};
-
-const setFormat = (value) => {
-  updateSettings({ formatFilter: value });
-  filterOpen.value = false;
-};
 
 const closeOnOutsideClick = (event) => {
   if (!event.target.closest('.filter-dropdown')) filterOpen.value = false;

@@ -1,15 +1,32 @@
 <template>
   <div class="group-detail-page">
-    <!-- No title: the hero below names the playlist in full. Edit and delete
-         ride in the bar opposite the back button, clear of the title. -->
+    <!-- No title: the hero below names the playlist in full. One overflow
+         button in the bar, opposite the back button, keeps the two destructive
+         -ish actions a deliberate step away rather than one stray tap. -->
     <MobileSettingsNav :show-title="false" back-to="/playlists" aria-label="Playlist navigation">
       <template v-if="playlist" #actions>
-        <button type="button" class="title-action" aria-label="Edit playlist" @click="editingPlaylist = playlist">
-          <i class="ri-edit-line"></i>
-        </button>
-        <button type="button" class="title-action danger" aria-label="Delete playlist" @click="showDeletePlaylist = true">
-          <i class="ri-delete-bin-line"></i>
-        </button>
+        <div class="more-wrap">
+          <button
+            type="button"
+            class="title-action"
+            aria-label="Playlist options"
+            :aria-expanded="menuOpen"
+            @click.stop="menuOpen = !menuOpen"
+          >
+            <i class="ri-more-2-fill"></i>
+          </button>
+
+          <div v-if="menuOpen" class="more-menu" role="menu">
+            <button type="button" role="menuitem" @click="editingPlaylist = playlist; menuOpen = false">
+              <i class="ri-edit-line"></i>
+              Edit playlist
+            </button>
+            <button type="button" role="menuitem" class="danger" @click="showDeletePlaylist = true; menuOpen = false">
+              <i class="ri-delete-bin-line"></i>
+              Delete playlist
+            </button>
+          </div>
+        </div>
       </template>
     </MobileSettingsNav>
 
@@ -119,7 +136,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AddToPlaylistModal from '~/components/shared/AddToPlaylistModal.vue';
 import DeleteConfirmModal from '~/components/shared/DeleteConfirmModal.vue';
@@ -148,6 +165,14 @@ const savingPlaylist = ref(false);
 const showDeleteModal = ref(false);
 const bookToDelete = ref(null);
 const showDeletePlaylist = ref(false);
+const menuOpen = ref(false);
+
+const closeMenuOnOutsideClick = (event) => {
+  if (!event.target.closest('.more-wrap')) menuOpen.value = false;
+};
+
+onMounted(() => document.addEventListener('click', closeMenuOnOutsideClick));
+onUnmounted(() => document.removeEventListener('click', closeMenuOnOutsideClick));
 
 const playlist = computed(() => (
   collections.value.find((item) => String(item.id) === String(route.params.id))
@@ -404,7 +429,45 @@ const getStackStyle = (index, total = 3) => {
   font-size: 1rem;
 }
 
-.title-action.danger {
+.more-wrap {
+  position: relative;
+}
+
+.more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  min-width: 178px;
+  padding: 6px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 12px;
+  background: var(--color-surface-primary);
+  box-shadow: var(--shadow-card-hover, 0 12px 28px rgba(15, 23, 42, 0.18));
+}
+
+.more-menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.7rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.more-menu button:active {
+  background: var(--color-surface-secondary);
+}
+
+.more-menu button.danger {
   color: var(--color-status-danger-bright, #dc2626);
 }
 

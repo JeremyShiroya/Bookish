@@ -87,7 +87,9 @@ describe('settings pages wiring', () => {
       const source = read(path)
       expect(source, path).toContain('FORMAT_FILTER_CHOICES')
       expect(source, path).toContain('Format')
-      expect(source, path).toContain('setFormat')
+      // LibraryControlsRow renders its pills from a section list rather than a
+      // hand-written block, so it writes the setting through one `select`.
+      expect(source, path).toMatch(/setFormat|formatFilter: value/)
     }
 
     // Format is a single library-wide setting, so choosing it anywhere applies

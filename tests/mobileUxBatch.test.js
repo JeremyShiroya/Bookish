@@ -179,9 +179,10 @@ describe('mobile UX batch', () => {
     expect(reader).toContain('resumeChoice')
     expect(reader).toContain('playFromShownPage')
     expect(reader).toContain('resumeWhereLeftOff')
-    // Only when PAUSED and genuinely elsewhere — scrolling around the passage
-    // being narrated must not trigger it.
-    expect(reader).toMatch(/const movedAway = paused/)
+    // Only when PAUSED and genuinely elsewhere. The rule itself lives in
+    // useResumePrompt so it can be tested directly — see
+    // tests/selectionAndFilters.test.js.
+    expect(reader).toContain('shouldAskWhereToResume')
   })
 
   test('mobile library pages show a per-page empty-state illustration, not an icon', () => {
@@ -215,8 +216,11 @@ describe('mobile UX batch', () => {
 
   test('home search results come straight off the bound input', () => {
     const home = read('components/mobile/HomeMobile.vue')
-    // No submit handler and no debounce: the computed re-runs on every keystroke.
-    expect(home).toContain('v-model="homeSearch"')
+    // No submit handler and no debounce: the computed re-runs on every
+    // keystroke. Deliberately NOT v-model — it suppresses input events while an
+    // IME composes, and Gboard treats each word as a composition, so results
+    // only appeared once a word was committed with a space.
+    expect(home).toContain('@input="homeSearch = $event.target.value"')
     expect(home).toContain('searchLibrary(books.value, homeSearch.value)')
     expect(home).not.toContain('setTimeout')
   })
@@ -394,7 +398,7 @@ describe('mobile UX batch', () => {
     expect(plugin).toContain('public void deleteFile(PluginCall call)')
 
     const modal = read('components/shared/DeleteConfirmModal.vue')
-    expect(modal).toContain('permanently removes the book')
+    expect(modal).toContain("permanently removes {{ isBulk ? 'them' : 'the book' }}")
     expect(modal).toContain('removesDeviceFile')
     expect(modal).toContain('Delete permanently')
     // Points the user at Hide, the non-destructive neighbour.

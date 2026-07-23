@@ -10,16 +10,49 @@
     <!-- Playlists render through the SAME card as series (SeriesCollageCard),
          so they stay identical in styling and honour the playlist-card
          Preferences. Long-press / right-click opens the edit menu. -->
-    <div v-else-if="playlistsWithBooks.length > 0" class="series-grid">
+    <div v-if="!showSkeleton && playlistsWithBooks.length" class="playlists-controls">
+      <LibraryControlsRow
+        :built-in-filters="false"
+        :sections="filterSections"
+        :values="filterValues"
+        hide-view
+        @update:values="filterValues = $event"
+      >
+        <template v-if="selectionMode" #actions>
+          <SelectionActionsBar
+            :count="selectedCount"
+            :actions="bulkActions"
+            @action="runBulkAction"
+            @clear="clearSelection"
+          />
+        </template>
+      </LibraryControlsRow>
+    </div>
+
+    <div v-if="!showSkeleton && visiblePlaylists.length > 0" class="series-grid">
       <SeriesCollageCard
-        v-for="playlist in playlistsWithBooks"
+        v-for="playlist in visiblePlaylists"
         :key="playlist.id"
         variant="playlist"
         :series="playlist"
+        :selectable="selectionMode"
+        :selected="isSelected(playlist.id)"
+        @toggle-select="toggleSelected"
+        @pointerdown="(event) => onPointerDown(event, playlist)"
+        @pointermove="onPointerMove"
+        @pointerup="onPointerUp"
+        @pointercancel="onPointerUp"
         @open="openPlaylist(playlist)"
         @contextmenu="(e) => openContextMenu(e, playlist)"
       />
     </div>
+
+    <EmptyState
+      v-else-if="!showSkeleton && playlistsWithBooks.length"
+      title="No playlists match this filter"
+      description="Choose another sort or size filter to see more."
+      icon="ri-filter-3-line"
+    />
 
     <div
       v-if="contextMenu.playlist"
@@ -52,6 +85,14 @@
       @confirm="performDelete"
     />
 
+    <PlaylistDeleteModal
+      v-if="bulkDeleteTargets?.length"
+      :playlist="bulkDeleteTargets[0]"
+      :count="bulkDeleteTargets.length"
+      @close="bulkDeleteTargets = null"
+      @confirm="confirmBulkDelete"
+    />
+
     <!-- Empty State -->
     <EmptyState
       v-if="playlistsWithBooks.length === 0 && !showSkeleton"
@@ -72,13 +113,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import { useToast } from "~/composables/useToast";
+import { useLongPress, useMultiSelect } from "~/composables/useMultiSelect";
 import EmptyState from "../shared/EmptyState.vue";
 import PlaylistDeleteModal from "../shared/PlaylistDeleteModal.vue";
 import PlaylistEditModal from "../shared/PlaylistEditModal.vue";
+import LibraryControlsRow from "../shared/LibraryControlsRow.vue";
+import SelectionActionsBar from "../shared/SelectionActionsBar.vue";
 import SeriesCollageCard from "../shared/SeriesCollageCard.vue";
 import MobileBottomNav from "./MobileBottomNav.vue";
 import MobileSkeleton from "./MobileSkeleton.vue";
@@ -93,7 +137,110 @@ const savingPlaylist = ref(false);
 const playlistToDelete = ref(null);
 const contextMenu = reactive({ playlist: null, x: 0, y: 0 });
 
+// Filters relevant to a playlist: how it is named, and how full it is. Reading
+// status belongs to books, not to the collection that holds them.
+const filterSections = [
+  {
+    key: 'sort',
+    label: 'Name',
+    icon: 'ri-sort-alphabet-asc',
+    options: [
+      { value: 'az', label: 'A – Z' },
+      { value: 'za', label: 'Z – A' },
+      { value: 'largest', label: 'Most books' },
+      { value: 'smallest', label: 'Fewest books' },
+    ],
+  },
+  {
+    key: 'contents',
+    label: 'Contents',
+    icon: 'ri-stack-line',
+    options: [
+      { value: 'all', label: 'All' },
+      { value: 'filled', label: 'Has books' },
+      { value: 'empty', label: 'Empty' },
+    ],
+  },
+];
+
+const filterValues = ref({ sort: 'az', contents: 'all' });
+
+// ── Bulk selection ──────────────────────────────────────────────────────────
+const {
+  selectionMode,
+  selectedCount,
+  isSelected,
+  toggle: toggleSelect,
+  start: startSelection,
+  clear: clearSelection,
+  retain: retainSelection,
+} = useMultiSelect();
+
+const { onPointerDown, onPointerMove, onPointerUp, consumedTap } = useLongPress((playlist) => {
+  closeContextMenu();
+  startSelection(playlist.id);
+});
+
+const toggleSelected = (playlist) => toggleSelect(playlist.id);
+
+const selectedPlaylists = computed(
+  () => playlistsWithBooks.value.filter((playlist) => isSelected(playlist.id)),
+);
+
+const bulkActions = [
+  { key: 'delete', icon: 'ri-delete-bin-line', label: 'Delete', danger: true },
+];
+
+const bulkDeleteTargets = ref(null);
+
+const runBulkAction = (key) => {
+  if (key !== 'delete' || !selectedPlaylists.value.length) return;
+  bulkDeleteTargets.value = selectedPlaylists.value;
+};
+
+const confirmBulkDelete = async () => {
+  const chosen = bulkDeleteTargets.value || [];
+  bulkDeleteTargets.value = null;
+  try {
+    for (const playlist of chosen) await deletePlaylist(playlist.id);
+    addToast(`${chosen.length} playlist${chosen.length === 1 ? '' : 's'} deleted`, 'success');
+  } catch {
+    addToast('Could not delete every playlist', 'error');
+  }
+  clearSelection();
+};
+
+const visiblePlaylists = computed(() => {
+  const { sort, contents } = filterValues.value;
+  const filtered = playlistsWithBooks.value.filter((playlist) => {
+    const count = playlist.books?.length || 0;
+    if (contents === 'filled') return count > 0;
+    if (contents === 'empty') return count === 0;
+    return true;
+  });
+
+  const byName = (a, b) => String(a.name || '')
+    .localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
+  const size = (playlist) => playlist.books?.length || 0;
+
+  return [...filtered].sort((a, b) => {
+    if (sort === 'za') return -byName(a, b);
+    if (sort === 'largest') return size(b) - size(a) || byName(a, b);
+    if (sort === 'smallest') return size(a) - size(b) || byName(a, b);
+    return byName(a, b);
+  });
+});
+
+// A deleted playlist takes its tick with it.
+watch(collections, () => retainSelection(collections.value.map((playlist) => playlist.id)));
+
 const openPlaylist = (playlist) => {
+  // The hold that opened selection mode must not also open the playlist.
+  if (consumedTap()) return;
+  if (selectionMode.value) {
+    toggleSelect(playlist.id);
+    return;
+  }
   closeContextMenu();
   router.push(`/playlist/${playlist.id}`);
 };
@@ -195,6 +342,10 @@ const playlistsWithBooks = computed(() => {
   margin: 0 auto;
   padding-top: calc(4.85rem + env(safe-area-inset-top));
   padding-bottom: calc(var(--mobile-bottom-nav-height, 72px) + env(safe-area-inset-bottom));
+}
+
+.playlists-controls {
+  padding: 0 var(--mobile-page-padding-inline);
 }
 
 .playlists-loading {

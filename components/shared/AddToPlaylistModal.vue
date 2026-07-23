@@ -17,10 +17,10 @@
       </header>
 
       <div class="book-preview">
-        <img :src="coverUrl" :alt="book.title" @error="handleCoverError" />
+        <img :src="coverUrl" :alt="leadBook.title" @error="handleCoverError" />
         <div>
-          <strong>{{ book.title }}</strong>
-          <span>{{ book.author || 'Unknown author' }}</span>
+          <strong>{{ isBulk ? `${targetBooks.length} books` : leadBook.title }}</strong>
+          <span>{{ isBulk ? 'Selected in your library' : (leadBook.author || 'Unknown author') }}</span>
         </div>
       </div>
 
@@ -93,7 +93,14 @@ import { useToast } from '~/composables/useToast'
 const props = defineProps({
   book: {
     type: Object,
-    required: true,
+    default: null,
+  },
+  // Bulk selection files several books at once. One book or many is the only
+  // difference — the sheet, the toggling and the create-and-add flow are the
+  // same, so they share one component rather than two that drift apart.
+  books: {
+    type: Array,
+    default: null,
   },
 })
 
@@ -106,10 +113,20 @@ const newPlaylistName = ref('')
 const newPlaylistInput = ref(null)
 const saving = ref(false)
 
-const playlists = computed(() => collections.value.map(playlist => ({
-  ...playlist,
-  alreadyHas: (playlist.bookIds || []).some(id => String(id) === String(props.book.id)),
-})))
+const targetBooks = computed(() => (props.books?.length ? props.books : [props.book].filter(Boolean)))
+const isBulk = computed(() => targetBooks.value.length > 1)
+const leadBook = computed(() => targetBooks.value[0] || { title: 'Book' })
+
+// "Already has" means EVERY selected book is in it — a partial playlist still
+// offers to take the rest.
+const playlists = computed(() => collections.value.map(playlist => {
+  const ids = (playlist.bookIds || []).map(String)
+  return {
+    ...playlist,
+    alreadyHas: targetBooks.value.length > 0
+      && targetBooks.value.every((book) => ids.includes(String(book.id))),
+  }
+}))
 
 const generateCoverPlaceholder = (title) => {
   const safeTitle = String(title || 'Book')
@@ -118,9 +135,9 @@ const generateCoverPlaceholder = (title) => {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
-const coverUrl = computed(() => props.book.cover || generateCoverPlaceholder(props.book.title))
+const coverUrl = computed(() => leadBook.value.cover || generateCoverPlaceholder(leadBook.value.title))
 const handleCoverError = (event) => {
-  event.target.src = generateCoverPlaceholder(props.book.title)
+  event.target.src = generateCoverPlaceholder(leadBook.value.title)
 }
 
 const startCreating = async () => {
@@ -142,10 +159,10 @@ const togglePlaylist = async (playlist) => {
   saving.value = true
   try {
     if (playlist.alreadyHas) {
-      await removeBookFromPlaylist(playlist.id, props.book.id)
+      for (const book of targetBooks.value) await removeBookFromPlaylist(playlist.id, book.id)
       addToast(`Removed from "${playlist.name}"`, 'success')
     } else {
-      await addBookToPlaylist(playlist.id, props.book.id)
+      for (const book of targetBooks.value) await addBookToPlaylist(playlist.id, book.id)
       addToast(`Added to "${playlist.name}"`, 'success')
     }
     emit('saved')
@@ -163,7 +180,7 @@ const createAndAdd = async () => {
   saving.value = true
   try {
     const playlist = await createPlaylist({ name })
-    await addBookToPlaylist(playlist.id, props.book.id)
+    for (const book of targetBooks.value) await addBookToPlaylist(playlist.id, book.id)
     addToast(`Added to "${name}"`, 'success')
     emit('saved')
     // Back to the playlist list (now including the new one) rather than

@@ -14,17 +14,20 @@
         <i class="ri-play-list-2-line"></i>
       </div>
 
-      <h2 id="pl-delete-title">Delete this playlist?</h2>
+      <h2 id="pl-delete-title">
+        {{ isBulk ? `Delete these ${count} playlists?` : 'Delete this playlist?' }}
+      </h2>
       <p id="pl-delete-description" class="pl-delete-description">
-        <strong>{{ playlist.name }}</strong> will be removed. The books in it
-        stay in your library — only the playlist is deleted.
+        <strong>{{ isBulk ? `${count} playlists` : playlist.name }}</strong> will be removed. The
+        books in {{ isBulk ? 'them' : 'it' }} stay in your library — only the
+        {{ isBulk ? 'playlists are' : 'playlist is' }} deleted.
       </p>
 
       <div class="pl-delete-actions">
         <button type="button" class="pl-delete-cancel" @click="emit('close')">Cancel</button>
         <button type="button" class="pl-delete-confirm" @click="emit('confirm')">
           <i class="ri-delete-bin-line"></i>
-          Delete playlist
+          {{ isBulk ? 'Delete playlists' : 'Delete playlist' }}
         </button>
       </div>
     </section>
@@ -32,14 +35,24 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   playlist: {
     type: Object,
     required: true,
   },
+  // Bulk delete reuses this sheet rather than growing a near-copy of the same
+  // warning that would drift from it.
+  count: {
+    type: Number,
+    default: 1,
+  },
 })
 
 const emit = defineEmits(['close', 'confirm'])
+
+const isBulk = computed(() => props.count > 1)
 </script>
 
 <style scoped>

@@ -1,5 +1,23 @@
 <template>
-  <article class="library-book-card" :class="{ 'no-backdrop': cardBackground === 'blank' }" @click="emit('open', book)">
+  <article
+    class="library-book-card"
+    :class="{ 'no-backdrop': cardBackground === 'blank', selectable, selected }"
+    @click="onCardClick"
+  >
+    <!-- Selection mode: the tick replaces the per-card actions entirely, so the
+         only things offered are the ones that act on the whole selection. -->
+    <button
+      v-if="selectable"
+      type="button"
+      class="select-tick"
+      role="checkbox"
+      :aria-checked="selected"
+      :aria-label="selected ? `Deselect ${book.title}` : `Select ${book.title}`"
+      @click.stop="emit('toggle-select', book)"
+    >
+      <i v-if="selected" class="ri-check-line"></i>
+    </button>
+
     <template v-if="cardBackground !== 'blank'">
       <div class="card-background" :style="{ backgroundImage: `url(${coverUrl})` }"></div>
       <div class="card-overlay"></div>
@@ -129,6 +147,15 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  // Multi-select, driven by the page that owns the grid.
+  selectable: {
+    type: Boolean,
+    default: false,
+  },
+  selected: {
+    type: Boolean,
+    default: false,
+  },
   // Hidden Books view: swap the whole action row for a single Restore.
   restoreOnly: {
     type: Boolean,
@@ -136,7 +163,15 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['open', 'play', 'favourite', 'playlist', 'edit', 'hide', 'delete', 'restore'])
+const emit = defineEmits([
+  'open', 'play', 'favourite', 'playlist', 'edit', 'hide', 'delete', 'restore', 'toggle-select',
+])
+
+// While selecting, a tap anywhere on the card picks it rather than opening it.
+const onCardClick = () => {
+  if (props.selectable) emit('toggle-select', props.book)
+  else emit('open', props.book)
+}
 
 // Whether this book sits in any playlist, so the playlist icon can fill the
 // way the favourite heart does. Reactive on the shared collections list, so
@@ -208,6 +243,41 @@ const formatPersonalRating = (rating) => {
 
 /* Blank background: a plain solid card. Remap the on-image text colours to the
    normal text colours so everything stays readable without the dark backdrop. */
+/* Selection mode. The card lifts into the brand colour so a picked book reads
+   at a glance across a full grid, and the per-card action row is removed so it
+   cannot compete with the bulk actions in the toolbar. */
+.library-book-card.selected {
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 2px var(--color-brand-primary) inset;
+}
+
+.library-book-card.selectable .card-actions,
+.library-book-card.selectable .cover-actions {
+  display: none !important;
+}
+
+.select-tick {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 2px solid var(--color-brand-primary);
+  border-radius: 50%;
+  background: var(--color-surface-primary);
+  color: var(--color-text-on-brand);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.library-book-card.selected .select-tick {
+  background: var(--color-brand-primary);
+}
+
 .library-book-card.no-backdrop {
   --color-text-on-image-primary: var(--color-text-primary);
   --color-text-on-image-secondary: var(--color-text-secondary);
@@ -463,18 +533,16 @@ const formatPersonalRating = (rating) => {
 
 /* Restore is the only action on a hidden book, so it is labelled and spans
    the row rather than sitting as one anonymous icon among five. */
-/* Restore is the one action on a hidden book, so it is labelled. It has to
-   drop the icon-button `display: grid`, which stacked the icon on top of the
-   word instead of setting them side by side. */
+/* Restore is the one action on a hidden book, so it is labelled — but it is
+   still an action button and wears the same neutral treatment as the ones on
+   the Books page. It only has to drop the icon-button `display: grid`, which
+   stacked the icon on top of the word instead of setting them side by side. */
 .action-button.restore {
   display: inline-flex;
   align-items: center;
   width: auto;
   gap: 0.4rem;
   padding: 0 0.9rem;
-  border-color: var(--color-brand-primary);
-  background: color-mix(in srgb, var(--color-brand-primary) 14%, transparent);
-  color: var(--color-brand-primary);
 }
 
 .restore-label {

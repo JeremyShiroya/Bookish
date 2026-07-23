@@ -1,11 +1,22 @@
 <template>
   <button
     class="series-card"
-    :class="[`layout-${layout}`, `bg-${background}`]"
+    :class="[`layout-${layout}`, `bg-${background}`, { selectable, selected }]"
     type="button"
-    @click="$emit('open', series)"
+    @click="onCardClick"
     @contextmenu.prevent="$emit('contextmenu', $event)"
   >
+    <!-- Selection mode marker. A card that is one big <button> cannot nest
+         another, so this is a span the card's own click drives. -->
+    <span
+      v-if="selectable"
+      class="select-tick"
+      role="checkbox"
+      :aria-checked="selected"
+      aria-hidden="false"
+    >
+      <i v-if="selected" class="ri-check-line"></i>
+    </span>
     <!-- Optional blurred cover-image background. Uses a real <img> (the same
          technique as the series-detail hero backdrop) rather than a CSS
          background-image, so device/blob cover URLs render and a dead cover
@@ -82,9 +93,18 @@ const props = defineProps({
   // playlist-card preferences and shows a plain book count. The card is
   // otherwise the same, so series and playlists stay visually in lockstep.
   variant: { type: String, default: "series" },
+  // Multi-select, driven by the page that owns the grid.
+  selectable: { type: Boolean, default: false },
+  selected: { type: Boolean, default: false },
 });
 
-defineEmits(["open", "contextmenu"]);
+const emit = defineEmits(["open", "contextmenu", "toggle-select"]);
+
+// While selecting, a tap picks the card instead of opening it.
+const onCardClick = () => {
+  if (props.selectable) emit("toggle-select", props.series);
+  else emit("open", props.series);
+};
 
 const { settings } = useBookishSettings();
 const isPlaylist = computed(() => props.variant === "playlist");
@@ -416,5 +436,32 @@ const fanStyle = (i, n) => {
     width: 104px;
     height: 152px;
   }
+}
+
+/* Selection mode. The ring is drawn inside the card so it survives whichever
+   layout and background the card preferences are set to. */
+.series-card.selected {
+  box-shadow: 0 0 0 2px var(--color-brand-primary) inset;
+}
+
+.select-tick {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 4;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 2px solid var(--color-brand-primary);
+  border-radius: 50%;
+  background: var(--color-surface-primary);
+  color: var(--color-text-on-brand);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.series-card.selected .select-tick {
+  background: var(--color-brand-primary);
 }
 </style>
