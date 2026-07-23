@@ -298,20 +298,39 @@ describe('on-device Google Books key', () => {
   })
 })
 
-// Google Books intermittently answers 503 on the same URL and key minutes
-// apart, from both phone and desktop. Treating that as a permanent failure
-// meant the provider silently contributed nothing to the merge.
-describe('Google Books rides out transient 5xx', () => {
-  test('a 5xx is retried rather than skipped', () => {
+// Google Books fails a large share of single requests with 503, in bursts,
+// behind every front door — measured across params, connections, DNS answers
+// and edge IPs. Treating one failed request as a verdict silently dropped the
+// provider from the merge.
+describe('Google Books survives its own backend flakiness', () => {
+  test('retries alternate front doors and straddle burst windows', () => {
     const api = read('server/utils/googleBooksApi.ts')
     expect(api).toContain('res.status >= 500')
-    // Measured: ~30% of attempts succeed and failures burst, so one or two
-    // retries is not enough to get through reliably.
-    expect(api).toContain('TRANSIENT_ATTEMPTS = 6')
-    // Pacing measurably HURT, so the delay must stay short.
-    expect(api).toContain('TRANSIENT_DELAY_MS = 250')
-    expect(api).toContain('await booksFetch(')
+    // The two hosts fail only partially in sync (5 of 14 simultaneous pairs
+    // split), so alternating them decorrelates attempts.
+    expect(api).toContain("BOOKS_HOSTS = ['www.googleapis.com', 'books.googleapis.com']")
+    expect(api).toContain('BOOKS_HOSTS[attempt % BOOKS_HOSTS.length]')
+    // Early retries quick, later ones spaced — an unlucky start still escapes
+    // a multi-second 503 burst.
+    expect(api).toContain('RETRY_DELAYS_MS = [250, 250, 500, 750, 1250, 2000, 3000]')
+    // Bounded: a real outage degrades to "no contribution", never a hang.
+    expect(api).toContain('REQUEST_BUDGET_MS')
+    expect(api).toContain('LOOKUP_BUDGET_MS')
+    expect(api).toContain('await googleBooksRequest(')
     // A 429 is a quota verdict, not a blip — it must NOT be retried here.
     expect(api).toContain('res.status === 429')
+  })
+
+  test('successes are cached so a title only has to win once', () => {
+    const api = read('server/utils/googleBooksApi.ts')
+    expect(api).toContain('readBooksCache')
+    expect(api).toContain('writeBooksCache')
+    // Only 200s are stored — a 503 must never be remembered as an answer.
+    expect(api).toMatch(/if \(!res\.ok\) continue;\s*\n\s*data = await res\.json\(\);\s*\n\s*writeBooksCache/)
+  })
+
+  test('the connection test exercises the same engine, not a one-shot probe', () => {
+    const checks = read('composables/useConnectionChecks.js')
+    expect(checks).toContain('googleBooksRequest')
   })
 })

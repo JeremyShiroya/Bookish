@@ -64,7 +64,7 @@ const describeGoogleBooks = (status, body) => {
   if (status >= 500) {
     return {
       status: CHECK_STATUS.warn,
-      summary: 'Google Books is having temporary trouble at their end. Nothing to fix here — try again shortly.',
+      summary: 'Google Books stayed unavailable even after several retries. This is trouble at their end — nothing to fix here, and other sources cover for it.',
     }
   }
   return { status: CHECK_STATUS.fail, summary: `Google Books replied unexpectedly (code ${status}).` }
@@ -111,11 +111,16 @@ async function checkGoogleBooksKey({ googleBooksApiKey }) {
 }
 
 async function checkGoogleBooksSearch({ googleBooksApiKey }) {
-  const url = 'https://www.googleapis.com/books/v1/volumes?q=intitle:Dune&maxResults=3&country=US'
+  const query = '/books/v1/volumes?q=intitle:Dune&maxResults=3&country=US'
     + (googleBooksApiKey ? `&key=${encodeURIComponent(googleBooksApiKey)}` : '')
   try {
     const started = Date.now()
-    const response = await withTimeout(fetch(url), 20000, 'Google Books')
+    // The same retrying engine the app itself uses (alternating hosts, burst
+    // straddling). Google Books fails a share of single requests as a matter
+    // of course; a one-shot probe here reported "trouble" whenever one attempt
+    // landed in a 503 burst, even though real lookups were riding it out fine.
+    const { googleBooksRequest } = await import('~/server/utils/googleBooksApi')
+    const response = await withTimeout(googleBooksRequest(query), 25000, 'Google Books')
     const body = await response.text()
     const problem = describeGoogleBooks(response.status, body)
     if (problem) {

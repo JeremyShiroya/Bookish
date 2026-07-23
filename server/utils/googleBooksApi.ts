@@ -13,26 +13,27 @@ export interface GBResult {
   cover: string | null;
 }
 
-function buildGoogleBooksUrls(title: string, author?: string) {
-  const urls: string[] = [];
+// Host-less: the retry engine decides which front door each attempt uses.
+function buildGoogleBooksQueries(title: string, author?: string) {
+  const queries: string[] = [];
   const seen = new Set<string>();
-  const addUrl = (query: string) => {
-    const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=10&printType=books&country=US&langRestrict=en`;
-    if (!seen.has(url)) {
-      seen.add(url);
-      urls.push(url);
+  const addQuery = (query: string) => {
+    const path = `/books/v1/volumes?q=${query}&maxResults=10&printType=books&country=US&langRestrict=en`;
+    if (!seen.has(path)) {
+      seen.add(path);
+      queries.push(path);
     }
   };
 
   const encodedTitle = encodeURIComponent(title);
   const encodedAuthor = author ? encodeURIComponent(author) : null;
 
-  if (encodedAuthor) addUrl(`intitle:${encodedTitle}+inauthor:${encodedAuthor}`);
-  addUrl(`intitle:${encodedTitle}`);
-  if (encodedAuthor) addUrl(encodeURIComponent(`${title} ${author}`));
-  addUrl(encodedTitle);
+  if (encodedAuthor) addQuery(`intitle:${encodedTitle}+inauthor:${encodedAuthor}`);
+  addQuery(`intitle:${encodedTitle}`);
+  if (encodedAuthor) addQuery(encodeURIComponent(`${title} ${author}`));
+  addQuery(encodedTitle);
 
-  return urls;
+  return queries;
 }
 
 // Without an API key every caller shares one anonymous Google project, and its
@@ -82,36 +83,81 @@ function googleBooksKey() {
   return process.env?.GOOGLE_BOOKS_API_KEY || process.env?.NUXT_GOOGLE_BOOKS_API_KEY || '';
 }
 
-// Google Books answers a large share of requests with 503 "Service temporarily
-// unavailable". Measured directly rather than assumed:
+// Google Books answers a large share of requests with 503 "backendFailed".
+// Everything plausible was MEASURED before settling on this design:
 //
-//   * ~25-50% of attempts succeed, and the rate does not change with the
-//     `country` parameter, the query shape, `projection`, or the host
-//     (books.googleapis.com is no better than www.googleapis.com).
-//   * It is NOT rate limiting. Spacing requests 3s or 8s apart did WORSE than
-//     firing them 0.3s apart, so backing off is counter-productive.
-//   * Failures arrive in bursts and then clear: a representative run went
-//     503,503,503,503,503,200,200,200,200,200. Pushing through a burst is
-//     what gets a result, and results keep coming once through.
-//   * A 503 costs ~550ms, so an attempt is cheap.
+//   * Not our parameters: `country`, query shape, `projection` — no effect.
+//   * Not the connection: a single kept-alive socket flips 200↔503 mid-stream,
+//     and fresh TCP+TLS per request scored no better (1/14 in one run).
+//   * Not DNS or a bad edge: the router and 8.8.8.8 return the same regional
+//     VIPs (216.239.3x.223); Cloudflare's answer (172.217.x.x) points at a
+//     different front-end set that is EXACTLY as flaky when hit directly with
+//     correct SNI. The failure lives behind every front door.
+//   * Failures burst for seconds at a time, then clear.
+//   * The two public hosts fail only PARTIALLY in sync: in 14 simultaneous
+//     www/books.googleapis.com pairs, 5 had exactly one side succeed. So
+//     alternating hosts between attempts decorrelates them (~50% per round
+//     vs ~30% single-host).
+//   * A 503 round-trip costs ~550ms, so attempts are cheap.
 //
-// Hence: retry promptly and persistently rather than slowly. Six attempts at a
-// 30% per-attempt success rate clears ~88%, for a worst case around 4s — while
-// a single attempt silently dropped Google Books out of the merge most of the
-// time, which is what made book details look broken.
-const TRANSIENT_ATTEMPTS = 6;
-const TRANSIENT_DELAY_MS = 250;
+// Design that follows from those facts:
+//   1. Alternate front doors on every retry.
+//   2. Straddle bursts: early retries are quick, later ones spaced, so an
+//      unlucky start still escapes a multi-second burst window.
+//   3. A hard time budget per request, so a total outage degrades to "this
+//      provider contributed nothing" rather than hanging the lookup.
+//   4. Cache successes (below): a title only ever needs to win once.
+const BOOKS_HOSTS = ['www.googleapis.com', 'books.googleapis.com'];
+const RETRY_DELAYS_MS = [250, 250, 500, 750, 1250, 2000, 3000];
+const REQUEST_BUDGET_MS = 10000;
 
-async function booksFetch(url: string) {
-  let res = await fetch(url);
-  for (let attempt = 1; attempt < TRANSIENT_ATTEMPTS && res.status >= 500; attempt += 1) {
-    // Deliberately near-flat: pacing measurably hurt, so this is only enough
-    // of a gap to avoid a tight spin.
-    await new Promise((resolve) => setTimeout(resolve, TRANSIENT_DELAY_MS));
-    res = await fetch(url);
+// 200s are cached because the same title is looked up repeatedly — manual
+// fetch, import backfill, series sweep, connection test — and Books data for
+// a fixed query is effectively static. An empty item list is still a valid,
+// cacheable answer. Only successful responses are stored.
+const BOOKS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const BOOKS_CACHE_MAX = 300;
+const booksCache = new Map<string, { expires: number; data: any }>();
+
+function readBooksCache(query: string) {
+  const hit = booksCache.get(query);
+  if (!hit) return null;
+  if (Date.now() > hit.expires) {
+    booksCache.delete(query);
+    return null;
+  }
+  return hit.data;
+}
+
+function writeBooksCache(query: string, data: any) {
+  if (booksCache.size >= BOOKS_CACHE_MAX) {
+    // Maps iterate in insertion order, so the first key is the oldest entry.
+    const oldest = booksCache.keys().next().value;
+    if (oldest !== undefined) booksCache.delete(oldest);
+  }
+  booksCache.set(query, { expires: Date.now() + BOOKS_CACHE_TTL_MS, data });
+}
+
+// Exported so the Settings → Connection test exercises the exact engine the
+// app uses, retries and all — not a one-shot probe that cries wolf whenever a
+// single attempt lands in a 503 burst.
+export async function googleBooksRequest(pathAndQuery: string, budgetMs = REQUEST_BUDGET_MS) {
+  const deadline = Date.now() + budgetMs;
+  let res = await fetch(`https://${BOOKS_HOSTS[0]}${pathAndQuery}`);
+  for (
+    let attempt = 1;
+    res.status >= 500 && attempt <= RETRY_DELAYS_MS.length && Date.now() < deadline;
+    attempt += 1
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt - 1]));
+    res = await fetch(`https://${BOOKS_HOSTS[attempt % BOOKS_HOSTS.length]}${pathAndQuery}`);
   }
   return res;
 }
+
+// Retrying four query variants back-to-back could take a while during a full
+// outage; past this, remaining variants are skipped rather than queued.
+const LOOKUP_BUDGET_MS = 20000;
 
 export async function searchGoogleBooks(title: string, author?: string): Promise<GBResult[]> {
   if (googleBooksRateLimited()) return [];
@@ -120,24 +166,35 @@ export async function searchGoogleBooks(title: string, author?: string): Promise
     const seen = new Set<string>();
     const results: GBResult[] = [];
     const key = googleBooksKey();
+    const lookupDeadline = Date.now() + LOOKUP_BUDGET_MS;
 
-    for (const url of buildGoogleBooksUrls(title, author)) {
+    for (const query of buildGoogleBooksQueries(title, author)) {
       if (results.length >= ENOUGH_RESULTS) break;
-      const res = await booksFetch(key ? `${url}&key=${encodeURIComponent(key)}` : url);
-      if (res.status === 429) {
-        const body = await res.text().catch(() => '');
-        const cooldown = googleBooksCooldownFor(body);
-        googleBooksBlockedUntil = Date.now() + cooldown;
-        console.warn(
-          `[GoogleBooks] Quota exceeded (${/per day/i.test(body) ? 'per day' : 'per minute'})`
-          + ` — pausing this provider for ${Math.round(cooldown / 60000)} min`
-          + (key ? '' : '. Set GOOGLE_BOOKS_API_KEY to use your own quota instead of the shared anonymous one.'),
-        );
-        return results;
-      }
-      if (!res.ok) continue;
 
-      const data: any = await res.json();
+      let data: any = readBooksCache(query);
+      if (!data) {
+        const remaining = lookupDeadline - Date.now();
+        if (remaining <= 0) break;
+        const res = await googleBooksRequest(
+          key ? `${query}&key=${encodeURIComponent(key)}` : query,
+          Math.min(REQUEST_BUDGET_MS, remaining),
+        );
+        if (res.status === 429) {
+          const body = await res.text().catch(() => '');
+          const cooldown = googleBooksCooldownFor(body);
+          googleBooksBlockedUntil = Date.now() + cooldown;
+          console.warn(
+            `[GoogleBooks] Quota exceeded (${/per day/i.test(body) ? 'per day' : 'per minute'})`
+            + ` — pausing this provider for ${Math.round(cooldown / 60000)} min`
+            + (key ? '' : '. Set GOOGLE_BOOKS_API_KEY to use your own quota instead of the shared anonymous one.'),
+          );
+          return results;
+        }
+        if (!res.ok) continue;
+        data = await res.json();
+        writeBooksCache(query, data);
+      }
+
       if (!data.items?.length) continue;
 
       const parsed = data.items
