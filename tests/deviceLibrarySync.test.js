@@ -305,6 +305,11 @@ describe('Google Books rides out transient 5xx', () => {
   test('a 5xx is retried rather than skipped', () => {
     const api = read('server/utils/googleBooksApi.ts')
     expect(api).toContain('res.status >= 500')
+    // Measured: ~30% of attempts succeed and failures burst, so one or two
+    // retries is not enough to get through reliably.
+    expect(api).toContain('TRANSIENT_ATTEMPTS = 6')
+    // Pacing measurably HURT, so the delay must stay short.
+    expect(api).toContain('TRANSIENT_DELAY_MS = 250')
     expect(api).toContain('await booksFetch(')
     // A 429 is a quota verdict, not a blip — it must NOT be retried here.
     expect(api).toContain('res.status === 429')

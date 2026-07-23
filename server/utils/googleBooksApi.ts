@@ -82,19 +82,32 @@ function googleBooksKey() {
   return process.env?.GOOGLE_BOOKS_API_KEY || process.env?.NUXT_GOOGLE_BOOKS_API_KEY || '';
 }
 
-// Google Books intermittently answers 503 "Service temporarily unavailable"
-// — observed repeatedly from both the phone and a desktop, on the same URL and
-// key, minutes apart. It is transient and unrelated to the transport: a run
-// that looked like CapacitorHttp being rejected reversed completely on the next
-// attempt. Treating a 503 like a permanent failure meant the provider silently
-// contributed nothing, so a short retry rides it out instead.
-const TRANSIENT_RETRIES = 2;
-const TRANSIENT_DELAY_MS = 1200;
+// Google Books answers a large share of requests with 503 "Service temporarily
+// unavailable". Measured directly rather than assumed:
+//
+//   * ~25-50% of attempts succeed, and the rate does not change with the
+//     `country` parameter, the query shape, `projection`, or the host
+//     (books.googleapis.com is no better than www.googleapis.com).
+//   * It is NOT rate limiting. Spacing requests 3s or 8s apart did WORSE than
+//     firing them 0.3s apart, so backing off is counter-productive.
+//   * Failures arrive in bursts and then clear: a representative run went
+//     503,503,503,503,503,200,200,200,200,200. Pushing through a burst is
+//     what gets a result, and results keep coming once through.
+//   * A 503 costs ~550ms, so an attempt is cheap.
+//
+// Hence: retry promptly and persistently rather than slowly. Six attempts at a
+// 30% per-attempt success rate clears ~88%, for a worst case around 4s — while
+// a single attempt silently dropped Google Books out of the merge most of the
+// time, which is what made book details look broken.
+const TRANSIENT_ATTEMPTS = 6;
+const TRANSIENT_DELAY_MS = 250;
 
 async function booksFetch(url: string) {
   let res = await fetch(url);
-  for (let attempt = 0; attempt < TRANSIENT_RETRIES && res.status >= 500; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, TRANSIENT_DELAY_MS * (attempt + 1)));
+  for (let attempt = 1; attempt < TRANSIENT_ATTEMPTS && res.status >= 500; attempt += 1) {
+    // Deliberately near-flat: pacing measurably hurt, so this is only enough
+    // of a gap to avoid a tight spin.
+    await new Promise((resolve) => setTimeout(resolve, TRANSIENT_DELAY_MS));
     res = await fetch(url);
   }
   return res;
