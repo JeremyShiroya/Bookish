@@ -127,8 +127,10 @@ describe('wiring', () => {
     const plugin = read('plugins/auto-metadata.client.js')
     expect(plugin).toContain('startAutoMetadata')
     expect(plugin).toContain('metadataAutoFill')
-    // Reacts to the toggle without an app restart.
-    expect(plugin).toContain('watch(() => settings.value.metadataAutoFill')
+    // The loop starts once and re-reads the setting every cycle, so toggling
+    // it takes effect without an app restart AND without stopping the series
+    // sweep that now shares the same scheduler.
+    expect(plugin).toContain('isFillEnabled')
   })
 
   test('the runner cross-checks sources and never fights the manual sweep', () => {
@@ -138,8 +140,8 @@ describe('wiring', () => {
     expect(auto).toContain('fetchBookMetadataResults')
     expect(auto).toContain('metadataResultMatchesBook')
     expect(auto).toContain('isBackfillRunning')
-    // Rests between cycles.
-    expect(auto).toMatch(/CYCLE_COOLDOWN_MS/)
+    // Rests between cycles — for as long as the backlog and the sources warrant.
+    expect(auto).toContain('nextCooldownMs')
   })
 
   test('Settings → Storage exposes the automatic toggle', () => {

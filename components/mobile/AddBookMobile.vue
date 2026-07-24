@@ -133,6 +133,13 @@
             <i class="ri-camera-line"></i>
             <span>Change Cover</span>
           </div>
+          <!-- Always visible, not hover-only: a touch screen has no hover, so
+               a cover with an image looked like a plain picture and nobody
+               knew it could be tapped to change. -->
+          <span v-if="coverPreview" class="cover-change-hint" aria-hidden="true">
+            <i class="ri-camera-line"></i>
+            Change cover
+          </span>
           <input 
             type="file" 
             ref="coverInput" 
@@ -1625,5 +1632,30 @@ const saveBook = async () => {
 
 .keep-cover-option input {
   accent-color: var(--color-brand-primary);
+}
+
+/* The tap affordance. Sits along the bottom of the cover so it reads as an
+   action on the image without hiding it, and it never depends on hover. */
+.cover-change-hint {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.4rem;
+  background: var(--color-background-overlay-strong, rgba(15, 23, 42, 0.72));
+  color: var(--color-text-on-brand, #fff);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.cover-change-hint i {
+  font-size: 0.95rem;
 }
 </style>

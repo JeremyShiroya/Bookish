@@ -1,9 +1,5 @@
 import { syncDeviceLibrary } from '~/composables/useDeviceLibrarySync'
-import {
-  hydrateSeriesSuggestions,
-  startSeriesSuggestionSweep,
-} from '~/composables/useSeriesSuggestions'
-import { useBooks } from '~/composables/useBooks'
+import { hydrateSeriesSuggestions } from '~/composables/useSeriesSuggestions'
 import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
 
 // Repeating background scans keep the library current without reopening the
@@ -27,12 +23,10 @@ export default defineNuxtPlugin((nuxtApp) => {
     // setTimeout drops the Nuxt context, and the sync uses useState-backed
     // composables — restore the context or every composable call throws.
     setTimeout(() => {
-      nuxtApp.runWithContext(() => {
-        syncDeviceLibrary()
-
-        const { seriesList } = useBooks()
-        startSeriesSuggestionSweep({ seriesList })
-      })
+      // The series-suggestion sweep used to get its own interval here. It now
+      // shares the background scheduler in auto-metadata.client.js, so the two
+      // jobs take turns on the same metadata sources rather than colliding.
+      nuxtApp.runWithContext(() => syncDeviceLibrary())
     }, 2500)
 
     setInterval(() => {

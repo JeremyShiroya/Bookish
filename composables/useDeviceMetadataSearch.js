@@ -222,11 +222,20 @@ export async function fetchBookMetadataOnDevice(title, author, publisher, option
   const onProgress = options.onProgress
   // Bulk/background lookups set this to skip the slowest, lowest-yield stage.
   const light = options.light === true
+  // Goodreads is the slow one: a 25s search cap plus a scrape per candidate,
+  // against 9s for everything else — so it sets the pace of every lookup it is
+  // part of. It is also the only source carrying a star rating or a dependable
+  // series position, so a caller that needs neither can tell us to leave it
+  // out. Nothing else changes: every field still being filled is still merged
+  // across every source that could supply it.
+  const skipGoodreads = options.skipGoodreads === true
   onProgress?.({
     type: 'step',
     id: 'core',
     status: 'active',
-    detail: 'Searching Goodreads, Google Books, Kobo, Open Library, and Internet Archive from this device',
+    detail: skipGoodreads
+      ? 'Searching Google Books, Kobo, Open Library, and Internet Archive from this device'
+      : 'Searching Goodreads, Google Books, Kobo, Open Library, and Internet Archive from this device',
   })
 
   const [internetArchiveResults, openLibraryResults, googleBooksResults, koboSources, goodreadsSources] = await Promise.all([
@@ -234,7 +243,7 @@ export async function fetchBookMetadataOnDevice(title, author, publisher, option
     withTimeout(searchOpenLibrary(title, author), [], 9000),
     withTimeout(searchGoogleBooks(title, author), [], 9000),
     getKoboSources(title, author),
-    getGoodreadsSources(title, author),
+    skipGoodreads ? Promise.resolve([]) : getGoodreadsSources(title, author),
   ])
 
   const internetArchiveSources = internetArchiveResults.map(asSource('internetArchive'))

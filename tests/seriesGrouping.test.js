@@ -81,11 +81,15 @@ describe('series suggestion placeholders', () => {
     expect(suggestions).toContain('startSeriesSuggestionSweep')
   })
 
-  test('the background sweep and silent device rescan are wired from the native plugin', () => {
+  test('the background sweep and silent device rescan are wired from the plugins', () => {
     const plugin = read('plugins/device-library-sync.client.js')
-    expect(plugin).toContain('startSeriesSuggestionSweep')
+    // The device rescan keeps its own interval; the suggestion sweep moved to
+    // the shared background scheduler so it takes turns with the book fill
+    // instead of colliding with it on the same metadata sources.
     expect(plugin).toContain('setInterval')
     expect(plugin).toContain("syncDeviceLibrary({ silent: true })")
+    expect(plugin).toContain('hydrateSeriesSuggestions')
+    expect(read('plugins/auto-metadata.client.js')).toContain('runSeriesSuggestionSweep')
 
     const sync = read('composables/useDeviceLibrarySync.js')
     // Silent rescans never toast and never prompt for permissions.
