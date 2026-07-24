@@ -254,6 +254,9 @@ const fanStyle = (i, n) => {
   right: 16px;
   left: 16px;
   z-index: 40;
+  /* Taps belong to the card (and to the menu button above it), never to the
+     title block sitting over them. */
+  pointer-events: none;
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -451,19 +454,22 @@ const fanStyle = (i, n) => {
    the Books page outline.) */
 .series-card.selected {
   outline: 3px solid var(--color-brand-primary);
-  outline-offset: -3px;
+  outline-offset: 2px;
 }
 
 /* Overflow menu trigger. No pill behind it — just the icon, in the same colour
    as the card's title, so it sits quietly opposite the name. */
 .card-menu-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 5;
+  top: 6px;
+  right: 6px;
+  /* Above .series-meta (z-index 40), which spans the full width of the card's
+     top edge — underneath it, every tap on this button went to the card and
+     opened the playlist instead of the menu. */
+  z-index: 50;
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   place-items: center;
   border: 0;
   background: transparent;

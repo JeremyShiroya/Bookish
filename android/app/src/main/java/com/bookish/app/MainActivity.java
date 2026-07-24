@@ -21,6 +21,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DeviceBooksPlugin.class);
         registerPlugin(MediaSessionPlugin.class);
+        registerPlugin(SystemBarsPlugin.class);
         super.onCreate(savedInstanceState);
         enableEdgeToEdge();
         installRenderProcessGoneHandler();
@@ -56,10 +57,9 @@ public class MainActivity extends BridgeActivity {
      * env(safe-area-inset-*) values (enabled by viewport-fit=cover), so nothing
      * important is ever hidden behind a bar.
      *
-     * Bar ICONS follow the app's default light background: dark icons on the
-     * light chrome. If the reader/app is switched to a dark theme the icons stay
-     * dark, which is a known trade-off of setting this natively rather than
-     * pulling in the status-bar plugin.
+     * Bar ICONS start out dark, to suit the default light chrome. The web layer
+     * is the only thing that knows which theme is active, so it calls
+     * SystemBarsPlugin.setAppearance whenever that changes and flips them.
      */
     private void enableEdgeToEdge() {
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);

@@ -179,6 +179,23 @@ export function applyBookishTheme(theme) {
   const normalizedTheme = theme === 'dark' ? 'dark' : 'light'
   document.documentElement.dataset.theme = normalizedTheme
   document.documentElement.style.colorScheme = normalizedTheme
+  syncSystemBarAppearance(normalizedTheme === 'dark')
+}
+
+// The Android status and navigation bars are transparent, so the app's own
+// background already shows through them in either theme — but their ICONS do
+// not follow, and dark icons on the dark theme were unreadable. Android exposes
+// that only as a window flag, so the theme switch tells the native side here.
+// Fire-and-forget and fully optional: on the web (or before the bridge is up)
+// there is simply nothing to call.
+function syncSystemBarAppearance(dark) {
+  try {
+    const bridge = globalThis.Capacitor
+    if (!bridge?.isNativePlatform?.()) return
+    bridge.Plugins?.SystemBars?.setAppearance?.({ dark })?.catch?.(() => {})
+  } catch {
+    // Bridge not ready or plugin missing — the bars keep their current icons.
+  }
 }
 
 const resolveStorage = (storage) => {

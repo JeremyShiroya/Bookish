@@ -21,6 +21,8 @@ import { computed } from 'vue'
 import { useState } from '#app'
 import { useApiEndpoint } from '~/composables/useApiEndpoint'
 import { useBookishSettings } from '~/composables/useBookishSettings'
+import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
+import { metadataResultMatchesBook } from '~/composables/useAutoMetadata'
 import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
 
 const loadDeviceSearch = () => import('~/composables/useDeviceMetadataSearch')
@@ -74,6 +76,20 @@ const readCache = (seriesName, neededInstallments = []) => {
     const ttl = useful ? CACHE_TTL_MS : EMPTY_CACHE_TTL_MS
     if (Date.now() - (parsed.savedAt || 0) > ttl) return null
     return installments
+  } catch {
+    return null
+  }
+}
+
+// The stored map regardless of whether it answers a particular gap — used by
+// the detail top-up pass and by hydration, which both want whatever is on disk.
+const readCacheRaw = (seriesName) => {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const parsed = JSON.parse(localStorage.getItem(cacheKey(seriesName)) || 'null')
+    if (!parsed?.installments) return null
+    if (Date.now() - (parsed.savedAt || 0) > CACHE_TTL_MS) return null
+    return parsed.installments
   } catch {
     return null
   }
@@ -174,9 +190,53 @@ export const fetchSeriesInstallments = async (seriesName, seedBooks = [], needed
   return installments
 }
 
+// Load every cached series into the reactive store in one pass.
+//
+// The cache always lived on the device, but the store started empty on each
+// app open, so a series page rendered blank slots and only filled them after
+// its own fetch resolved — a visible wait for data already on disk. Hydrating
+// up front means the page paints from the store on first render.
+export const hydrateSeriesSuggestions = () => {
+  if (typeof localStorage === 'undefined') return 0
+  const store = useSuggestionsStore()
+  const next = { ...store.value }
+  let loaded = 0
+
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i)
+    if (!key || !key.startsWith(CACHE_PREFIX)) continue
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+      if (!parsed?.installments) continue
+      if (Date.now() - (parsed.savedAt || 0) > CACHE_TTL_MS) continue
+      next[key.slice(CACHE_PREFIX.length)] = parsed.installments
+      loaded += 1
+    } catch {
+      // Corrupt entry — skip it; the sweep will rebuild that series.
+    }
+  }
+
+  store.value = next
+  return loaded
+}
+
+// A suggestion is only finished when it can be shown properly: cover, author
+// and year. The roster often returns just a title and a number.
+export const installmentNeedsDetails = (entry) => (
+  !entry?.cover || !entry?.author || !entry?.year
+)
+
+let _hydrated = false
+
 // Live view of one series' resolved suggestions, for the detail page.
 export const useSeriesSuggestions = (seriesNameRef) => {
   const store = useSuggestionsStore()
+  // The native plugin hydrates on app open; this covers the web and any route
+  // reached before that ran. Once per session either way.
+  if (!_hydrated) {
+    _hydrated = true
+    hydrateSeriesSuggestions()
+  }
   const installments = computed(() => store.value[normalizeSeriesKey(seriesNameRef?.value)] || {})
   return { installments, fetchSeriesInstallments }
 }
@@ -217,10 +277,70 @@ export const runSeriesSuggestionSweep = async ({ seriesList, settings }) => {
       await fetchSeriesInstallments(series.name, books, missing)
       return `resolved:${series.name}`
     }
-    return 'idle'
+
+    // Every roster is resolved — now fill in the suggestions that came back as
+    // little more than a title, so a series page is complete before it is
+    // opened rather than after.
+    const detailed = await topUpSuggestionDetails(seriesList?.value || [])
+    return detailed || 'idle'
   } finally {
     _sweepInFlight = false
   }
+}
+
+// How many under-detailed suggestions to enrich per cycle. Small on purpose:
+// this shares the metadata sources with the automatic book-details backfill.
+const DETAIL_BATCH = 2
+
+// Find the first series holding suggestions that are missing a cover, author or
+// year, fill a couple of them from the cross-checked metadata engine, and write
+// the result back to the device so it is there on the next open.
+const topUpSuggestionDetails = async (seriesList) => {
+  const store = useSuggestionsStore()
+
+  for (const series of seriesList) {
+    const cached = readCacheRaw(series?.name)
+    if (!cached) continue
+
+    const gaps = Object.keys(cached)
+      .filter((installment) => installmentNeedsDetails(cached[installment]))
+      .slice(0, DETAIL_BATCH)
+    if (!gaps.length) continue
+
+    let changed = false
+    for (const installment of gaps) {
+      const entry = cached[installment]
+      if (!entry?.title) continue
+      try {
+        const results = await fetchBookMetadataResults(
+          entry.title,
+          entry.author || undefined,
+          undefined,
+          { light: true },
+        )
+        const top = results?.[0]
+        // Same guard the automatic backfill uses: never accept another book's
+        // details just because the search returned something.
+        if (!metadataResultMatchesBook(entry, top)) continue
+        cached[installment] = {
+          ...entry,
+          author: entry.author || top.author || null,
+          cover: entry.cover || top.cover || null,
+          year: entry.year || Number(top.publishYear) || null,
+        }
+        changed = true
+      } catch {
+        // Source down or throttled — try again on a later cycle.
+      }
+    }
+
+    if (!changed) continue
+    writeCache(series.name, cached)
+    store.value = { ...store.value, [normalizeSeriesKey(series.name)]: cached }
+    return `detailed:${series.name}`
+  }
+
+  return null
 }
 
 // Start the repeating sweep. Idempotent — safe to call from a plugin on every

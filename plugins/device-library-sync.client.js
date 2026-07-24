@@ -1,5 +1,8 @@
 import { syncDeviceLibrary } from '~/composables/useDeviceLibrarySync'
-import { startSeriesSuggestionSweep } from '~/composables/useSeriesSuggestions'
+import {
+  hydrateSeriesSuggestions,
+  startSeriesSuggestionSweep,
+} from '~/composables/useSeriesSuggestions'
 import { useBooks } from '~/composables/useBooks'
 import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
 
@@ -16,6 +19,11 @@ export default defineNuxtPlugin((nuxtApp) => {
   if (!isNativeCapacitorPlatform()) return
 
   nuxtApp.hook('app:mounted', () => {
+    // Suggestions already on the device go into the shared store immediately,
+    // so a series page paints its missing books on first render instead of
+    // waiting on its own lookup.
+    nuxtApp.runWithContext(() => hydrateSeriesSuggestions())
+
     // setTimeout drops the Nuxt context, and the sync uses useState-backed
     // composables — restore the context or every composable call throws.
     setTimeout(() => {

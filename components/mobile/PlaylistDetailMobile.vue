@@ -415,18 +415,20 @@ const getStackStyle = (index, total = 3) => {
 }
 
 /* Sits in the nav bar, so it matches the back button rather than the hero. */
+/* Bare icon, like the one on a playlist card — no border or fill, and the same
+   colour as the back arrow it sits opposite in the bar. */
 .title-action {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 9px;
-  background: var(--color-surface-secondary);
-  color: var(--color-brand-primary);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 20px;
+  line-height: 1;
 }
 
 .more-wrap {
