@@ -145,19 +145,28 @@ describe('one shared scheduler', () => {
 })
 
 describe('change-cover affordance', () => {
-  test('add and edit both show a permanent hint on an existing cover', () => {
+  test('an existing cover carries a centred, always-on call to action', () => {
     for (const path of [
       'components/mobile/AddBookMobile.vue',
       'components/mobile/EditBookMobile.vue',
     ]) {
       const source = read(path)
-      expect(source, path).toContain('cover-change-hint')
-      expect(source, path).toContain('Change cover')
-      // Not hover-gated — a touch screen never hovers.
-      expect(source, path).not.toMatch(/\.cover-container:hover \.cover-change-hint/)
-      expect(source, path).toMatch(/\.cover-change-hint\s*\{[^}]*position:\s*absolute/s)
-      // It must not eat the tap that opens the picker.
-      expect(source, path).toMatch(/\.cover-change-hint\s*\{[^}]*pointer-events:\s*none/s)
+      expect(source, path).toContain('Tap to change cover')
+
+      // Visible whenever there IS a cover, not only on hover — a touch screen
+      // never hovers, so hover-gating meant no affordance at all on a phone.
+      expect(source, path).toMatch(/\.cover-overlay\.active\s*\{[^}]*opacity:\s*1/s)
+      expect(source, path).not.toMatch(/\.cover-container:hover \.cover-overlay\.active\s*\{[^}]*opacity:\s*1/s)
+
+      // A large icon in the middle of the artwork, not a small strip.
+      expect(source, path).toMatch(/\.cover-overlay\s*\{[^}]*justify-content:\s*center/s)
+      expect(source, path).toMatch(/\.cover-overlay i\s*\{[^}]*border-radius:\s*50%/s)
+
+      // Signage only: the container underneath owns the tap.
+      expect(source, path).toMatch(/\.cover-overlay\s*\{[^}]*pointer-events:\s*none/s)
+
+      // The old bottom strip is gone.
+      expect(source, path).not.toContain('cover-change-hint')
     }
   })
 })

@@ -136,15 +136,8 @@
             </div>
             <div class="cover-overlay" :class="{ 'active': coverPreview || editBook.cover }">
               <i class="ri-camera-line"></i>
-              <span>Change Cover</span>
+              <span>Tap to change cover</span>
             </div>
-          <!-- Always visible, not hover-only: a touch screen has no hover, so
-               a cover with an image looked like a plain picture and nobody
-               knew it could be tapped to change. -->
-          <span v-if="coverPreview || editBook.cover" class="cover-change-hint" aria-hidden="true">
-            <i class="ri-camera-line"></i>
-            Change cover
-          </span>
             <input 
               type="file" 
               ref="coverInput" 
@@ -833,23 +826,47 @@ const handleUpdateBook = async () => {
 .cover-overlay {
   position: absolute;
   inset: 0;
-  background: var(--color-background-overlay-strong);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-on-brand);
+  gap: 0.55rem;
+  background: var(--color-background-overlay-strong);
+  color: var(--color-text-on-brand, #fff);
   opacity: 0;
-  transition: opacity 0.2s;
-  gap: 0.5rem;
+  transition: opacity 0.2s, background-color 0.2s;
+  /* The container owns the tap; the overlay is signage. */
+  pointer-events: none;
+}
+
+/* Always on once there IS a cover. A phone never hovers, so the only way to
+   advertise that the artwork is tappable is to say so on top of it — tuned
+   dark enough to read against any cover, light enough to see the art through. */
+.cover-overlay.active {
+  opacity: 1;
+  background: rgba(15, 23, 42, 0.45);
 }
 
 .cover-container:hover .cover-overlay.active {
-  opacity: 1;
+  background: rgba(15, 23, 42, 0.62);
 }
 
 .cover-overlay i {
-  font-size: 2rem;
+  display: grid;
+  width: 3.4rem;
+  height: 3.4rem;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  font-size: 1.8rem;
+}
+
+.cover-overlay span {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
 }
 
 .info-card {
@@ -1423,28 +1440,4 @@ const handleUpdateBook = async () => {
   accent-color: var(--color-brand-primary);
 }
 
-/* The tap affordance. Sits along the bottom of the cover so it reads as an
-   action on the image without hiding it, and it never depends on hover. */
-.cover-change-hint {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  padding: 0.45rem 0.4rem;
-  background: var(--color-background-overlay-strong, rgba(15, 23, 42, 0.72));
-  color: var(--color-text-on-brand, #fff);
-  font-size: 0.78rem;
-  font-weight: 600;
-  line-height: 1;
-  pointer-events: none;
-}
-
-.cover-change-hint i {
-  font-size: 0.95rem;
-}
 </style>
