@@ -445,13 +445,17 @@ const fanStyle = (i, n) => {
   }
 }
 
-/* Selection mode. A thick purple ring marks a picked card — drawn inside with
-   an inset box-shadow so it survives whichever layout and background the card
-   preferences are set to, and follows the card's rounded corners. */
+/* Selection mode. The same thick purple ring the Books page draws: a solid
+   outline set just inside the card so it follows the rounded corners and reads
+   identically to a selected book. (An inset box-shadow looked different from
+   the Books page outline.) */
 .series-card.selected {
-  box-shadow: 0 0 0 3px var(--color-brand-primary) inset;
+  outline: 3px solid var(--color-brand-primary);
+  outline-offset: -3px;
 }
 
+/* Overflow menu trigger. No pill behind it — just the icon, in the same colour
+   as the card's title, so it sits quietly opposite the name. */
 .card-menu-btn {
   position: absolute;
   top: 8px;
@@ -461,12 +465,16 @@ const fanStyle = (i, n) => {
   width: 32px;
   height: 32px;
   place-items: center;
-  border-radius: 50%;
-  background: var(--color-surface-primary);
+  border: 0;
+  background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+}
+
+/* Over cover art the title turns white, so the icon does too. */
+.bg-blur .card-menu-btn {
+  color: #fff;
 }
 </style>

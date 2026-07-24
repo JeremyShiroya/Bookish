@@ -3000,23 +3000,18 @@ onUnmounted(() => {
 }
 
 /* A noted passage carries a small marker so it is findable without tapping
-   every highlight to see which one has writing behind it. It sits at the TOP
-   LEFT of the first word — anchored to the mark's own inline box, nudged just
-   outside it so it reads as a flag on the passage rather than punctuation. */
-:deep(.annotation-mark[data-has-note="true"]) {
-  position: relative;
-}
-
+   every highlight to see which one has writing behind it. Same superscript dot
+   as before — an inline part of the text flow — only moved to the START of the
+   passage (::before with margin-right) instead of the end. */
 :deep(.annotation-mark[data-has-note="true"])::before {
   content: "";
-  position: absolute;
-  top: -0.35em;
-  left: -0.15em;
+  display: inline-block;
   width: 6px;
   height: 6px;
+  margin-right: 3px;
   border-radius: 50%;
   background: var(--color-brand-primary, #8a2be2);
-  pointer-events: none;
+  vertical-align: super;
 }
 
 /* ── Resume-position sheet ─────────────────────────────────────────────── */

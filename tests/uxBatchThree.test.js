@@ -18,6 +18,20 @@ describe('edge-to-edge system bars', () => {
     expect(activity).toContain('setStatusBarColor(Color.TRANSPARENT)')
     expect(activity).toContain('setNavigationBarColor(Color.TRANSPARENT)')
   })
+
+  test('sub-pages (not the tab roots) get the safe-area insets so nothing stretches', () => {
+    const layout = read('layouts/default.vue')
+    // Tab roots carry their own fixed nav bars and must be left alone; every
+    // other page is padded here so it returns to its original position while
+    // the body background fills the bar strips.
+    expect(layout).toContain('TAB_ROOT_PATHS')
+    expect(layout).toContain('isMobileSubPage')
+    expect(layout).toMatch(/\.page-container\.mobile-sub-page\s*\{[^}]*padding-top:\s*env\(safe-area-inset-top\)/s)
+    expect(layout).toMatch(/\.page-container\.mobile-sub-page\s*\{[^}]*padding-bottom:\s*env\(safe-area-inset-bottom\)/s)
+    for (const path of ['/', '/books', '/series', '/favourites', '/playlists']) {
+      expect(layout).toContain(`'${path}'`)
+    }
+  })
 })
 
 describe('books sort filter', () => {
@@ -67,8 +81,17 @@ describe('selection styling', () => {
     expect(card).toMatch(/\.library-book-card\.selected \.card-cover\s*\{[^}]*outline:\s*3px solid var\(--color-brand-primary\)/s)
     // List: the ring wraps the whole card.
     expect(card).toMatch(/\.mobile-list-book-card\.selected\s*\{[^}]*outline:\s*3px solid var\(--color-brand-primary\)/s)
-    // Series/playlist card: an inset ring following the rounded corners.
-    expect(series).toMatch(/\.series-card\.selected\s*\{[^}]*box-shadow:\s*0 0 0 3px var\(--color-brand-primary\) inset/s)
+    // Series/playlist card: the same solid outline as the Books page, so a
+    // selected playlist reads identically to a selected book.
+    expect(series).toMatch(/\.series-card\.selected\s*\{[^}]*outline:\s*3px solid var\(--color-brand-primary\)/s)
+  })
+
+  test('the playlist overflow icon has no pill and takes the title colour', () => {
+    const series = read('components/shared/SeriesCollageCard.vue')
+    expect(series).toMatch(/\.card-menu-btn\s*\{[^}]*background:\s*transparent/s)
+    expect(series).toMatch(/\.card-menu-btn\s*\{[^}]*color:\s*var\(--color-text-primary\)/s)
+    // White over cover art, matching the title.
+    expect(series).toMatch(/\.bg-blur \.card-menu-btn\s*\{[^}]*color:\s*#fff/s)
   })
 })
 
@@ -82,14 +105,19 @@ describe('series suggestion covers', () => {
 })
 
 describe('note badge placement', () => {
-  test('the note flag sits at the top-left of the word', () => {
+  test('the note flag is the inline superscript dot, at the start of the word', () => {
     const reader = read('components/mobile/ReaderMobile.vue')
     const rule = reader.slice(
       reader.indexOf('.annotation-mark[data-has-note="true"])::before'),
       reader.indexOf('.annotation-mark[data-has-note="true"])::before') + 300,
     )
-    expect(rule).toMatch(/top:\s*-0\.35em/)
-    expect(rule).toMatch(/left:\s*-0\.15em/)
+    // Same inline superscript dot as before — only margin-right (start of the
+    // word) instead of the old margin-left (end).
+    expect(rule).toMatch(/display:\s*inline-block/)
+    expect(rule).toMatch(/margin-right:\s*3px/)
+    expect(rule).toMatch(/vertical-align:\s*super/)
+    // Not the absolute-positioned floating variant.
+    expect(rule).not.toMatch(/position:\s*absolute/)
     // No trailing ::after badge on the right any more.
     expect(reader).not.toContain('data-has-note="true"])::after')
   })
