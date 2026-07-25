@@ -5,10 +5,20 @@ import { mergeMetadataIntoBook } from '~/composables/useDeviceLibrarySync'
 // Library-wide metadata backfill used by Settings → Storage. Walks every book
 // that is missing details, fetches metadata, and fills ONLY empty fields.
 
+// A book still needs its SERIES worked out when it has no series name and we
+// have not yet looked. `seriesChecked` records that we asked the sources and
+// they said "standalone" — without it, a genuine standalone would be re-queried
+// forever, and (worse, before this) a book that IS in a series was never
+// queried at all, because a missing series name was not treated as a gap. That
+// is what forced the reader to set so many series by hand.
+export function needsSeriesLookup(book) {
+  return !String(book?.series ?? '').trim() && !book?.seriesChecked
+}
+
 // Every gap the details check looks for: an empty cover, author, blurb, genre,
-// year, or Goodreads rating — plus, for a book that belongs to a series, its
-// series name, installment number and total. Format ("book type") is set at
-// import from the file itself, so it is never missing and not checked here.
+// year, or Goodreads rating; a book's SERIES name if it hasn't been determined;
+// and, once a series IS known, its installment number and total. Format ("book
+// type") is set at import from the file itself, so it is never missing here.
 export function missingMetadataFields(book) {
   if (!book?.title) return []
   const missing = []
@@ -21,8 +31,12 @@ export function missingMetadataFields(book) {
   // webReview carries the Goodreads star rating.
   if (!book.webReview || !(Number(book.webReview.rating) > 0)) missing.push('goodreadsRating')
 
-  // Series details only count as gaps once we know the book is in a series.
-  if (String(book.series ?? '').trim()) {
+  if (needsSeriesLookup(book)) {
+    // The series NAME itself is unknown — go and find out whether this book
+    // belongs to one.
+    missing.push('series')
+  } else if (String(book.series ?? '').trim()) {
+    // The series is known; top up its installment and total.
     if (!book.seriesInstallment) missing.push('seriesInstallment')
     if (!(Number(book.seriesTotal) > 0)) missing.push('seriesTotal')
   }
@@ -32,6 +46,25 @@ export function missingMetadataFields(book) {
 
 export function bookNeedsMetadata(book) {
   return missingMetadataFields(book).length > 0
+}
+
+// Apply a fetched result to a book, filling only empty fields. When the book
+// had no series and — after a genuine lookup — still has none, it is marked
+// `seriesChecked` so a true standalone stops being re-queried. Returns
+// { record, filled }: `record` is null when nothing at all changed.
+export function applyMetadataResult(book, meta, { didLookup = true } = {}) {
+  const hadNoSeries = !String(book?.series ?? '').trim()
+  const merged = mergeMetadataIntoBook(book, meta)
+  const stillNoSeries = !String((merged || book).series ?? '').trim()
+
+  // Only conclude "standalone" when we actually asked and matched a result —
+  // a lookup that found nothing at all must not silently mark the book.
+  const resolveStandalone = didLookup && hadNoSeries && stillNoSeries && !book?.seriesChecked
+
+  if (!merged && !resolveStandalone) return { record: null, filled: false }
+  const record = { ...(merged || book) }
+  if (resolveStandalone) record.seriesChecked = true
+  return { record, filled: !!merged }
 }
 
 export async function backfillLibraryMetadata({ books, updateBook, onProgress, shouldStop } = {}) {
@@ -48,10 +81,12 @@ export async function backfillLibraryMetadata({ books, updateBook, onProgress, s
       // light: this is a bulk sweep over the whole library — skip the blind
       // publisher-site crawl, which costs ~15s a book for occasional extras.
       const results = await fetchBookMetadataResults(book.title, book.author || undefined, undefined, { light: true })
-      const merged = mergeMetadataIntoBook(book, results?.[0])
-      if (merged) {
-        await updateBook(merged)
-        updated += 1
+      const { record, filled } = applyMetadataResult(book, results?.[0], { didLookup: !!results?.length })
+      if (record) {
+        // A record with no fill is a standalone we just confirmed — persist the
+        // seriesChecked mark, but it does not count as an update.
+        await updateBook(record)
+        if (filled) updated += 1
       } else if (!results?.length) {
         failures.push({ id: book.id, title: book.title, reason: 'No metadata results found' })
       } else {

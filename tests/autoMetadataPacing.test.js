@@ -14,6 +14,8 @@ const read = (path) => readFileSync(resolve(root, path), 'utf8')
 const complete = {
   title: 'A Book', author: 'An Author', blurb: 'words', genre: 'Fiction',
   publishYear: 2020, cover: 'https://x/cover.jpg', webReview: { rating: 4.2 },
+  // A standalone whose series has already been resolved.
+  seriesChecked: true,
 }
 
 describe('adaptive cooldown', () => {
@@ -44,6 +46,12 @@ describe('adaptive cooldown', () => {
 describe('skipping the slow source when it has nothing to add', () => {
   test('Goodreads is needed for the rating', () => {
     expect(needsGoodreads({ ...complete, webReview: null })).toBe(true)
+  })
+
+  test('Goodreads is needed to determine an unknown series name', () => {
+    expect(needsGoodreads({ ...complete, series: '', seriesChecked: false })).toBe(true)
+    // Once resolved standalone, it is not.
+    expect(needsGoodreads({ ...complete, series: '', seriesChecked: true })).toBe(false)
   })
 
   test('Goodreads is needed for a series position', () => {

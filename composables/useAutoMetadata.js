@@ -17,8 +17,7 @@
 
 import { reactive, readonly } from 'vue'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
-import { mergeMetadataIntoBook } from '~/composables/useDeviceLibrarySync'
-import { bookNeedsMetadata, missingMetadataFields } from '~/composables/useMetadataBackfill'
+import { applyMetadataResult, bookNeedsMetadata, missingMetadataFields } from '~/composables/useMetadataBackfill'
 
 // Pacing.
 //
@@ -86,7 +85,7 @@ export function metadataResultMatchesBook(book, result) {
 // so cross-verification is untouched. It only skips a source that has nothing
 // left to contribute.
 const GOODREADS_ONLY_FIELDS = new Set([
-  'goodreadsRating', 'seriesInstallment', 'seriesTotal',
+  'goodreadsRating', 'series', 'seriesInstallment', 'seriesTotal',
 ])
 
 export function needsGoodreads(book) {
@@ -179,15 +178,14 @@ async function fillOne(book) {
     { light: true, skipGoodreads: !needsGoodreads(book) },
   )
   const top = results?.[0]
-  // Verify before trusting: only merge a result that is really this book.
-  const merged = metadataResultMatchesBook(book, top)
-    ? mergeMetadataIntoBook(book, top)
-    : null
+  // Verify before trusting: only apply a result that is really this book.
+  const matched = metadataResultMatchesBook(book, top)
+  const { record, filled } = applyMetadataResult(book, matched ? top : null, { didLookup: matched })
   // Stamp the check either way so an unfillable book waits a day before its
-  // next attempt. Merge on top of `merged` so a successful fill keeps its new
-  // fields.
-  await _deps.updateBook({ ...(merged || book), metaCheckedAt: Date.now() })
-  return !!merged
+  // next attempt, on top of whatever the result filled (series-checked flag
+  // included).
+  await _deps.updateBook({ ...(record || book), metaCheckedAt: Date.now() })
+  return filled
 }
 
 async function runCycle() {

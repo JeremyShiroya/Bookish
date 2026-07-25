@@ -6,8 +6,10 @@ import {
   pickAutoTargets,
 } from '../composables/useAutoMetadata.js'
 import {
+  applyMetadataResult,
   bookNeedsMetadata,
   missingMetadataFields,
+  needsSeriesLookup,
 } from '../composables/useMetadataBackfill.js'
 
 const root = resolve(process.cwd())
@@ -17,6 +19,9 @@ describe('missing-details detection', () => {
   const complete = {
     title: 'A Book', author: 'An Author', blurb: 'words', genre: 'Fiction',
     publishYear: 2020, cover: 'https://x/cover.jpg', webReview: { rating: 4.2 },
+    // A standalone whose series has already been determined — otherwise the
+    // unknown series name is itself a gap.
+    seriesChecked: true,
   }
 
   test('a fully populated standalone book has no gaps', () => {
@@ -40,17 +45,49 @@ describe('missing-details detection', () => {
     expect(missingMetadataFields({ ...complete, webReview: { rating: 0 } })).toContain('goodreadsRating')
   })
 
-  test('series details are only gaps once the book is in a series', () => {
-    const standalone = { ...complete, series: '' }
-    expect(missingMetadataFields(standalone)).not.toContain('seriesInstallment')
+  test('an unknown series name is itself a gap, until it has been checked', () => {
+    // This is the fix for series never being auto-filled: a book with no series
+    // set is looked up, not left for the reader to fill by hand.
+    const unknown = { ...complete, series: '', seriesChecked: false }
+    expect(missingMetadataFields(unknown)).toContain('series')
+    expect(needsSeriesLookup(unknown)).toBe(true)
 
+    // Once checked and found standalone, the series stops being a gap.
+    const checked = { ...complete, series: '', seriesChecked: true }
+    expect(missingMetadataFields(checked)).not.toContain('series')
+    expect(needsSeriesLookup(checked)).toBe(false)
+  })
+
+  test('installment and total become gaps once the series name is known', () => {
     const seriesBook = { ...complete, series: 'The Saga' }
     const gaps = missingMetadataFields(seriesBook)
+    expect(gaps).not.toContain('series')
     expect(gaps).toContain('seriesInstallment')
     expect(gaps).toContain('seriesTotal')
 
     const filled = { ...seriesBook, seriesInstallment: 2, seriesTotal: 5 }
     expect(missingMetadataFields(filled)).toEqual([])
+  })
+
+  test('applying a result that finds no series marks the standalone as checked', () => {
+    const book = { ...complete, series: '', seriesChecked: false }
+    const { record, filled } = applyMetadataResult(book, { title: 'A Book' }, { didLookup: true })
+    expect(record.seriesChecked).toBe(true)
+    expect(filled).toBe(false)
+    // ...and a lookup that returned nothing at all does NOT conclude standalone.
+    expect(applyMetadataResult(book, null, { didLookup: false }).record).toBeNull()
+  })
+
+  test('applying a result that finds a series fills it and does not mark checked', () => {
+    const book = { ...complete, series: '', seriesChecked: false }
+    const { record, filled } = applyMetadataResult(
+      book, { title: 'A Book', series: 'The Saga', seriesInstallment: 1 }, { didLookup: true },
+    )
+    expect(record.series).toBe('The Saga')
+    expect(record.seriesInstallment).toBe(1)
+    // A series was found, so it is not marked "checked, standalone".
+    expect(record.seriesChecked).not.toBe(true)
+    expect(filled).toBe(true)
   })
 })
 
@@ -103,7 +140,7 @@ describe('auto-target selection', () => {
   test('only books with gaps are picked', () => {
     const books = [
       { id: 'a', title: 'Gap', author: '' },
-      { id: 'b', title: 'Full', author: 'Auth', blurb: 'b', genre: 'g', publishYear: 2000, cover: 'http://c', webReview: { rating: 4 } },
+      { id: 'b', title: 'Full', author: 'Auth', blurb: 'b', genre: 'g', publishYear: 2000, cover: 'http://c', webReview: { rating: 4 }, seriesChecked: true },
     ]
     expect(pickAutoTargets(books, { now }).map((b) => b.id)).toEqual(['a'])
   })
