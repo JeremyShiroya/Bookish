@@ -68,12 +68,16 @@ const readCache = (seriesName, neededInstallments = []) => {
     // question being asked — it must resolve at least one of the installments
     // the library is currently missing. Anything less retries on the short
     // TTL, so blank slots only ever mean "the last fetch failed recently".
+    // A cached roster only earns the long TTL when it answers the question in
+    // FULL — every installment the library is missing. Settling for "resolved
+    // at least one" is what left series stuck showing empty slots for 30 days:
+    // a roster covering 1-28 of 30 looked like a success and was never retried.
     const needed = (neededInstallments || []).map(Number).filter(Number.isFinite)
-    const useful = installments
+    const complete = installments
       && Object.keys(installments).length
-      && (!needed.length || needed.some((installment) => installments[installment]))
+      && (!needed.length || needed.every((installment) => installments[installment]))
 
-    const ttl = useful ? CACHE_TTL_MS : EMPTY_CACHE_TTL_MS
+    const ttl = complete ? CACHE_TTL_MS : EMPTY_CACHE_TTL_MS
     if (Date.now() - (parsed.savedAt || 0) > ttl) return null
     return installments
   } catch {
@@ -157,6 +161,51 @@ const indexRoster = (payload, seriesName) => {
   return installments
 }
 
+// Union of two installment maps: existing entries win on a field-by-field
+// basis, so a later thinner roster tops up gaps without ever removing detail.
+export function mergeInstallments(existing = {}, incoming = {}) {
+  const merged = { ...existing }
+  for (const [installment, entry] of Object.entries(incoming || {})) {
+    if (!entry) continue
+    const current = merged[installment]
+    merged[installment] = current
+      ? {
+        title: current.title || entry.title || null,
+        author: current.author || entry.author || null,
+        cover: current.cover || entry.cover || null,
+        year: current.year || entry.year || null,
+      }
+      : entry
+  }
+  return merged
+}
+
+// Give a different owned book the first go each time a series is retried, so a
+// series that keeps resolving partially isn't asked the same failing question
+// forever. Deterministic per attempt count, not random, so it is testable.
+export function rotateSeeds(seeds, seriesName, attempt = attemptCountFor(seriesName)) {
+  const list = (seeds || []).filter(Boolean)
+  if (list.length < 2) return list.slice(0, 2)
+  const offset = attempt % list.length
+  return [...list.slice(offset), ...list.slice(0, offset)].slice(0, 3)
+}
+
+// How many times this series has been fetched, so seed rotation can advance.
+const ATTEMPT_PREFIX = 'bookish:series-attempts:'
+
+function attemptCountFor(seriesName) {
+  if (typeof localStorage === 'undefined') return 0
+  return Number(localStorage.getItem(ATTEMPT_PREFIX + normalizeSeriesKey(seriesName))) || 0
+}
+
+function bumpAttemptCount(seriesName) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    const key = ATTEMPT_PREFIX + normalizeSeriesKey(seriesName)
+    localStorage.setItem(key, String((Number(localStorage.getItem(key)) || 0) + 1))
+  } catch {}
+}
+
 // Fetch (and cache) the resolvable installments for a series, seeded by the
 // books the user owns. `neededInstallments` — the numbers the library is
 // missing — decides whether a cached result is still useful.
@@ -171,20 +220,29 @@ export const fetchSeriesInstallments = async (seriesName, seedBooks = [], needed
     return cached
   }
 
-  // Seed from up to two owned books: if the first can't be followed to a series
-  // page, the second might.
-  const seeds = seedBooks.filter((book) => book?.title).slice(0, 2)
-  let installments = {}
+  // Start from whatever is already on disk: a fetch that comes back thinner
+  // than last time must never erase installments already resolved.
+  let installments = { ...(readCacheRaw(seriesName) || {}) }
+
+  // Every seed gets a turn, and the results are merged. Stopping at the first
+  // seed that returned anything meant a thin roster won over a fuller one that
+  // the next owned book would have found. Seeds are rotated per attempt so a
+  // series that keeps coming back partial tries a different door each cycle.
+  const seeds = rotateSeeds(seedBooks.filter((book) => book?.title), seriesName)
+  const needed = (neededInstallments || []).map(Number).filter(Number.isFinite)
+
   for (const seed of seeds) {
     try {
       const roster = await fetchRoster(seed.title, seed.author || undefined, seriesName)
-      installments = indexRoster(roster, seriesName)
-      if (Object.keys(installments).length) break
+      installments = mergeInstallments(installments, indexRoster(roster, seriesName))
     } catch {
       // Try the next owned book before giving up.
     }
+    // Stop early only when the gaps are actually closed.
+    if (needed.length && needed.every((n) => installments[n])) break
   }
 
+  bumpAttemptCount(seriesName)
   writeCache(seriesName, installments)
   store.value = { ...store.value, [key]: installments }
   return installments

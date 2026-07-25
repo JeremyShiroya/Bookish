@@ -26,3 +26,5 @@ logs
 # Git worktrees
 .worktrees/
 .claude/worktrees/
+apk file/
+android/app/release/

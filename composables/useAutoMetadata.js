@@ -133,6 +133,11 @@ const autoState = reactive({
   lastUpdated: 0, // books filled in the last cycle
   totalUpdated: 0, // books filled since this session started
   pending: 0, // books still carrying a gap
+  // Progress reporting for Settings → Storage.
+  batchTotal: 0, // books in the batch being worked right now
+  batchDone: 0, // how many of them are finished
+  nextRunAt: 0, // epoch ms the next cycle is due
+  lastError: 0, // failures in the last cycle
 })
 
 let _timer = null
@@ -199,6 +204,8 @@ async function runCycle() {
 
   autoState.running = true
   autoState.lastUpdated = 0
+  autoState.batchTotal = targets.length
+  autoState.batchDone = 0
   let failed = 0
   try {
     // Concurrently, not in single file: each lookup is almost entirely waiting
@@ -220,6 +227,7 @@ async function runCycle() {
           // A source was down or rate-limited; leave the book for a later cycle.
           failed += 1
         }
+        autoState.batchDone += 1
       }
     }
     await Promise.all(Array.from({ length: lanes }, worker))
@@ -227,6 +235,7 @@ async function runCycle() {
   } finally {
     autoState.running = false
     autoState.lastRunAt = Date.now()
+    autoState.lastError = failed
   }
 }
 
@@ -250,7 +259,9 @@ async function loop() {
       ? 0
       : countPendingTargets(_deps.getBooks())
     autoState.pending = pending
-    await wait(nextCooldownMs({ pending, attempted, failed, isForeground: foreground() }))
+    const rest = nextCooldownMs({ pending, attempted, failed, isForeground: foreground() })
+    autoState.nextRunAt = Date.now() + rest
+    await wait(rest)
   }
 }
 

@@ -53,6 +53,22 @@
         />
       </label>
 
+      <!-- What the background scan is doing right now, in plain words. -->
+      <ul v-if="settings.metadataAutoFill" class="scan-status">
+        <li>
+          <i :class="autoMeta.running ? 'ri-loader-4-line spin' : 'ri-time-line'"></i>
+          <span>{{ scanNowLabel }}</span>
+        </li>
+        <li>
+          <i class="ri-history-line"></i>
+          <span>{{ lastScanLabel }}</span>
+        </li>
+        <li>
+          <i class="ri-calendar-schedule-line"></i>
+          <span>{{ nextScanLabel }}</span>
+        </li>
+      </ul>
+
       <div v-if="backfill.running" class="backfill-progress">
         <div class="backfill-progress-labels">
           <span class="backfill-title">{{ backfill.currentTitle }}</span>
@@ -179,7 +195,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLibraryBackfill } from '~/composables/useMetadataBackfill'
 import { useAutoMetadata } from '~/composables/useAutoMetadata'
@@ -242,6 +258,51 @@ const showFailures = ref(false)
 const setAutoMetadata = (on) => updateSettings({ metadataAutoFill: !!on })
 
 // A plain-language read on what the background top-up is doing right now.
+// A ticking clock so "next scan in x" counts down instead of freezing at
+// whatever it said when the page opened.
+const nowTick = ref(Date.now())
+let _tickTimer = null
+onMounted(() => { _tickTimer = setInterval(() => { nowTick.value = Date.now() }, 1000) })
+onUnmounted(() => { if (_tickTimer) clearInterval(_tickTimer) })
+
+const relativeTime = (ms) => {
+  const seconds = Math.max(0, Math.round(ms / 1000))
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'}`
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`
+  const hours = Math.round(minutes / 60)
+  return `${hours} hour${hours === 1 ? '' : 's'}`
+}
+
+const scanNowLabel = computed(() => {
+  if (!autoMeta.running) {
+    return autoMeta.pending
+      ? `${autoMeta.pending} book${autoMeta.pending === 1 ? '' : 's'} still waiting on details.`
+      : 'Every book has its details.'
+  }
+  const { batchDone, batchTotal } = autoMeta
+  return batchTotal
+    ? `Scanning now — book ${Math.min(batchDone + 1, batchTotal)} of ${batchTotal}.`
+    : 'Scanning now…'
+})
+
+const lastScanLabel = computed(() => {
+  if (!autoMeta.lastRunAt) return 'No scan has run yet this session.'
+  const ago = relativeTime(nowTick.value - autoMeta.lastRunAt)
+  const filled = autoMeta.lastUpdated
+    ? ` — filled ${autoMeta.lastUpdated} book${autoMeta.lastUpdated === 1 ? '' : 's'}`
+    : ''
+  return `Last scan finished ${ago} ago${filled}.`
+})
+
+const nextScanLabel = computed(() => {
+  if (autoMeta.running) return 'Next scan starts when this one finishes.'
+  if (!autoMeta.nextRunAt) return 'First scan starts shortly after opening the app.'
+  const remaining = autoMeta.nextRunAt - nowTick.value
+  if (remaining <= 0) return 'Next scan starting…'
+  return `Next scan in ${relativeTime(remaining)}.`
+})
+
 const autoStatusLabel = computed(() => {
   if (!settings.value.metadataAutoFill) return 'Off — details are only filled when you tap the button below.'
   if (autoMeta.running) return 'Checking your library now…'
@@ -679,6 +740,40 @@ onMounted(() => {
   color: var(--color-text-muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.scan-status {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 12px;
+  background: var(--color-surface-secondary);
+  list-style: none;
+}
+
+.scan-status li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.scan-status i {
+  flex-shrink: 0;
+  color: var(--color-brand-primary);
+  font-size: 14px;
+}
+
+.scan-status .spin {
+  animation: storage-spin 0.9s linear infinite;
+}
+
+@keyframes storage-spin {
+  to { transform: rotate(360deg); }
 }
 
 .auto-switch {

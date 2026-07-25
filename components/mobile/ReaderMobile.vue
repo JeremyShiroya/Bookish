@@ -188,6 +188,7 @@
           class="reader-mobile-pdf"
           @touchend="onSelectionSettled"
           @mouseup="onSelectionSettled"
+          @click="onScrollTap"
           @contextmenu.prevent
         >
           <PdfViewer
@@ -622,6 +623,19 @@
           <div class="sheet-grabber"></div>
           <h2>Narrator</h2>
 
+          <!-- One dropped fetch flips narration to the phone's own voices for
+               the rest of the session, with no way back. This is the way back. -->
+          <button
+            v-if="useOfflineVoice"
+            type="button"
+            class="retry-online-voices"
+            :disabled="retryingOnlineVoices"
+            @click="retryNaturalVoices"
+          >
+            <i :class="retryingOnlineVoices ? 'ri-loader-4-line spin' : 'ri-refresh-line'"></i>
+            {{ retryingOnlineVoices ? 'Reconnecting…' : 'Use natural voices again' }}
+          </button>
+
           <div class="voice-list" role="listbox" aria-label="Narrator voices">
             <button
               v-for="voice in displayVoices"
@@ -702,6 +716,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { onCoverError } from "~/composables/useCoverFallback";
+import { offeredDeviceVoices } from "~/composables/tts/nativeSpeech";
 import { shouldAskWhereToResume } from "~/composables/useResumePrompt";
 import { firstChunkForPage, pageForChunk } from "~/composables/usePdfManifest";
 import PdfViewer from "~/components/shared/PdfViewer.vue";
@@ -819,6 +834,7 @@ const {
   setSpeed,
   setVoice,
   loadDeviceVoices,
+  retryOnlineVoices,
   setNativeVoice,
 } = useTTS();
 
@@ -828,6 +844,7 @@ const mediaOpen = ref(false);
 const displayOpen = ref(false);
 const voicePickerOpen = ref(false);
 const narratorOpen = ref(false);
+const retryingOnlineVoices = ref(false);
 const tocModalOpen = ref(false);
 
 // ── Table of contents ───────────────────────────────────────────────────────
@@ -1129,21 +1146,15 @@ const useOfflineVoice = computed(() => (
 ));
 
 // Device voices as picker options: id "native:<index>" into ttsNativeVoices.
-// Deduped by name, with a language hint, and an "auto" entry that lets the OS
-// choose per language.
-const deviceVoiceOptions = computed(() => {
-  const seen = new Set();
-  const options = [{ id: "native:-1", name: OFFLINE_VOICE.name }];
-  (ttsNativeVoices.value || []).forEach((voice, index) => {
-    const label = String(voice?.name || voice?.lang || `Voice ${index + 1}`).trim();
-    const lang = String(voice?.lang || "").replace("_", "-");
-    const name = lang && !label.toLowerCase().includes(lang.toLowerCase()) ? `${label} · ${lang}` : label;
-    if (seen.has(name)) return;
-    seen.add(name);
-    options.push({ id: `native:${index}`, name });
-  });
-  return options;
-});
+// Restricted to the three English locales the reader offers, and listing every
+// variant each ships rather than one per name — see offeredDeviceVoices.
+const deviceVoiceOptions = computed(() => [
+  { id: "native:-1", name: OFFLINE_VOICE.name },
+  ...offeredDeviceVoices(ttsNativeVoices.value).map((voice) => ({
+    id: `native:${voice.index}`,
+    name: voice.name,
+  })),
+]);
 
 const displayVoices = computed(() => (useOfflineVoice.value ? deviceVoiceOptions.value : ttsVoices.value));
 const activeVoiceId = computed(() =>
@@ -1344,9 +1355,36 @@ const readerMode = ref("listen");
 // Listen mode is never left without controls.
 const chromeHidden = ref(false);
 
+// Once summoned, the chrome steps back out of the way on its own — a reader
+// who tapped to check the page number should not have to tap again to get the
+// page back. Any further interaction restarts the countdown.
+const CHROME_AUTOHIDE_MS = 4000;
+let _chromeHideTimer = null;
+
+const cancelChromeAutoHide = () => {
+  if (_chromeHideTimer) clearTimeout(_chromeHideTimer);
+  _chromeHideTimer = null;
+};
+
+const scheduleChromeAutoHide = () => {
+  cancelChromeAutoHide();
+  if (readerMode.value !== "read" || chromeHidden.value) return;
+  _chromeHideTimer = setTimeout(() => {
+    _chromeHideTimer = null;
+    // Never yank it away mid-task: a sheet or a selection means the reader is
+    // still using it.
+    if (readerMode.value !== "read") return;
+    if (selectionMenu.value.visible || noteEditor.value.visible) return;
+    if (mediaOpen.value || displayOpen.value || tocModalOpen.value || narratorOpen.value) return;
+    if (resumeChoice.value.visible) return;
+    chromeHidden.value = true;
+  }, CHROME_AUTOHIDE_MS);
+};
+
 const toggleChrome = () => {
   if (readerMode.value !== "read") return;
   chromeHidden.value = !chromeHidden.value;
+  scheduleChromeAutoHide();
 };
 
 // Scroll mode has no page-turn zones, so any tap that is not a text selection
@@ -1393,6 +1431,7 @@ const setReaderMode = (mode) => {
   if (mode === "listen") sampleScrollChunk();
   readerMode.value = mode;
   chromeHidden.value = mode === "read";
+  cancelChromeAutoHide();
   try {
     localStorage.setItem(READER_MODE_KEY, mode);
   } catch {}
@@ -1661,6 +1700,25 @@ watch([activeListenChunk, listenStartChunk, listenChunks], (next, prev) => {
 watch(readerMode, (mode) => {
   if (mode === "listen") syncListenOffset({ resetEls: true });
 });
+
+// Ask the engine to go back to the cloud narrators. It reports whether it
+// actually managed it, so a still-dead connection says so instead of silently
+// falling back a second time.
+const retryNaturalVoices = async () => {
+  if (retryingOnlineVoices.value) return;
+  retryingOnlineVoices.value = true;
+  try {
+    const restored = await retryOnlineVoices();
+    if (restored) {
+      addToast("Natural voices are back.", "success");
+      narratorOpen.value = false;
+    } else {
+      addToast("Still can't reach the natural voices — check your connection.", "error");
+    }
+  } finally {
+    retryingOnlineVoices.value = false;
+  }
+};
 
 const chooseVoice = (voiceId) => {
   applyVoiceChoice(voiceId);
@@ -2067,6 +2125,7 @@ onUnmounted(() => {
   window.removeEventListener("online", updateOnlineStatus);
   window.removeEventListener("offline", updateOnlineStatus);
   cancelLongPress();
+  cancelChromeAutoHide();
   _pageMapToken += 1;
   _placeholderObserver?.disconnect();
   if (_mountScrollRaf !== null) cancelAnimationFrame(_mountScrollRaf);
@@ -2979,6 +3038,37 @@ onUnmounted(() => {
    recalculation of the entire book subtree on every toggle, which on a long
    book was a visible stall. The chrome is fixed and opaque, so showing it never
    moves a word of text. */
+.retry-online-voices {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--color-brand-primary);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-brand-primary) 12%, transparent);
+  color: var(--color-brand-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.retry-online-voices:disabled {
+  opacity: 0.6;
+}
+
+.retry-online-voices .spin {
+  animation: reader-spin 0.9s linear infinite;
+}
+
+@keyframes reader-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Highlights and notes ──────────────────────────────────────────────────
    Painted as <mark> around the book's own text. `color: inherit` matters: a
    mark's default black would fight the dark and Book-brown reader themes. */

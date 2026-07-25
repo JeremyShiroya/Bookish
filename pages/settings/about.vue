@@ -5,29 +5,34 @@
     <section class="about-card" aria-labelledby="about-title">
 
       <div class="about-copy">
+
         <p>
-          <strong>Pages</strong> is a local-first library for keeping books, favourites,
-          playlists, reading status, and read-aloud sessions together in one calm workspace.
-        </p>
-        <p>
-          It is built for readers who want their collection to feel personal without needing an
-          account or cloud sync. Your day-to-day library data stays in this browser unless you
-          choose to export it.
-        </p>
-        <p>
-          Use Pages to add books, group series, track what you are reading, listen from the
-          player, and carry your backup with you through Storage import and export.
+          <strong>Pages</strong> is a private mobile library for readers who value simplicity, beautiful 
+          design, and complete control. Keep your books, series, favourites, playlists, and reading 
+          progress on your device, while enjoying natural read-aloud voices in a clean, intuitive reading experience.
         </p>
 
         <p>
-          Special thanks to <strong>Hope Makena Mutinda</strong>, who served as a key source of inspiration and provided 
-          invaluable support through beta testing and feedback during the creation of the project.
+          <strong>Pages</strong> was created by <strong>Jeremy Shiroya</strong>, a Kenya-based developer 
+          and lifelong reader who believes reading apps should be simple, beautiful, and free. Inspired 
+          by his own love of books, he built Pages to offer a clean, intuitive experience that puts books first. 
+          Frustrated that many popular apps hide great features behind subscriptions while free 
+          alternatives often compromise on design, Jeremy created Pages as a different kind of 
+          reading app: thoughtfully designed, reader-first, and accessible to everyone. 
+          Pages is a statement that enjoying books shouldn't come at a price. It continues to evolve 
+          with new features for readers, and it always will be completely free to use.
+        </p>
+
+        <p>
+          Special thanks to my love, <strong>Hope Makena Mutinda</strong>(Pending "Shiroya"), for her encouragement, thoughtful
+          feedback, and dedicated beta testing throughout the development of Pages. Her support helped
+          shape the app into what it is today.
         </p>
       </div>
 
+
       <p class="closing-copy">
-        Pages keeps library management, listening defaults, and storage tools visible so you can
-        shape the app around your own reading habits.
+        Pages is Built by a reader, for readers.
       </p>
     </section>
   </main>

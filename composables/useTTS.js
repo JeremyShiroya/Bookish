@@ -279,9 +279,13 @@ export function resolvePlaybackChunks({
   explicitChunks = [],
 } = {}) {
   if (String(format).toLowerCase() === 'pdf' && Array.isArray(explicitChunks)) {
-    return explicitChunks
-      .map(chunk => String(chunk || '').trim())
-      .filter(Boolean)
+    // NO filter. A PDF's playback chunks come straight from the manifest, and
+    // the reader highlights by manifest chunk id — which is the array index.
+    // Dropping the empties re-indexed everything after the first one, so the
+    // overlay lit the sentence BEFORE the one being spoken, drifting further
+    // with each empty. Blanks stay in place as positional holes; the playback
+    // loop skips over them instead.
+    return explicitChunks.map(chunk => String(chunk || '').trim())
   }
   return buildReadableChunks(html).chunks
 }
@@ -846,6 +850,21 @@ export const useTTS = () => {
       _persistSession()
       return
     }
+    // A PDF manifest can contain positionally-empty chunks (a page number, a
+    // running header). They are kept so the indices stay aligned with the
+    // manifest, so step over them here rather than trying to speak nothing.
+    while (_chunkIdx < _chunks.length && !String(_chunks[_chunkIdx] || '').trim()) {
+      _chunkIdx += 1
+    }
+    if (_chunkIdx >= _chunks.length) {
+      ttsStatus.value = 'idle'
+      ttsProgress.value = 100
+      ttsCurrentChunk.value = ''
+      _stopKeepAlive()
+      _persistSession()
+      return
+    }
+
     _updateProgress()
     const requestedChunkIdx = _chunkIdx
     const requestedChunkText = _chunks[requestedChunkIdx] || ''
@@ -1179,6 +1198,33 @@ export const useTTS = () => {
     return ttsNativeVoices.value
   }
 
+  // "Use natural voices again".
+  //
+  // A single failed fetch — a throttled socket on a backgrounded WebView, a
+  // blip of signal — flips the engine to the phone's own voices, and it has no
+  // way back on its own: ttsUsingDeviceVoice stays true for the rest of the
+  // session even once the connection is fine. This clears the fallback, drops
+  // the cached device audio, and re-speaks the current sentence over the
+  // network. Returns false when there is plainly still no connection, so the
+  // caller can say so rather than silently failing again.
+  const retryOnlineVoices = async () => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return false
+
+    ttsUsingDeviceVoice.value = false
+    _clearAudioCache()
+    _prefetchChunk = null
+    _prefetchGeneration += 1
+
+    if (ttsStatus.value === 'playing') {
+      _cancelAudio()
+      await _speakNextEdge()
+    } else if (ttsStatus.value === 'paused') {
+      _cancelAudio()
+    }
+    // The fallback re-arms itself if the very next fetch fails again.
+    return !ttsUsingDeviceVoice.value
+  }
+
   // Pick a specific device voice by its index in ttsNativeVoices (the offline
   // narrator picker). Re-speaks the current chunk with it.
   const setNativeVoice = (index) => {
@@ -1328,7 +1374,7 @@ export const useTTS = () => {
     elapsedTime, totalTime,
     play, pause, resume, togglePlay, stop, restart, restoreLastSession,
     setSpeed, setVolume, setVoice, seekToProgress, skipChunks, skipSeconds, seekToChunk,
-    loadDeviceVoices, setNativeVoice,
+    loadDeviceVoices, setNativeVoice, retryOnlineVoices,
     setChapterBoundaries, prewarmText,
   }
 }

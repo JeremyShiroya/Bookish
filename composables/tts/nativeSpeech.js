@@ -37,6 +37,62 @@ export async function loadNativeVoices() {
   return _voicesCache
 }
 
+// The only device locales the picker offers. The OS ships dozens, most of them
+// languages this reader will never use, which buried the handful that matter.
+export const DEVICE_VOICE_LOCALES = ['en-AU', 'en-GB', 'en-US']
+
+const LOCALE_LABELS = {
+  'en-au': 'English (Australia)',
+  'en-gb': 'English (UK)',
+  'en-us': 'English (US)',
+}
+
+const normalizeLocale = (value) => String(value || '').replace('_', '-').toLowerCase()
+
+export function isOfferedDeviceLocale(voice) {
+  const lang = normalizeLocale(voice?.lang)
+  return DEVICE_VOICE_LOCALES.some((locale) => lang === locale.toLowerCase())
+}
+
+// Android's Google voices are named like "en-us-x-tpf-local" — the variant code
+// carries no documented gender, so gender is only claimed when the name really
+// says so (some OEM engines do label theirs). Everything else is offered
+// unlabelled rather than guessed at.
+const FEMALE_NAME_HINT = /\b(?:female|woman)\b|zira|jenny|aria|sonia|natasha|samantha|karen|moira|tessa|fiona/i
+const MALE_NAME_HINT = /\b(?:male|man)\b|david|guy|ryan|christopher|davis|daniel|alex|fred|oliver|arthur|william/i
+
+export function describeDeviceVoice(voice, indexWithinLocale = 0) {
+  const lang = normalizeLocale(voice?.lang)
+  const localeLabel = LOCALE_LABELS[lang] || voice?.lang || 'Device voice'
+  const raw = String(voice?.name || '')
+  const gender = FEMALE_NAME_HINT.test(raw)
+    ? 'Female'
+    : MALE_NAME_HINT.test(raw)
+      ? 'Male'
+      : ''
+  const variant = gender || `Voice ${indexWithinLocale + 1}`
+  return `${localeLabel} · ${variant}`
+}
+
+// Every offered voice, in locale order, keyed by its ORIGINAL index so the
+// engine can still select it. Deduping by display name used to collapse the
+// several variants each locale ships — which is why only one voice per locale
+// (and so seemingly only female ones) ever showed up.
+export function offeredDeviceVoices(voices) {
+  const list = Array.isArray(voices) ? voices : []
+  const out = []
+  for (const locale of DEVICE_VOICE_LOCALES) {
+    const target = locale.toLowerCase()
+    let seenInLocale = 0
+    list.forEach((voice, index) => {
+      if (normalizeLocale(voice?.lang) !== target) return
+      out.push({ index, name: describeDeviceVoice(voice, seenInLocale), lang: voice?.lang })
+      seenInLocale += 1
+    })
+  }
+  return out
+}
+
 const FEMALE_EDGE_VOICES = new Set([
   'en-US-JennyNeural', 'en-US-AriaNeural', 'en-GB-SoniaNeural', 'en-AU-NatashaNeural',
 ])
