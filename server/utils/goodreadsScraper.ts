@@ -286,10 +286,8 @@ export function parseGoodreadsSeriesBooks(html: string): GoodreadsSeriesBook[] {
   return books;
 }
 
-export async function scrapeGoodreadsSeriesBooks(seriesUrl: string): Promise<GoodreadsSeriesBook[]> {
-  const targetUrl = unwrapNativeHttpUrl(seriesUrl);
-  if (!/^https:\/\/(?:www\.)?goodreads\.com\//i.test(targetUrl)) return [];
-
+// Fetch and parse ONE series page (a single ?page=N).
+async function scrapeGoodreadsSeriesPage(targetUrl: string): Promise<GoodreadsSeriesBook[]> {
   // Goodreads intermittently answers 202 (an anti-bot interstitial with no
   // data) when several requests land close together — which is exactly the
   // situation on a series page open, where the roster fetch runs alongside the
@@ -307,6 +305,46 @@ export async function scrapeGoodreadsSeriesBooks(seriesUrl: string): Promise<Goo
     if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 1200));
   }
   return [];
+}
+
+// A Goodreads series page lists ~30 books per page, so a long series (Lucas
+// Davenport, Wesley Peterson) needs every page walked or the roster stops at 30
+// and the later installments show as blank cards forever. Pages are fetched
+// until one comes back short or empty, capped so a mis-paginating page can't
+// loop.
+const SERIES_PAGE_SIZE = 30;
+const MAX_SERIES_PAGES = 12; // 360 books — beyond any real series
+const MIN_PAGE_GAP_MS = 400;
+
+export async function scrapeGoodreadsSeriesBooks(seriesUrl: string): Promise<GoodreadsSeriesBook[]> {
+  const targetUrl = unwrapNativeHttpUrl(seriesUrl);
+  if (!/^https:\/\/(?:www\.)?goodreads\.com\//i.test(targetUrl)) return [];
+
+  const merged: GoodreadsSeriesBook[] = [];
+  const seen = new Set<string>();
+  const add = (book: GoodreadsSeriesBook) => {
+    const key = book.url || `${book.title}::${book.installment}`;
+    if (!book.title || seen.has(key)) return;
+    seen.add(key);
+    merged.push(book);
+  };
+
+  for (let page = 1; page <= MAX_SERIES_PAGES; page += 1) {
+    const pageUrl = page === 1
+      ? targetUrl
+      : `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}page=${page}`;
+    const books = await scrapeGoodreadsSeriesPage(pageUrl);
+    if (!books.length) break;
+
+    const before = merged.length;
+    books.forEach(add);
+    // A page that added nothing new, or came back short, is the last one.
+    if (merged.length === before || books.length < SERIES_PAGE_SIZE) break;
+
+    await new Promise((resolve) => setTimeout(resolve, MIN_PAGE_GAP_MS));
+  }
+
+  return merged;
 }
 
 // One-hop roster seed: the title-redirect endpoint serves the full book page

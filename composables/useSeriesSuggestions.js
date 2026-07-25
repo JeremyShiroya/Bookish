@@ -210,12 +210,15 @@ function bumpAttemptCount(seriesName) {
 // Fetch (and cache) the resolvable installments for a series, seeded by the
 // books the user owns. `neededInstallments` — the numbers the library is
 // missing — decides whether a cached result is still useful.
-export const fetchSeriesInstallments = async (seriesName, seedBooks = [], neededInstallments = []) => {
+export const fetchSeriesInstallments = async (seriesName, seedBooks = [], neededInstallments = [], { forceRefresh = false } = {}) => {
   if (!seriesName) return {}
   const store = useSuggestionsStore()
   const key = normalizeSeriesKey(seriesName)
 
-  const cached = readCache(seriesName, neededInstallments)
+  // The explicit "Search for missing books" action bypasses the cache — the
+  // roster on disk may be a stale partial page, and the whole point is to go
+  // and fetch the rest.
+  const cached = forceRefresh ? null : readCache(seriesName, neededInstallments)
   if (cached) {
     store.value = { ...store.value, [key]: cached }
     return cached
@@ -297,31 +300,70 @@ export const installmentMatchesBook = (entry, book) => {
   )
 }
 
-// PHASE 1 — the visible sweep. For every missing installment, resolve its
-// roster entry and fill any blank cover / title / author / year from the
-// cross-checked metadata engine, reporting progress so the page can show a
+// What a resolved roster actually covers: its highest installment, and whether
+// every installment from 1 to that high point is present. A contiguous roster
+// is treated as the authoritative length of the series — the metadata "works"
+// count Goodreads reports overcounts (novellas, box sets, announced numbers),
+// which is what puts phantom "Book 29 / Book 30" cards past the real last book.
+export const rosterCoverage = (installments = {}) => {
+  const numbers = Object.keys(installments || {})
+    .map(Number)
+    .filter((n) => Number.isSafeInteger(n) && n >= 1)
+  if (!numbers.length) return { max: 0, contiguous: false }
+  const max = Math.max(...numbers)
+  const present = new Set(numbers)
+  let contiguous = true
+  for (let n = 1; n <= max; n += 1) {
+    if (!present.has(n)) { contiguous = false; break }
+  }
+  return { max, contiguous }
+}
+
+// PHASE 1 — the visible sweep. Re-fetch the roster in full (paginated), then for
+// every missing installment fill any blank cover / title / author / year from
+// the cross-checked metadata engine, reporting progress so the page can show a
 // modal. Everything it fills is written to the device cache and the live store,
-// so the cards update in place.
+// so the cards update in place. Returns the roster's coverage so the caller can
+// reconcile the series total.
 export const fillMissingInstallmentDetails = async ({
   seriesName,
   seedBooks = [],
-  missing = [],
+  ownedInstallments = [],
+  claimedTotal = 0,
   onProgress,
   shouldStop,
 } = {}) => {
-  if (!seriesName || !missing.length) return {}
+  const empty = { coverage: { max: 0, contiguous: false }, effectiveTotal: 0, cached: {} }
+  if (!seriesName) return empty
 
-  // Make sure we have the roster first — it is what gives each installment a
-  // title to search on.
-  await fetchSeriesInstallments(seriesName, seedBooks, missing)
+  // Force a fresh, fully-paginated roster first — this is what pulls in the
+  // installments a stale first-page-only cache was missing.
+  await fetchSeriesInstallments(seriesName, seedBooks, [], { forceRefresh: true })
 
   const store = useSuggestionsStore()
   const key = normalizeSeriesKey(seriesName)
   const cached = { ...(readCacheRaw(seriesName) || {}) }
+
+  // The roster is the authoritative length when it runs 1..max with no gaps;
+  // then its max caps the phantom installments the metadata "works" count
+  // invents. When it has gaps (a page that could not be fetched), keep the
+  // larger of the two so a real book is never hidden.
+  const coverage = rosterCoverage(cached)
+  const effectiveTotal = coverage.contiguous
+    ? coverage.max
+    : Math.max(coverage.max, Number(claimedTotal) || 0)
+
+  // The real missing list, recomputed against the fresh roster and the
+  // reconciled total.
+  const owned = new Set((ownedInstallments || []).map(Number).filter((n) => Number.isSafeInteger(n) && n >= 1))
+  const missing = []
+  for (let n = 1; n <= effectiveTotal; n += 1) {
+    if (!owned.has(n)) missing.push(n)
+  }
+
   const total = missing.length
   let done = 0
   let filled = 0
-
   onProgress?.({ done, total, filled, current: null })
 
   for (const installment of missing) {
@@ -361,7 +403,7 @@ export const fillMissingInstallmentDetails = async ({
 
   writeCache(seriesName, cached)
   store.value = { ...store.value, [key]: cached }
-  return cached
+  return { coverage, effectiveTotal, cached }
 }
 
 // PHASE 2 — the background reconcile. A book the reader already owns but that

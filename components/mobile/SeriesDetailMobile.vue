@@ -177,7 +177,7 @@ import LibraryControlsRow from '~/components/shared/LibraryControlsRow.vue';
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch';
 import { matchesFormatFilter, useBookishSettings } from '~/composables/useBookishSettings';
 import { useBooks } from '~/composables/useBooks';
-import { ensureSeriesTotal, formatSeriesCollectionProgress } from '~/composables/useSeriesProgress';
+import { ensureSeriesTotal, formatSeriesCollectionProgress, propagateSeriesTotal } from '~/composables/useSeriesProgress';
 import { useSeriesSuggestions } from '~/composables/useSeriesSuggestions';
 import { useTTS } from '~/composables/useTTS';
 import { useToast } from '~/composables/useToast';
@@ -426,12 +426,18 @@ const startMissingSweep = async () => {
   _sweepStop = false;
   Object.assign(sweep, { visible: true, running: true, done: 0, total: missing.length, filled: 0, current: '' });
 
+  const ownedInstallments = seriesBooks.value
+    .map((book) => Number(book.seriesInstallment))
+    .filter((n) => Number.isSafeInteger(n) && n >= 1);
+
   try {
-    // Phase 1 — visible: fill each gap's details.
-    await fillMissingInstallmentDetails({
+    // Phase 1 — visible: re-fetch the full roster, reconcile the series total to
+    // what the roster actually covers, and fill each gap's details.
+    const { effectiveTotal, coverage } = await fillMissingInstallmentDetails({
       seriesName: seriesName.value,
       seedBooks: seriesBooks.value,
-      missing,
+      ownedInstallments,
+      claimedTotal: derivedSeriesTotal.value || 0,
       shouldStop: () => _sweepStop,
       onProgress: ({ done, total, filled, current }) => {
         sweep.done = done;
@@ -440,6 +446,18 @@ const startMissingSweep = async () => {
         sweep.current = current || '';
       },
     });
+
+    // Correct the stored total so phantom installments past the real last book
+    // disappear (and any newly-found ones show). Only when the roster is
+    // authoritative (contiguous) and disagrees with what is stored.
+    if (coverage.contiguous && effectiveTotal > 0 && effectiveTotal !== derivedSeriesTotal.value) {
+      await propagateSeriesTotal({
+        seriesName: seriesName.value,
+        seriesTotal: effectiveTotal,
+        books: seriesBooks.value,
+        updateBook,
+      });
+    }
   } catch (error) {
     console.warn('[series detail] Missing-book sweep failed:', error);
     addToast('Some books could not be looked up — try again in a moment.', 'error');
