@@ -1,7 +1,33 @@
 <template>
   <div class="group-detail-page">
-    <!-- The hero names the series; the bar carries only the back button. -->
-    <MobileSettingsNav :show-title="false" back-to="/series" aria-label="Series navigation" />
+    <!-- The hero names the series; the bar carries the back button and, opposite
+         it, an overflow menu for the missing-book actions. -->
+    <MobileSettingsNav :show-title="false" back-to="/series" aria-label="Series navigation">
+      <template v-if="seriesBooks.length" #actions>
+        <div class="more-wrap">
+          <button
+            type="button"
+            class="title-action"
+            aria-label="Series options"
+            :aria-expanded="menuOpen"
+            @click.stop="menuOpen = !menuOpen"
+          >
+            <i class="ri-more-2-fill"></i>
+          </button>
+
+          <div v-if="menuOpen" class="more-menu" role="menu">
+            <button type="button" role="menuitem" @click="startMissingSweep(); menuOpen = false">
+              <i class="ri-search-line"></i>
+              Search for missing books
+            </button>
+            <button type="button" role="menuitem" @click="hideMissing = !hideMissing; menuOpen = false">
+              <i :class="hideMissing ? 'ri-eye-line' : 'ri-eye-off-line'"></i>
+              {{ hideMissing ? 'Show missing books' : 'Hide missing books' }}
+            </button>
+          </div>
+        </div>
+      </template>
+    </MobileSettingsNav>
 
     <section v-if="seriesBooks.length" class="detail-shell">
       <header class="detail-hero">
@@ -107,11 +133,41 @@
       @close="showDeleteModal = false; bookToDelete = null"
       @confirm="confirmDeleteBook"
     />
+
+    <!-- Visible progress for the first sweep: fill each missing installment's
+         cover, title, author and year. The library reconcile runs after this,
+         quietly, so it needs no modal of its own. -->
+    <Teleport to="body">
+      <div v-if="sweep.visible" class="sweep-overlay" role="presentation" @click.self="closeSweepIfDone">
+        <section class="sweep-sheet" role="dialog" aria-modal="true" aria-labelledby="sweep-title">
+          <span class="sheet-grabber" aria-hidden="true"></span>
+          <h2 id="sweep-title">
+            {{ sweep.done >= sweep.total && sweep.total ? 'Missing books updated' : 'Searching for missing books' }}
+          </h2>
+          <p class="sweep-current">{{ sweepStatusLine }}</p>
+
+          <div class="sweep-bar">
+            <div class="sweep-fill" :style="{ width: `${sweepPercent}%` }"></div>
+          </div>
+
+          <p class="sweep-count">{{ sweep.done }} / {{ sweep.total }}</p>
+
+          <button
+            v-if="sweep.done >= sweep.total && sweep.total"
+            type="button"
+            class="sweep-done-btn"
+            @click="sweep.visible = false"
+          >
+            Done
+          </button>
+        </section>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AddToPlaylistModal from '~/components/shared/AddToPlaylistModal.vue';
 import DeleteConfirmModal from '~/components/shared/DeleteConfirmModal.vue';
@@ -124,11 +180,13 @@ import { useBooks } from '~/composables/useBooks';
 import { ensureSeriesTotal, formatSeriesCollectionProgress } from '~/composables/useSeriesProgress';
 import { useSeriesSuggestions } from '~/composables/useSeriesSuggestions';
 import { useTTS } from '~/composables/useTTS';
+import { useToast } from '~/composables/useToast';
 import MobileSettingsNav from './MobileSettingsNav.vue';
 
 const route = useRoute();
 const router = useRouter();
-const { seriesList, updateBook, deleteBook, toggleFavourite, hideBook } = useBooks();
+const { books, seriesList, updateBook, deleteBook, toggleFavourite, hideBook } = useBooks();
+const { addToast } = useToast();
 const { settings } = useBookishSettings();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const selectedStatus = ref('all');
@@ -205,14 +263,21 @@ const readCount = computed(() => seriesBooks.value.filter((book) => normalizedSt
 // filtering by EPUB/PDF still shows the gaps, which is the whole point of
 // "which book should I look for". It is only hidden under the "Read" status
 // filter, since a book you don't own can't have been read.
+// Per-page "Hide missing books" toggle from the overflow menu — a temporary
+// override that sits on top of the global Preferences setting.
+const hideMissing = ref(false);
+
 const suggestionsEnabled = computed(() => (
   settings.value.seriesSuggestions === true
+  && !hideMissing.value
   && selectedStatus.value !== 'Read'
   && selectedStatus.value !== 'Reading'
 ));
 
-const missingInstallments = computed(() => {
-  if (!suggestionsEnabled.value) return [];
+// Installments the library is missing, independent of whether the cards are
+// currently shown — the manual "Search for missing books" sweep needs this even
+// while the gaps are hidden.
+const allMissingInstallments = computed(() => {
   const total = derivedSeriesTotal.value;
   if (!Number.isSafeInteger(total) || total < 1) return [];
 
@@ -229,11 +294,20 @@ const missingInstallments = computed(() => {
   return missing;
 });
 
+const missingInstallments = computed(() => (
+  suggestionsEnabled.value ? allMissingInstallments.value : []
+));
+
 // Cover/title/author/year for missing installments, resolved through the same
 // metadata engine as Add/Edit's Fetch Metadata (in light mode) and shared with
 // the background sweep — installmentMeta is a live view of the store, so slots
 // filled by the sweep appear here without reopening the page.
-const { installments: installmentMeta, fetchSeriesInstallments } = useSeriesSuggestions(seriesName);
+const {
+  installments: installmentMeta,
+  fetchSeriesInstallments,
+  fillMissingInstallmentDetails,
+  reconcileSeriesWithLibrary,
+} = useSeriesSuggestions(seriesName);
 
 watch([missingInstallments, seriesBooks], async ([missing, books]) => {
   if (!import.meta.client || !missing.length || !seriesName.value) return;
@@ -300,6 +374,100 @@ const confirmDeleteBook = async () => {
   bookToDelete.value = null;
 };
 
+// ── Overflow menu ────────────────────────────────────────────────────────────
+const menuOpen = ref(false);
+const closeMenuOnOutsideClick = (event) => {
+  if (!event.target.closest('.more-wrap')) menuOpen.value = false;
+};
+onMounted(() => document.addEventListener('click', closeMenuOnOutsideClick));
+onUnmounted(() => document.removeEventListener('click', closeMenuOnOutsideClick));
+
+// ── "Search for missing books" ───────────────────────────────────────────────
+//
+// Two passes. The FIRST, shown in the modal, fills each missing installment's
+// cover / title / author / year so the gaps stop being blank. The SECOND runs
+// quietly afterwards: it matches those resolved installments against the whole
+// library and tags any book the reader already owns — but that was never
+// labelled with this series — so it slides into its real place. The second pass
+// is deliberately off the modal so a slow library scan never makes the UI wait.
+const sweep = reactive({ visible: false, running: false, done: 0, total: 0, filled: 0, current: '' });
+let _sweepStop = false;
+
+const sweepPercent = computed(() => (
+  sweep.total ? Math.round((sweep.done / sweep.total) * 100) : 0
+));
+
+const sweepStatusLine = computed(() => {
+  if (sweep.done >= sweep.total && sweep.total) {
+    return sweep.filled
+      ? `Filled details for ${sweep.filled} book${sweep.filled === 1 ? '' : 's'}.`
+      : 'These books were already up to date.';
+  }
+  return sweep.current ? `Looking up “${sweep.current}”…` : 'Preparing…';
+});
+
+const closeSweepIfDone = () => {
+  if (sweep.done >= sweep.total) sweep.visible = false;
+};
+
+const startMissingSweep = async () => {
+  if (sweep.running) { sweep.visible = true; return; }
+
+  const missing = allMissingInstallments.value;
+  if (!missing.length) {
+    addToast('This series has no missing books to search for.', 'info');
+    return;
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    addToast('You are offline — connect to search for missing books.', 'error');
+    return;
+  }
+
+  _sweepStop = false;
+  Object.assign(sweep, { visible: true, running: true, done: 0, total: missing.length, filled: 0, current: '' });
+
+  try {
+    // Phase 1 — visible: fill each gap's details.
+    await fillMissingInstallmentDetails({
+      seriesName: seriesName.value,
+      seedBooks: seriesBooks.value,
+      missing,
+      shouldStop: () => _sweepStop,
+      onProgress: ({ done, total, filled, current }) => {
+        sweep.done = done;
+        sweep.total = total;
+        sweep.filled = filled;
+        sweep.current = current || '';
+      },
+    });
+  } catch (error) {
+    console.warn('[series detail] Missing-book sweep failed:', error);
+    addToast('Some books could not be looked up — try again in a moment.', 'error');
+  } finally {
+    sweep.running = false;
+  }
+
+  // Phase 2 — background: link owned-but-untagged books into the series. Not
+  // awaited, so the modal's "Done" is about the visible pass only.
+  reconcileSeriesWithLibrary({
+    seriesName: seriesName.value,
+    missing: allMissingInstallments.value,
+    allBooks: books.value,
+    updateBook,
+  })
+    .then((result) => {
+      if (result?.linked) {
+        addToast(
+          `Matched ${result.linked} book${result.linked === 1 ? '' : 's'} you already own into this series.`,
+          'success',
+        );
+      }
+    })
+    .catch((error) => console.warn('[series detail] Library reconcile failed:', error));
+};
+
+onUnmounted(() => { _sweepStop = true; });
+
 const generateCoverPlaceholder = (title) => {
   const colors = ['#8A2BE2', '#6A0DAD', '#2f7d62', '#b45309'];
   const safeTitle = String(title || 'Book');
@@ -359,6 +527,128 @@ watch(seriesBooks, async (books) => {
 <style scoped>
 .group-detail-page {
   width: 100%;
+}
+
+/* Overflow menu — identical to the playlist detail's, so the two detail pages
+   share one control. */
+.title-action {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.more-wrap {
+  position: relative;
+}
+
+.more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  min-width: 210px;
+  padding: 6px;
+  border: 1px solid var(--color-border-card);
+  border-radius: 12px;
+  background: var(--color-surface-primary);
+  box-shadow: var(--shadow-card-hover, 0 12px 28px rgba(15, 23, 42, 0.18));
+}
+
+.more-menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.7rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.more-menu button:active {
+  background: var(--color-surface-secondary);
+}
+
+/* Missing-book sweep progress. */
+.sweep-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3400;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.sweep-sheet {
+  width: 100%;
+  max-width: 520px;
+  padding: 0.75rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+  border-radius: 20px 20px 0 0;
+  background: var(--color-surface-primary);
+  color: var(--color-text-primary);
+}
+
+.sweep-sheet h2 {
+  margin: 0.4rem 0 0.3rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.sweep-current {
+  margin: 0 0 0.9rem;
+  min-height: 1.2em;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.sweep-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-surface-secondary);
+}
+
+.sweep-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-brand-primary);
+  transition: width 0.25s ease;
+}
+
+.sweep-count {
+  margin: 0.55rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+.sweep-done-btn {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border: 0;
+  border-radius: 12px;
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
 }
 
 .detail-shell {

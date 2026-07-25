@@ -23,6 +23,7 @@ import { useApiEndpoint } from '~/composables/useApiEndpoint'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
 import { metadataResultMatchesBook } from '~/composables/useAutoMetadata'
+import { mergeMetadataIntoBook } from '~/composables/useDeviceLibrarySync'
 import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
 
 const loadDeviceSearch = () => import('~/composables/useDeviceMetadataSearch')
@@ -284,6 +285,151 @@ export const installmentNeedsDetails = (entry) => (
   !entry?.cover || !entry?.author || !entry?.year
 )
 
+// Does an owned book look like this missing installment? Title must match (or
+// one contain the other — sources vary on subtitles), and the author agree
+// when both are known. Same shape as the metadata guard, so a wrong book never
+// gets pulled into the series.
+export const installmentMatchesBook = (entry, book) => {
+  if (!entry?.title || !book?.title) return false
+  return metadataResultMatchesBook(
+    { title: entry.title, author: entry.author || '' },
+    { title: book.title, author: book.author || '' },
+  )
+}
+
+// PHASE 1 — the visible sweep. For every missing installment, resolve its
+// roster entry and fill any blank cover / title / author / year from the
+// cross-checked metadata engine, reporting progress so the page can show a
+// modal. Everything it fills is written to the device cache and the live store,
+// so the cards update in place.
+export const fillMissingInstallmentDetails = async ({
+  seriesName,
+  seedBooks = [],
+  missing = [],
+  onProgress,
+  shouldStop,
+} = {}) => {
+  if (!seriesName || !missing.length) return {}
+
+  // Make sure we have the roster first — it is what gives each installment a
+  // title to search on.
+  await fetchSeriesInstallments(seriesName, seedBooks, missing)
+
+  const store = useSuggestionsStore()
+  const key = normalizeSeriesKey(seriesName)
+  const cached = { ...(readCacheRaw(seriesName) || {}) }
+  const total = missing.length
+  let done = 0
+  let filled = 0
+
+  onProgress?.({ done, total, filled, current: null })
+
+  for (const installment of missing) {
+    if (shouldStop?.()) break
+    const entry = cached[installment]
+
+    if (entry?.title && installmentNeedsDetails(entry)) {
+      try {
+        const results = await fetchBookMetadataResults(
+          entry.title,
+          entry.author || undefined,
+          undefined,
+          { light: true },
+        )
+        const top = results?.[0]
+        if (installmentMatchesBook(entry, top)) {
+          const next = {
+            title: entry.title,
+            author: entry.author || top.author || null,
+            cover: entry.cover || top.cover || null,
+            year: entry.year || Number(top.publishYear) || null,
+          }
+          if (!installmentNeedsDetails(next) || JSON.stringify(next) !== JSON.stringify(entry)) filled += 1
+          cached[installment] = next
+          // Publish as we go so each card fills before the sweep finishes.
+          writeCache(seriesName, cached)
+          store.value = { ...store.value, [key]: { ...cached } }
+        }
+      } catch {
+        // Source down or rate-limited — leave this one for a later pass.
+      }
+    }
+
+    done += 1
+    onProgress?.({ done, total, filled, current: entry?.title || `Book ${installment}` })
+  }
+
+  writeCache(seriesName, cached)
+  store.value = { ...store.value, [key]: cached }
+  return cached
+}
+
+// PHASE 2 — the background reconcile. A book the reader already owns but that
+// was never tagged with this series shows up as a "missing" gap. Match each
+// resolved installment against the whole library and, where an owned book is
+// the same book, tag it with the series and installment so it slides from
+// "missing" into its real place — and fill in the rest of ITS metadata while
+// there. No modal: this runs quietly after the visible sweep.
+export const reconcileSeriesWithLibrary = async ({
+  seriesName,
+  missing = [],
+  allBooks = [],
+  updateBook,
+  shouldStop,
+} = {}) => {
+  if (!seriesName || !missing.length || typeof updateBook !== 'function') return { linked: 0 }
+
+  const cached = readCacheRaw(seriesName) || {}
+  const key = normalizeSeriesKey(seriesName)
+  const linkedBookIds = new Set()
+  let linked = 0
+
+  for (const installment of missing) {
+    if (shouldStop?.()) break
+    const entry = cached[installment]
+    if (!entry?.title) continue
+
+    const match = allBooks.find((book) => (
+      book?.id
+      && !linkedBookIds.has(book.id)
+      // Not already correctly placed in this series.
+      && !(normalizeSeriesKey(book.series) === key && Number(book.seriesInstallment) === installment)
+      && installmentMatchesBook(entry, book)
+    ))
+    if (!match) continue
+
+    linkedBookIds.add(match.id)
+
+    // Tag it into the series, then top up whatever else the book itself is
+    // missing from the metadata engine — this is the "fetch and populate the
+    // metadata for that specific book" step, done in the background.
+    let record = {
+      ...match,
+      series: seriesName,
+      seriesInstallment: Number(match.seriesInstallment) || installment,
+    }
+    try {
+      const results = await fetchBookMetadataResults(
+        match.title,
+        match.author || undefined,
+        undefined,
+        { light: true },
+      )
+      const top = results?.[0]
+      if (metadataResultMatchesBook(match, top)) {
+        record = mergeMetadataIntoBook(record, top) || record
+      }
+    } catch {
+      // Metadata top-up failed; the tag alone still moves it into the series.
+    }
+
+    await updateBook(record)
+    linked += 1
+  }
+
+  return { linked }
+}
+
 let _hydrated = false
 
 // Live view of one series' resolved suggestions, for the detail page.
@@ -296,7 +442,12 @@ export const useSeriesSuggestions = (seriesNameRef) => {
     hydrateSeriesSuggestions()
   }
   const installments = computed(() => store.value[normalizeSeriesKey(seriesNameRef?.value)] || {})
-  return { installments, fetchSeriesInstallments }
+  return {
+    installments,
+    fetchSeriesInstallments,
+    fillMissingInstallmentDetails,
+    reconcileSeriesWithLibrary,
+  }
 }
 
 // ── Background sweep ────────────────────────────────────────────────────────
