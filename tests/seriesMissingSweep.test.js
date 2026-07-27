@@ -5,6 +5,7 @@ import {
   bestResultForInstallment,
   bestResultForOwnedBook,
   installmentMatchesBook,
+  reconcileEffectiveTotal,
   rosterCoverage,
 } from '../composables/useSeriesSuggestions.js'
 
@@ -96,6 +97,33 @@ describe('roster coverage decides the real series length', () => {
   })
 })
 
+describe('the series total is reconciled against roster evidence', () => {
+  test('a contiguous roster is authoritative', () => {
+    expect(reconcileEffectiveTotal({ contiguous: true, rosterMax: 28, claimedTotal: 30 })).toBe(28)
+  })
+
+  test('a small overcount above the roster max is trimmed (Prey: works=37, last book #36)', () => {
+    // The real Lucas Davenport bug: one owned book carried seriesTotal 37, but
+    // the roster's highest real book is Revenge Prey #36, so slot 37 is a
+    // phantom from the "works" count and must be dropped.
+    expect(reconcileEffectiveTotal({ contiguous: false, rosterMax: 36, claimedTotal: 37 })).toBe(36)
+  })
+
+  test('a large gap keeps the claimed total so a missed page never hides real books', () => {
+    // Roster only reached book 30 (a later page failed) but the series really
+    // has 37 — do NOT trim to 30, or books 31-37 vanish.
+    expect(reconcileEffectiveTotal({ contiguous: false, rosterMax: 30, claimedTotal: 37 })).toBe(37)
+  })
+
+  test('a roster larger than the stored total wins', () => {
+    expect(reconcileEffectiveTotal({ contiguous: false, rosterMax: 40, claimedTotal: 34 })).toBe(40)
+  })
+
+  test('no claimed total falls back to the roster', () => {
+    expect(reconcileEffectiveTotal({ contiguous: false, rosterMax: 12, claimedTotal: 0 })).toBe(12)
+  })
+})
+
 describe('the roster scraper walks every page', () => {
   const scraper = read('server/utils/goodreadsScraper.ts')
 
@@ -173,8 +201,10 @@ describe('the series detail page exposes the missing-book actions', () => {
 
   test('a corrected total is written back so phantom cards disappear', () => {
     expect(page).toContain('propagateSeriesTotal')
-    // Only when the roster is authoritative and disagrees with what is stored.
-    expect(page).toMatch(/coverage\.contiguous && effectiveTotal > 0 && effectiveTotal !== derivedSeriesTotal\.value/)
+    // Corrects when the roster is authoritative (contiguous) OR when it trimmed
+    // the stored total DOWN — never silently raises off a gappy roster.
+    expect(page).toMatch(/effectiveTotal > 0 && effectiveTotal !== derivedSeriesTotal\.value/)
+    expect(page).toMatch(/coverage\.contiguous \|\| effectiveTotal < derivedSeriesTotal\.value/)
     // Owned installments are handed to the composable so it can rebuild the list.
     expect(page).toContain('ownedInstallments')
   })

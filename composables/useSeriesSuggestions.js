@@ -37,6 +37,12 @@ const EMPTY_CACHE_TTL_MS = 1000 * 60 * 15
 // Background sweep pacing: one gapped series per cycle, a few minutes apart.
 export const SERIES_SWEEP_INTERVAL_MS = 1000 * 60 * 4
 
+// How far the stored "N works" total may sit above the highest installment the
+// roster actually lists before we stop trusting it. One or two is the usual
+// novella/box-set padding and gets trimmed; a bigger gap is treated as a roster
+// page the fetch missed, so the claimed total is kept and no real book hides.
+export const TRAILING_PHANTOM_MARGIN = 2
+
 export const normalizeSeriesKey = (value) => String(value || '')
   .normalize('NFKD')
   .replace(/[̀-ͯ]/g, '')
@@ -345,6 +351,19 @@ export const rosterCoverage = (installments = {}) => {
   return { max, contiguous }
 }
 
+// Decide the real number of installments from the roster and the stored "N
+// works" total. A contiguous roster is authoritative outright. Otherwise the
+// claimed total wins so a roster page the fetch missed can't hide real books —
+// UNLESS the claim is only a novella or two above the highest book the roster
+// actually names, in which case that excess is the works-count padding (box
+// sets, novellas) and gets trimmed away. Pure so the rule is unit-testable.
+export const reconcileEffectiveTotal = ({ contiguous = false, rosterMax = 0, claimedTotal = 0 } = {}) => {
+  const claimed = Number(claimedTotal) || 0
+  if (contiguous) return rosterMax
+  if (rosterMax > 0 && claimed > rosterMax && claimed - rosterMax <= TRAILING_PHANTOM_MARGIN) return rosterMax
+  return Math.max(rosterMax, claimed)
+}
+
 // PHASE 1 — the visible sweep. Re-fetch the roster in full (paginated), then for
 // every missing installment fill any blank cover / title / author / year from
 // the cross-checked metadata engine, reporting progress so the page can show a
@@ -375,11 +394,20 @@ export const fillMissingInstallmentDetails = async ({
   // The roster is the authoritative length when it runs 1..max with no gaps;
   // then its max caps the phantom installments the metadata "works" count
   // invents. When it has gaps (a page that could not be fetched), keep the
-  // larger of the two so a real book is never hidden.
+  // larger of the two so a real book is never hidden — EXCEPT when the stored
+  // total is only a book or two above the highest installment the roster
+  // actually lists. That small excess is almost always the "N works" count
+  // padding in box sets and novellas that have no numbered slot (e.g. Prey
+  // reports 37 works but the last real book is #36), so trust the roster and
+  // drop those trailing phantom cards. A larger gap is treated as a page the
+  // fetch missed, and the claimed total is kept so real books stay visible.
   const coverage = rosterCoverage(cached)
-  const effectiveTotal = coverage.contiguous
-    ? coverage.max
-    : Math.max(coverage.max, Number(claimedTotal) || 0)
+  const rosterMax = coverage.max
+  const effectiveTotal = reconcileEffectiveTotal({
+    contiguous: coverage.contiguous,
+    rosterMax,
+    claimedTotal,
+  })
 
   // The real missing list, recomputed against the fresh roster and the
   // reconciled total.
@@ -396,6 +424,10 @@ export const fillMissingInstallmentDetails = async ({
   )))
   let filled = improvedInstallments.size
   let unresolved = countIncompleteInstallments(cached, missing)
+  // A metadata lookup that throws means a source was down or rate-limiting us —
+  // the book is fillable, just not right now, so we must not tell the reader it
+  // is permanently missing.
+  let sourceThrew = false
   onProgress?.({ done, total, filled, unresolved, current: null })
 
   for (const installment of missing) {
@@ -430,6 +462,7 @@ export const fillMissingInstallmentDetails = async ({
         }
       } catch {
         // Source down or rate-limited — leave this one for a later pass.
+        sourceThrew = true
       }
     }
 
@@ -440,7 +473,24 @@ export const fillMissingInstallmentDetails = async ({
   unresolved = countIncompleteInstallments(cached, missing)
   writeCache(seriesName, cached)
   store.value = { ...store.value, [key]: cached }
-  return { coverage, effectiveTotal, cached, unresolved }
+
+  // Why are the leftovers still blank? A missing installment the roster never
+  // named at all (no title in the cache) is a book the series-page fetch didn't
+  // return — usually because Goodreads rate-limited (HTTP 202) this device, not
+  // because the book does not exist. Those, plus any lookup that threw, mean the
+  // sources were unreachable and trying again later genuinely helps. This is the
+  // difference between an honest "the database is busy, they'll fill in" and a
+  // misleading "already up to date" / "try again in a moment" that never moved.
+  const absentFromRoster = missing.filter((n) => !cached[n]?.title)
+  const sourcesUnreachable = sourceThrew || absentFromRoster.length > 0
+  return {
+    coverage,
+    effectiveTotal,
+    cached,
+    unresolved,
+    absent: absentFromRoster.length,
+    sourcesUnreachable,
+  }
 }
 
 // PHASE 2 — the background reconcile. A book the reader already owns but that

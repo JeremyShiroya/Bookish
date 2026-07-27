@@ -390,7 +390,7 @@ onUnmounted(() => document.removeEventListener('click', closeMenuOnOutsideClick)
 // library and tags any book the reader already owns — but that was never
 // labelled with this series — so it slides into its real place. The second pass
 // is deliberately off the modal so a slow library scan never makes the UI wait.
-const sweep = reactive({ visible: false, running: false, done: 0, total: 0, filled: 0, unresolved: 0, current: '' });
+const sweep = reactive({ visible: false, running: false, done: 0, total: 0, filled: 0, unresolved: 0, unreachable: false, current: '' });
 let _sweepStop = false;
 
 const sweepPercent = computed(() => (
@@ -400,9 +400,15 @@ const sweepPercent = computed(() => (
 const sweepStatusLine = computed(() => {
   if (sweep.done >= sweep.total && sweep.total) {
     if (sweep.filled && sweep.unresolved) {
-      return `Filled details for ${sweep.filled} book${sweep.filled === 1 ? '' : 's'}; ${sweep.unresolved} still need details.`;
+      return `Filled details for ${sweep.filled} book${sweep.filled === 1 ? '' : 's'}; ${sweep.unresolved} still to find.`;
     }
     if (sweep.filled) return `Filled details for ${sweep.filled} book${sweep.filled === 1 ? '' : 's'}.`;
+    // Leftovers the book database could not be reached for (it rate-limits busy
+    // devices). Tell the truth: they fill in on their own once it responds —
+    // don't imply the reader did something wrong or that a quick retry fixes it.
+    if (sweep.unresolved && sweep.unreachable) {
+      return `The book database is busy right now, so ${sweep.unresolved} book${sweep.unresolved === 1 ? '' : 's'} couldn't be looked up. They'll fill in automatically once it's reachable.`;
+    }
     if (sweep.unresolved) return `${sweep.unresolved} book${sweep.unresolved === 1 ? '' : 's'} still need details. Try again in a moment.`;
     return 'These books were already up to date.';
   }
@@ -427,7 +433,7 @@ const startMissingSweep = async () => {
   }
 
   _sweepStop = false;
-  Object.assign(sweep, { visible: true, running: true, done: 0, total: missing.length, filled: 0, unresolved: 0, current: '' });
+  Object.assign(sweep, { visible: true, running: true, done: 0, total: missing.length, filled: 0, unresolved: 0, unreachable: false, current: '' });
 
   const ownedInstallments = seriesBooks.value
     .map((book) => Number(book.seriesInstallment))
@@ -436,7 +442,7 @@ const startMissingSweep = async () => {
   try {
     // Phase 1 — visible: re-fetch the full roster, reconcile the series total to
     // what the roster actually covers, and fill each gap's details.
-    const { effectiveTotal, coverage } = await fillMissingInstallmentDetails({
+    const { effectiveTotal, coverage, unresolved, sourcesUnreachable } = await fillMissingInstallmentDetails({
       seriesName: seriesName.value,
       seedBooks: seriesBooks.value,
       ownedInstallments,
@@ -450,11 +456,17 @@ const startMissingSweep = async () => {
         sweep.current = current || '';
       },
     });
+    sweep.unresolved = unresolved || 0;
+    sweep.unreachable = !!sourcesUnreachable;
 
     // Correct the stored total so phantom installments past the real last book
-    // disappear (and any newly-found ones show). Only when the roster is
-    // authoritative (contiguous) and disagrees with what is stored.
-    if (coverage.contiguous && effectiveTotal > 0 && effectiveTotal !== derivedSeriesTotal.value) {
+    // disappear (and any newly-found ones show). Trust the roster when it is
+    // authoritative (contiguous 1..max) OR when it has trimmed a small "N works"
+    // overcount down — i.e. whenever the roster's reconciled total is lower than
+    // what is stored. Never silently raise the total off a gappy roster.
+    const totalCorrectable = effectiveTotal > 0 && effectiveTotal !== derivedSeriesTotal.value
+      && (coverage.contiguous || effectiveTotal < derivedSeriesTotal.value);
+    if (totalCorrectable) {
       await propagateSeriesTotal({
         seriesName: seriesName.value,
         seriesTotal: effectiveTotal,
