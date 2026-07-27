@@ -79,7 +79,8 @@ describe('system bar icons follow the theme', () => {
 })
 
 describe('series suggestions persist and keep filling in', () => {
-  test('an installment is only finished with a cover, author and year', () => {
+  test('an installment is only finished with a title, cover, author and year', () => {
+    expect(installmentNeedsDetails({ cover: 'c', author: 'a', year: 2001 })).toBe(true)
     expect(installmentNeedsDetails({ title: 'X' })).toBe(true)
     expect(installmentNeedsDetails({ title: 'X', cover: 'c', author: 'a' })).toBe(true)
     expect(installmentNeedsDetails({ title: 'X', cover: 'c', author: 'a', year: 2001 })).toBe(false)

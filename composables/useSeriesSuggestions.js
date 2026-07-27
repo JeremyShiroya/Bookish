@@ -285,7 +285,19 @@ export const hydrateSeriesSuggestions = () => {
 // A suggestion is only finished when it can be shown properly: cover, author
 // and year. The roster often returns just a title and a number.
 export const installmentNeedsDetails = (entry) => (
-  !entry?.cover || !entry?.author || !entry?.year
+  !entry?.title || !entry?.cover || !entry?.author || !entry?.year
+)
+
+const filledDisplayFields = (entry) => (
+  ['title', 'cover', 'author', 'year'].filter((field) => Boolean(entry?.[field])).length
+)
+
+const installmentImproved = (before, after) => (
+  filledDisplayFields(after) > filledDisplayFields(before)
+)
+
+const countIncompleteInstallments = (installments = {}, missing = []) => (
+  (missing || []).filter((installment) => installmentNeedsDetails(installments[installment])).length
 )
 
 // Does an owned book look like this missing installment? Title must match (or
@@ -299,6 +311,20 @@ export const installmentMatchesBook = (entry, book) => {
     { title: book.title, author: book.author || '' },
   )
 }
+
+// Pick the metadata result that is REALLY this installment — the first one that
+// matches, not blindly results[0]. Goodreads/Google routinely return a box set,
+// an omnibus, or a different edition as the top hit; taking only [0] made the
+// match guard reject it and leave the slot blank even when the right book sat
+// at [1] or [2]. Scanning for the first true match is what finally fills them.
+export const bestResultForInstallment = (entry, results = []) => (
+  (results || []).find((result) => installmentMatchesBook(entry, result)) || null
+)
+
+// Same idea for an owned book: the first result that is genuinely this book.
+export const bestResultForOwnedBook = (book, results = []) => (
+  (results || []).find((result) => metadataResultMatchesBook(book, result)) || null
+)
 
 // What a resolved roster actually covers: its highest installment, and whether
 // every installment from 1 to that high point is present. A contiguous roster
@@ -333,8 +359,10 @@ export const fillMissingInstallmentDetails = async ({
   onProgress,
   shouldStop,
 } = {}) => {
-  const empty = { coverage: { max: 0, contiguous: false }, effectiveTotal: 0, cached: {} }
+  const empty = { coverage: { max: 0, contiguous: false }, effectiveTotal: 0, cached: {}, unresolved: 0 }
   if (!seriesName) return empty
+
+  const beforeFetch = { ...(readCacheRaw(seriesName) || {}) }
 
   // Force a fresh, fully-paginated roster first — this is what pulls in the
   // installments a stale first-page-only cache was missing.
@@ -363,8 +391,12 @@ export const fillMissingInstallmentDetails = async ({
 
   const total = missing.length
   let done = 0
-  let filled = 0
-  onProgress?.({ done, total, filled, current: null })
+  const improvedInstallments = new Set(missing.filter((installment) => (
+    installmentImproved(beforeFetch[installment], cached[installment])
+  )))
+  let filled = improvedInstallments.size
+  let unresolved = countIncompleteInstallments(cached, missing)
+  onProgress?.({ done, total, filled, unresolved, current: null })
 
   for (const installment of missing) {
     if (shouldStop?.()) break
@@ -378,16 +410,20 @@ export const fillMissingInstallmentDetails = async ({
           undefined,
           { light: true },
         )
-        const top = results?.[0]
-        if (installmentMatchesBook(entry, top)) {
+        const top = bestResultForInstallment(entry, results)
+        if (top) {
           const next = {
             title: entry.title,
             author: entry.author || top.author || null,
             cover: entry.cover || top.cover || null,
             year: entry.year || Number(top.publishYear) || null,
           }
-          if (!installmentNeedsDetails(next) || JSON.stringify(next) !== JSON.stringify(entry)) filled += 1
+          if (installmentImproved(entry, next)) {
+            improvedInstallments.add(installment)
+            filled = improvedInstallments.size
+          }
           cached[installment] = next
+          unresolved = countIncompleteInstallments(cached, missing)
           // Publish as we go so each card fills before the sweep finishes.
           writeCache(seriesName, cached)
           store.value = { ...store.value, [key]: { ...cached } }
@@ -398,12 +434,13 @@ export const fillMissingInstallmentDetails = async ({
     }
 
     done += 1
-    onProgress?.({ done, total, filled, current: entry?.title || `Book ${installment}` })
+    onProgress?.({ done, total, filled, unresolved, current: entry?.title || `Book ${installment}` })
   }
 
+  unresolved = countIncompleteInstallments(cached, missing)
   writeCache(seriesName, cached)
   store.value = { ...store.value, [key]: cached }
-  return { coverage, effectiveTotal, cached }
+  return { coverage, effectiveTotal, cached, unresolved }
 }
 
 // PHASE 2 — the background reconcile. A book the reader already owns but that
@@ -457,8 +494,8 @@ export const reconcileSeriesWithLibrary = async ({
         undefined,
         { light: true },
       )
-      const top = results?.[0]
-      if (metadataResultMatchesBook(match, top)) {
+      const top = bestResultForOwnedBook(match, results)
+      if (top) {
         record = mergeMetadataIntoBook(record, top) || record
       }
     } catch {
@@ -569,10 +606,11 @@ const topUpSuggestionDetails = async (seriesList) => {
           undefined,
           { light: true },
         )
-        const top = results?.[0]
         // Same guard the automatic backfill uses: never accept another book's
-        // details just because the search returned something.
-        if (!metadataResultMatchesBook(entry, top)) continue
+        // details just because the search returned something — and scan every
+        // result for the real match, not just the first.
+        const top = bestResultForInstallment(entry, results)
+        if (!top) continue
         cached[installment] = {
           ...entry,
           author: entry.author || top.author || null,

@@ -48,6 +48,62 @@ export function bookNeedsMetadata(book) {
   return missingMetadataFields(book).length > 0
 }
 
+const normalizeForMatch = (value) => String(value ?? '')
+  .normalize('NFD')
+  .replace(/\p{Diacritic}/gu, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim()
+
+export function metadataResultMatchesBook(book, result) {
+  if (!result) return false
+  const bookTitle = normalizeForMatch(book?.title)
+  const resultTitle = normalizeForMatch(result.title)
+  if (!bookTitle || !resultTitle) return false
+
+  const titleMatches = bookTitle === resultTitle
+    || bookTitle.includes(resultTitle)
+    || resultTitle.includes(bookTitle)
+  if (!titleMatches) return false
+
+  const bookAuthor = normalizeForMatch(book?.author)
+  const resultAuthor = normalizeForMatch(result.author)
+  if (bookAuthor && resultAuthor) {
+    return bookAuthor === resultAuthor
+      || bookAuthor.includes(resultAuthor)
+      || resultAuthor.includes(bookAuthor)
+  }
+  return true
+}
+
+export function bestMetadataResultForBook(book, results = []) {
+  return (results || []).find((result) => metadataResultMatchesBook(book, result)) || null
+}
+
+export function markMetadataCheck(book, { now = Date.now(), lookedUp = true } = {}) {
+  const record = { ...book }
+  const missing = missingMetadataFields(record)
+  if (!missing.length && lookedUp) {
+    record.metaCompleteAt = now
+    record.metaCheckedAt = now
+  } else {
+    delete record.metaCompleteAt
+    record.metaCheckedAt = now
+  }
+  return record
+}
+
+export function friendlyMetadataFailure(error) {
+  const message = String(error?.message || error || '').trim()
+  if (/light is not defined|is not defined|referenceerror/i.test(message)) {
+    return 'The metadata lookup hit an app error. Please update and try again.'
+  }
+  if (/failed with \d+|request failed|fetch failed|network|timeout|timed out/i.test(message)) {
+    return 'The metadata sources could not be reached. Try again when the connection is steady.'
+  }
+  return 'Details are not available from the metadata sources yet.'
+}
+
 // Apply a fetched result to a book, filling only empty fields. When the book
 // had no series and — after a genuine lookup — still has none, it is marked
 // `seriesChecked` so a true standalone stops being re-queried. Returns
@@ -81,19 +137,20 @@ export async function backfillLibraryMetadata({ books, updateBook, onProgress, s
       // light: this is a bulk sweep over the whole library — skip the blind
       // publisher-site crawl, which costs ~15s a book for occasional extras.
       const results = await fetchBookMetadataResults(book.title, book.author || undefined, undefined, { light: true })
-      const { record, filled } = applyMetadataResult(book, results?.[0], { didLookup: !!results?.length })
+      const match = bestMetadataResultForBook(book, results)
+      const { record, filled } = applyMetadataResult(book, match, { didLookup: !!match })
       if (record) {
         // A record with no fill is a standalone we just confirmed — persist the
         // seriesChecked mark, but it does not count as an update.
-        await updateBook(record)
+        await updateBook(markMetadataCheck(record))
         if (filled) updated += 1
       } else if (!results?.length) {
-        failures.push({ id: book.id, title: book.title, reason: 'No metadata results found' })
+        failures.push({ id: book.id, title: book.title, reason: 'No matching details found yet' })
       } else {
-        failures.push({ id: book.id, title: book.title, reason: 'Results had no new details to add' })
+        failures.push({ id: book.id, title: book.title, reason: 'Returned details did not match this book' })
       }
     } catch (error) {
-      failures.push({ id: book.id, title: book.title, reason: error?.message || 'Lookup failed' })
+      failures.push({ id: book.id, title: book.title, reason: friendlyMetadataFailure(error) })
     }
   }
 

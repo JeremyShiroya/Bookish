@@ -17,7 +17,13 @@
 
 import { reactive, readonly } from 'vue'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
-import { applyMetadataResult, bookNeedsMetadata, missingMetadataFields } from '~/composables/useMetadataBackfill'
+import {
+  applyMetadataResult,
+  bestMetadataResultForBook,
+  bookNeedsMetadata,
+  markMetadataCheck,
+  missingMetadataFields,
+} from '~/composables/useMetadataBackfill'
 
 // Pacing.
 //
@@ -177,14 +183,12 @@ async function fillOne(book) {
     // actually needs something only Goodreads has.
     { light: true, skipGoodreads: !needsGoodreads(book) },
   )
-  const top = results?.[0]
-  // Verify before trusting: only apply a result that is really this book.
-  const matched = metadataResultMatchesBook(book, top)
-  const { record, filled } = applyMetadataResult(book, matched ? top : null, { didLookup: matched })
+  const match = bestMetadataResultForBook(book, results)
+  const { record, filled } = applyMetadataResult(book, match, { didLookup: !!match })
   // Stamp the check either way so an unfillable book waits a day before its
   // next attempt, on top of whatever the result filled (series-checked flag
   // included).
-  await _deps.updateBook({ ...(record || book), metaCheckedAt: Date.now() })
+  await _deps.updateBook(markMetadataCheck(record || book, { lookedUp: !!match }))
   return filled
 }
 

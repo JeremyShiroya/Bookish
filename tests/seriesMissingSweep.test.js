@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { installmentMatchesBook, rosterCoverage } from '../composables/useSeriesSuggestions.js'
+import {
+  bestResultForInstallment,
+  bestResultForOwnedBook,
+  installmentMatchesBook,
+  rosterCoverage,
+} from '../composables/useSeriesSuggestions.js'
 
 const root = resolve(process.cwd())
 const read = (path) => readFileSync(resolve(root, path), 'utf8')
@@ -38,6 +43,32 @@ describe('matching a missing installment to an owned book', () => {
   test('an untitled entry or book never matches', () => {
     expect(installmentMatchesBook({ title: '' }, { title: 'X' })).toBe(false)
     expect(installmentMatchesBook({ title: 'X' }, { title: '' })).toBe(false)
+  })
+})
+
+describe('the fill picks the real match, not just the first result', () => {
+  // This is the bug the reader hit: the top hit was a box set / wrong edition,
+  // so results[0] failed the guard and the slot stayed blank forever — even
+  // though the correct book was sitting right behind it.
+  const entry = { title: 'Neon Prey', author: 'John Sandford' }
+  const results = [
+    { title: 'The Prey Series Box Set', author: 'John Sandford', cover: 'box.jpg', publishYear: 2020 },
+    { title: 'Neon Prey', author: 'John Sandford', cover: 'neon.jpg', publishYear: 2019 },
+  ]
+
+  test('an installment fill skips the non-matching first result', () => {
+    expect(installmentMatchesBook(entry, results[0])).toBe(false)
+    expect(bestResultForInstallment(entry, results)).toBe(results[1])
+  })
+
+  test('an owned-book match skips the non-matching first result', () => {
+    expect(bestResultForOwnedBook(entry, results)).toBe(results[1])
+  })
+
+  test('no real match means nothing is filled (never a wrong book)', () => {
+    expect(bestResultForInstallment(entry, [results[0]])).toBeNull()
+    expect(bestResultForInstallment(entry, [])).toBeNull()
+    expect(bestResultForOwnedBook(entry, undefined)).toBeNull()
   })
 })
 
@@ -87,11 +118,15 @@ describe('the two-phase sweep is wired correctly', () => {
     expect(suggestions).toContain('{ forceRefresh: true }')
     // The contiguous roster is authoritative for the series length.
     expect(suggestions).toContain('coverage.contiguous')
-    // Fills only the four gap fields, guarded by the match check.
-    expect(suggestions).toContain('installmentMatchesBook(entry, top)')
+    // Fills only the four gap fields, guarded by the match check — and scans
+    // every returned result for the real match, not just results[0].
+    expect(suggestions).toContain('bestResultForInstallment(entry, results)')
+    expect(suggestions).toContain('installmentMatchesBook(entry, result)')
     expect(suggestions).toContain('installmentNeedsDetails(entry)')
+    // The blind first-result grab that left slots blank is gone everywhere.
+    expect(suggestions).not.toContain('results?.[0]')
     // Publishes each fill as it goes so the cards update mid-sweep.
-    expect(suggestions).toMatch(/onProgress\?\.\(\{ done, total, filled, current/)
+    expect(suggestions).toMatch(/onProgress\?\.\(\{ done, total, filled, unresolved, current/)
   })
 
   test('phase 2 links owned-but-untagged books and never overwrites the right one', () => {
@@ -125,6 +160,7 @@ describe('the series detail page exposes the missing-book actions', () => {
     expect(page).toContain('sweep-overlay')
     expect(page).toContain('fillMissingInstallmentDetails')
     expect(page).toContain('reconcileSeriesWithLibrary')
+    expect(page).toContain('still need details')
     // The reconcile is not awaited — the modal's Done is about the visible pass.
     expect(page).toMatch(/reconcileSeriesWithLibrary\(\{[\s\S]*?\}\)\s*\n\s*\.then/)
   })

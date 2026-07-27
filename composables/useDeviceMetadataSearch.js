@@ -160,7 +160,7 @@ function uniquePublishers(sources) {
 // Mirrors the publisher stage of server/api/books/metadata.get.ts: try the
 // publisher names found in provider records first, then research the major
 // publisher sites directly.
-async function getPublisherSources(title, author, publisherCandidates, onProgress) {
+async function getPublisherSources(title, author, publisherCandidates, onProgress, { light = false } = {}) {
   const relayProgress = (event) => {
     onProgress?.({ type: 'step', id: event.stage, status: event.status, detail: event.message })
   }
@@ -282,7 +282,7 @@ export async function fetchBookMetadataOnDevice(title, author, publisher, option
       : 'No publisher field was found; researching major publisher sites by title and author',
   })
 
-  const publisherSources = await getPublisherSources(title, author, publisherCandidates, onProgress)
+  const publisherSources = await getPublisherSources(title, author, publisherCandidates, onProgress, { light })
 
   onProgress?.({ type: 'step', id: 'merge', status: 'active', detail: 'Combining provider and publisher metadata' })
   const results = buildMetadataResults(title, author, {

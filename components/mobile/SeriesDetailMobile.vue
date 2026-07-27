@@ -390,7 +390,7 @@ onUnmounted(() => document.removeEventListener('click', closeMenuOnOutsideClick)
 // library and tags any book the reader already owns — but that was never
 // labelled with this series — so it slides into its real place. The second pass
 // is deliberately off the modal so a slow library scan never makes the UI wait.
-const sweep = reactive({ visible: false, running: false, done: 0, total: 0, filled: 0, current: '' });
+const sweep = reactive({ visible: false, running: false, done: 0, total: 0, filled: 0, unresolved: 0, current: '' });
 let _sweepStop = false;
 
 const sweepPercent = computed(() => (
@@ -399,9 +399,12 @@ const sweepPercent = computed(() => (
 
 const sweepStatusLine = computed(() => {
   if (sweep.done >= sweep.total && sweep.total) {
-    return sweep.filled
-      ? `Filled details for ${sweep.filled} book${sweep.filled === 1 ? '' : 's'}.`
-      : 'These books were already up to date.';
+    if (sweep.filled && sweep.unresolved) {
+      return `Filled details for ${sweep.filled} book${sweep.filled === 1 ? '' : 's'}; ${sweep.unresolved} still need details.`;
+    }
+    if (sweep.filled) return `Filled details for ${sweep.filled} book${sweep.filled === 1 ? '' : 's'}.`;
+    if (sweep.unresolved) return `${sweep.unresolved} book${sweep.unresolved === 1 ? '' : 's'} still need details. Try again in a moment.`;
+    return 'These books were already up to date.';
   }
   return sweep.current ? `Looking up “${sweep.current}”…` : 'Preparing…';
 });
@@ -424,7 +427,7 @@ const startMissingSweep = async () => {
   }
 
   _sweepStop = false;
-  Object.assign(sweep, { visible: true, running: true, done: 0, total: missing.length, filled: 0, current: '' });
+  Object.assign(sweep, { visible: true, running: true, done: 0, total: missing.length, filled: 0, unresolved: 0, current: '' });
 
   const ownedInstallments = seriesBooks.value
     .map((book) => Number(book.seriesInstallment))
@@ -439,10 +442,11 @@ const startMissingSweep = async () => {
       ownedInstallments,
       claimedTotal: derivedSeriesTotal.value || 0,
       shouldStop: () => _sweepStop,
-      onProgress: ({ done, total, filled, current }) => {
+      onProgress: ({ done, total, filled, unresolved, current }) => {
         sweep.done = done;
         sweep.total = total;
         sweep.filled = filled;
+        sweep.unresolved = unresolved || 0;
         sweep.current = current || '';
       },
     });

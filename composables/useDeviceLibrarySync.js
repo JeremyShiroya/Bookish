@@ -348,15 +348,19 @@ async function backfillBookMetadata(importedBooks, { updateBook, addToast }) {
   addToast(`Fetching book details for ${targets.length} imported book${targets.length === 1 ? '' : 's'} in the background…`, 'info')
 
   const { fetchBookMetadataResults } = await import('~/composables/useBookMetadataSearch')
+  const { bestMetadataResultForBook, markMetadataCheck } = await import('~/composables/useMetadataBackfill')
   let updatedCount = 0
 
   for (const book of targets) {
     try {
       // light: background pass over freshly imported books — see backfill.
       const results = await fetchBookMetadataResults(book.title, book.author || undefined, undefined, { light: true })
-      const updated = mergeMetadataIntoBook(book, results?.[0])
+      const match = bestMetadataResultForBook(book, results)
+      const updated = mergeMetadataIntoBook(book, match)
+      if (updated || match) {
+        await updateBook(markMetadataCheck(updated || book, { lookedUp: !!match }))
+      }
       if (updated) {
-        await updateBook(updated)
         updatedCount += 1
       }
     } catch (error) {
