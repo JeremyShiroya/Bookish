@@ -378,6 +378,22 @@ export async function extractPdfManifestFromSource(source) {
   }
 }
 
+// Figures for Reflow. Kept here so every pdf.js document load in the app goes
+// through the same worker setup.
+export async function extractPdfFiguresFromSource(source, options = {}) {
+  let pdf = null
+  try {
+    pdf = await loadPdfDocument(source)
+    if (!pdf) return null
+    const { extractPdfFigures } = await import('./usePdfFigures.js')
+    return await extractPdfFigures(pdf, options)
+  } finally {
+    try {
+      await pdf?.destroy?.()
+    } catch {}
+  }
+}
+
 export async function extractPdfTextFromSource(source) {
   const pdf = await loadPdfDocument(source)
   if (!pdf) return ''

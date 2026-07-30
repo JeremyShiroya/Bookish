@@ -148,7 +148,7 @@ import LibraryBookCard from '~/components/shared/LibraryBookCard.vue';
 import LibraryControlsRow from '~/components/shared/LibraryControlsRow.vue';
 import PlaylistDeleteModal from '~/components/shared/PlaylistDeleteModal.vue';
 import PlaylistEditModal from '~/components/shared/PlaylistEditModal.vue';
-import { matchesLibraryFilters, useLibraryFilters } from '~/composables/useLibraryFilters';
+import { useLibraryFilters } from '~/composables/useLibraryFilters';
 import { useBooks } from '~/composables/useBooks';
 import { useToast } from '~/composables/useToast';
 import { useTTS } from '~/composables/useTTS';
@@ -161,7 +161,7 @@ const { addToast } = useToast();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 // Each playlist remembers its own filters — filtering one is not a statement
 // about the others.
-const { filters, setFilter } = useLibraryFilters(`playlist:${route.params.id}`);
+const { filters, setFilter, matches } = useLibraryFilters(`playlist:${route.params.id}`);
 const viewMode = ref('grid');
 const selectedPlaylistBook = ref(null);
 const editingPlaylist = ref(null);
@@ -199,7 +199,7 @@ const normalizedStatus = (book) => {
 };
 
 const filteredBooks = computed(() => playlistBooks.value.filter(
-  (book) => matchesLibraryFilters(book, filters.value, normalizedStatus),
+  (book) => matches(book, normalizedStatus),
 ));
 
 const isBookActive = (book) => (

@@ -229,17 +229,40 @@
           </button>
         </div>
 
-        <div class="pref-row">
+        <!-- Two separate controls, deliberately. This one HIDES: the app still
+             handles both formats, it just shows one. It disappears when only one
+             format is enabled below, because then there is nothing to hide. -->
+        <div v-if="enabledFormats.length > 1" class="pref-row">
           <div class="pref-copy">
             <span class="pref-label">Book format</span>
+            <span class="pref-hint">Which formats appear in your library.</span>
+          </div>
+          <div class="segmented" role="group" aria-label="Book format filter">
+            <button
+              v-for="opt in formatFilterOptions"
+              :key="opt.value"
+              type="button"
+              class="segment"
+              :class="{ active: settings.formatFilter === opt.value }"
+              @click="set('formatFilter', opt.value)"
+            >{{ opt.label }}</button>
+          </div>
+        </div>
+
+        <!-- And this one REMOVES: those books leave the library and the app
+             stops detecting the format at all. -->
+        <div class="pref-row">
+          <div class="pref-copy">
+            <span class="pref-label">Formats Pages reads</span>
             <span class="pref-hint">
-              Which formats Pages handles. Removing one clears those books from your
-              library and stops the app detecting them — your files stay on the device.
+              Removing a format clears those books from your library and stops Pages
+              detecting them at all — even ones added later. Your files stay on your
+              device, so turning it back on re-imports them.
             </span>
           </div>
           <div class="segmented" role="group" aria-label="Book formats Pages handles">
             <button
-              v-for="opt in formatOptions"
+              v-for="opt in formatModeOptions"
               :key="opt.value"
               type="button"
               class="segment"
@@ -313,16 +336,22 @@ const toggleOptions = [
   { value: true, label: 'On' },
   { value: false, label: 'Off' },
 ]
-// This row is no longer a filter — it is the app-level format choice. See
-// useFormatEnablement: turning a format off purges its books and stops the
-// device scanner detecting the extension.
-const formatOptions = [
+// "Book format" — an app-wide HIDE. Only offers formats the app still handles.
+const formatFilterOptions = computed(() => [
+  { value: 'all', label: 'All' },
+  ...enabledFormats.value.map((format) => ({ value: format, label: formatLabel(format) })),
+])
+
+// "Formats Pages reads" — the app-level choice. See useFormatEnablement:
+// turning one off purges its books and stops the device scanner detecting the
+// extension. Not a filter, which is why it is its own row.
+const formatModeOptions = [
   { value: 'both', label: 'All' },
   { value: 'pdf', label: 'PDF' },
   { value: 'epub', label: 'EPUB' },
 ]
 
-const { formatMode, countAffected, applyFormatMode } = useFormatEnablement()
+const { enabledFormats, formatMode, countAffected, applyFormatMode } = useFormatEnablement()
 
 const pendingFormatMode = ref(null)
 const applyingFormat = ref(false)

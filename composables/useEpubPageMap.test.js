@@ -79,26 +79,19 @@ describe('useMobileReaderPrefs', () => {
   })
 
   it('keeps valid preferences', () => {
-    const prefs = normalizeMobileReaderPrefs({
+    const valid = {
       readingMode: 'scroll',
       pdfViewMode: 'reflow',
+      pdfPageMode: 'scroll',
+      pdfZoom: 1.5,
       background: 'sepia',
       fontSize: 19,
       fontFamily: 'sans',
       fontWeight: 500,
       lineSpacing: 1.8,
       textAlign: 'left',
-    })
-    expect(prefs).toEqual({
-      readingMode: 'scroll',
-      pdfViewMode: 'reflow',
-      background: 'sepia',
-      fontSize: 19,
-      fontFamily: 'sans',
-      fontWeight: 500,
-      lineSpacing: 1.8,
-      textAlign: 'left',
-    })
+    }
+    expect(normalizeMobileReaderPrefs(valid)).toEqual(valid)
   })
 
   it('changes the layout hash only for layout-affecting prefs', () => {

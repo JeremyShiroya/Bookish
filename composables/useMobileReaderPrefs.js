@@ -10,6 +10,14 @@ export const READING_MODE_OPTIONS = Object.freeze(['page', 'scroll'])
 // PDFs only. 'original' is the fixed-page canvas render; 'reflow' rebuilds the
 // text into a continuous flow for phone screens, the way WPS Office does.
 export const PDF_VIEW_MODE_OPTIONS = Object.freeze(['original', 'reflow'])
+// Original View only: 'scroll' is the continuous strip of pages, 'page' snaps
+// one whole PDF page to the screen at a time.
+export const PDF_PAGE_MODE_OPTIONS = Object.freeze(['scroll', 'page'])
+// Fit-to-width is 1.0. Below 1 there is no reason to go on a phone — the page
+// is already only as wide as the screen — so the range starts there.
+export const PDF_ZOOM_MIN = 1.0
+export const PDF_ZOOM_MAX = 3.0
+export const PDF_ZOOM_STEP = 0.25
 export const READER_BACKGROUND_OPTIONS = Object.freeze(['default', 'sepia'])
 // Every reader font must carry real 300-700 weights, otherwise the thickness
 // control does nothing: CSS font-matching silently collapses 300 and 500 onto
@@ -35,6 +43,8 @@ export const READER_FONT_SIZE_MAX = 24
 export const DEFAULT_MOBILE_READER_PREFS = Object.freeze({
   readingMode: 'page',      // 'page' (ReadEra-style page turns) | 'scroll'
   pdfViewMode: 'original',  // PDFs: 'original' (fixed page) | 'reflow'
+  pdfPageMode: 'page',      // Original View: 'page' (one page per screen) | 'scroll'
+  pdfZoom: 1.0,             // 1.0 = the page fills the screen width
   background: 'default',    // 'default' (theme) | 'sepia' (book brown)
   fontSize: 17,             // px
   fontFamily: 'serif',      // READER_FONT_OPTIONS id
@@ -57,6 +67,12 @@ export function normalizeMobileReaderPrefs(value) {
     pdfViewMode: PDF_VIEW_MODE_OPTIONS.includes(source.pdfViewMode)
       ? source.pdfViewMode
       : DEFAULT_MOBILE_READER_PREFS.pdfViewMode,
+    pdfPageMode: PDF_PAGE_MODE_OPTIONS.includes(source.pdfPageMode)
+      ? source.pdfPageMode
+      : DEFAULT_MOBILE_READER_PREFS.pdfPageMode,
+    pdfZoom: Number.isFinite(Number(source.pdfZoom))
+      ? Math.round(clamp(Number(source.pdfZoom), PDF_ZOOM_MIN, PDF_ZOOM_MAX) / PDF_ZOOM_STEP) * PDF_ZOOM_STEP
+      : DEFAULT_MOBILE_READER_PREFS.pdfZoom,
     background: READER_BACKGROUND_OPTIONS.includes(source.background)
       ? source.background
       : DEFAULT_MOBILE_READER_PREFS.background,

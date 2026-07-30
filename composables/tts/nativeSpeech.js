@@ -54,6 +54,22 @@ export function isOfferedDeviceLocale(voice) {
   return DEVICE_VOICE_LOCALES.some((locale) => lang === locale.toLowerCase())
 }
 
+// WHICH FIELD CARRIES THE VOICE'S IDENTITY.
+//
+// The Capacitor plugin does NOT put the OS voice name in `name`. On Android it
+// builds `name` from the locale —
+//   obj.put("voiceURI", voice.getName());
+//   obj.put("name", locale.getDisplayLanguage() + " " + locale.getDisplayCountry());
+// — so every en-US voice arrives called "English United States", and only
+// `voiceURI` holds the real "en-us-x-sfg#female_1-local".
+//
+// Reading `name` therefore made every voice in a locale look identical: gender
+// could never be detected, and deduping collapsed each locale to a single voice
+// (which is why the picker showed four entries that were all female — the
+// survivor was whichever sorted first). Identity and gender both come from
+// voiceURI, with `name` as the fallback for platforms that do fill it in.
+const voiceKey = (voice) => String(voice?.voiceURI || voice?.name || '')
+
 // Android's Google voices are named like "en-us-x-sfg#female_1-local": the
 // gender and its ordinal live in a `#gender_n` token. Matching that token has to
 // come FIRST and without a trailing \b — `_` is a word character, so
@@ -69,7 +85,7 @@ const MALE_NAME_HINT = /male|man|david|guy|ryan|christopher|davis|daniel|alex|fr
 // names one. Order matters: FEMALE_NAME_HINT would match the "male" inside
 // "female", so the female test always runs first.
 export function deviceVoiceGender(voice) {
-  const raw = String(voice?.name || '')
+  const raw = voiceKey(voice)
   const token = GENDER_TOKEN.exec(raw)
   if (token) {
     return {
@@ -97,18 +113,28 @@ export function describeDeviceVoice(voice, indexWithinGroup = 0) {
 const VOICE_INSTALL_SUFFIX = /-(?:local|network)$/i
 
 const voiceIdentity = (voice) => (
-  `${normalizeLocale(voice?.lang)}|${String(voice?.name || '').replace(VOICE_INSTALL_SUFFIX, '').toLowerCase()}`
+  `${normalizeLocale(voice?.lang)}|${voiceKey(voice).replace(VOICE_INSTALL_SUFFIX, '').toLowerCase()}`
 )
 
-const isNetworkVoice = (voice) => /-network$/i.test(String(voice?.name || ''))
+// `localService` is the plugin's own answer to "does this voice need the
+// network" (!voice.isNetworkConnectionRequired() on Android), so it is trusted
+// ahead of guessing from the name suffix.
+const isNetworkVoice = (voice) => (
+  voice?.localService === false || /-network$/i.test(voiceKey(voice))
+)
 
 // Every distinct offered voice, in locale order, keyed by its ORIGINAL index so
-// the engine can still select it. Deduping by DISPLAY name used to collapse the
-// several variants each locale ships; deduping by nothing at all listed the same
-// voice three times. The key is the OS voice's own identity, ignoring the
-// install-location suffix.
+// the engine can still select it.
+//
+// Deduping is only safe when the platform gives something that actually tells
+// voices apart. If no voice carries a voiceURI, the only key available is the
+// locale-derived display name, which is IDENTICAL for every voice in a locale —
+// deduping on that collapsed the whole list to one voice per locale. In that
+// case every voice is kept, since listing a few duplicates is far better than
+// hiding the real ones.
 export function offeredDeviceVoices(voices) {
   const list = Array.isArray(voices) ? voices : []
+  const canDedupe = list.some((voice) => !!voice?.voiceURI)
   const out = []
 
   for (const locale of DEVICE_VOICE_LOCALES) {
@@ -117,6 +143,10 @@ export function offeredDeviceVoices(voices) {
 
     list.forEach((voice, index) => {
       if (normalizeLocale(voice?.lang) !== target) return
+      if (!canDedupe) {
+        byIdentity.set(`${index}`, { voice, index })
+        return
+      }
       const key = voiceIdentity(voice)
       const existing = byIdentity.get(key)
       // First one wins, unless it is the network twin of a local voice.
@@ -131,12 +161,23 @@ export function offeredDeviceVoices(voices) {
       rank[deviceVoiceGender(a.voice).gender] - rank[deviceVoiceGender(b.voice).gender]
     ))
 
+    // Two different variants can both call themselves "#female_1", so a label
+    // already taken falls back to the next free number. Duplicate LABELS are
+    // what the picker looked broken for, whatever the OS calls things.
+    const usedLabels = new Set()
     const seenPerGroup = new Map()
     for (const { voice, index } of entries) {
       const { gender } = deviceVoiceGender(voice)
       const seen = seenPerGroup.get(gender) || 0
       seenPerGroup.set(gender, seen + 1)
-      out.push({ index, name: describeDeviceVoice(voice, seen), lang: voice?.lang })
+
+      let name = describeDeviceVoice(voice, seen)
+      for (let bump = seen; usedLabels.has(name); bump += 1) {
+        name = describeDeviceVoice({ ...voice, voiceURI: '', name: '' }, bump)
+          .replace('Voice', gender || 'Voice')
+      }
+      usedLabels.add(name)
+      out.push({ index, name, lang: voice?.lang })
     }
   }
 

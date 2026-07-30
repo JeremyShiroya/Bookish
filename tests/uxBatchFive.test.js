@@ -234,8 +234,16 @@ describe('the book detail playlist icon reflects membership', () => {
   test('it fills the way the favourite heart does', () => {
     const detail = read('components/mobile/BookDetailMobile.vue')
     expect(detail).toContain('const playlistCount = computed')
-    expect(detail).toContain(':class="{ active: playlistCount > 0 }"')
     expect(detail).toContain("playlistCount > 0 ? 'ri-play-list-2-fill' : 'ri-play-list-2-line'")
+
+    // It marks membership in the BRAND colour, like the same marker on the
+    // library cards. Reusing `.active` — the favourite heart's rule — made it
+    // red, which reads as a warning rather than as "filed in a playlist".
+    expect(detail).toContain(":class=\"{ 'in-playlist': playlistCount > 0 }\"")
+    expect(detail).toMatch(/\.icon-action\.in-playlist[^}]*var\(--color-brand-primary\)/s)
+
+    const card = read('components/shared/LibraryBookCard.vue')
+    expect(card).toMatch(/\.action-button\.in-playlist[^}]*var\(--color-brand-primary\)/s)
   })
 })
 
@@ -387,7 +395,7 @@ describe('PDF reflow', () => {
     // Availability is a cheap manifest check, not a full reflow — otherwise
     // every PDF open would pay for a pass over every page before painting.
     expect(page).toContain("(pdfManifest.value?.chunks?.length || 0) > 0")
-    expect(page).toContain('usePdfReflowView.value ? reflowPdfManifest(pdfManifest.value) : null')
+    expect(page).toContain('usePdfReflowView.value ? reflowPdfManifest(pdfManifest.value, pdfFigures.value) : null')
 
     const reader = read('components/mobile/ReaderMobile.vue')
     expect(reader).toContain("prefs.pdfViewMode === mode")

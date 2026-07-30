@@ -17,10 +17,15 @@
 // free. Each block keeps the manifest chunk ids it came from, which is what lets
 // the reading position stay in sync with Original View.
 //
-// Deliberately text-only: figures and table grids are not reproduced. A reader
-// who needs them switches back to Original View.
+// Figures (images, diagrams and tables) come from usePdfFigures as cropped
+// pictures of the page, and are placed inline at their position in the reading
+// order — the way WPS keeps them. Text painted INSIDE a figure is absorbed by
+// it rather than emitted as prose, which is what stopped axis labels and table
+// cells from arriving as stray paragraphs.
 
-export const PDF_REFLOW_VERSION = 1
+import { lineIsInsideFigure } from './usePdfFigures.js'
+
+export const PDF_REFLOW_VERSION = 2
 
 // ── Geometry from the text transform ────────────────────────────────────────
 // A PDF text matrix is [a, b, c, d, e, f]: e/f are the position, and the font
@@ -225,6 +230,30 @@ function appendLine(paragraph, text) {
 
 // ── Block building ──────────────────────────────────────────────────────────
 
+// Figures are laid out between the text blocks they sit between, by y. PDF y
+// grows upward, so a figure comes BEFORE a line whose baseline is below it.
+export function mergeFiguresIntoBlocks(blocks, figures) {
+  if (!figures?.length) return blocks
+
+  const remaining = [...figures].sort((a, b) => (b.y + b.height) - (a.y + a.height))
+  const out = []
+
+  for (const block of blocks) {
+    const blockTop = block.top ?? Number.POSITIVE_INFINITY
+    while (remaining.length && (remaining[0].y + remaining[0].height) > blockTop) {
+      const figure = remaining.shift()
+      out.push({ type: 'figure', src: figure.src, width: figure.width, height: figure.height })
+    }
+    out.push(block)
+  }
+
+  for (const figure of remaining) {
+    out.push({ type: 'figure', src: figure.src, width: figure.width, height: figure.height })
+  }
+
+  return out
+}
+
 export function blocksForLines(lines, { bodySize, headingSizes, columnRight }) {
   const blocks = []
   let paragraph = null
@@ -243,7 +272,7 @@ export function blocksForLines(lines, { bodySize, headingSizes, columnRight }) {
     const level = headingLevelFor(line, bodySize, headingSizes)
     if (level) {
       flush()
-      blocks.push({ type: 'heading', level, text, itemIndexes: [...line.itemIndexes] })
+      blocks.push({ type: 'heading', level, text, top: line.y, itemIndexes: [...line.itemIndexes] })
       continue
     }
 
@@ -255,12 +284,15 @@ export function blocksForLines(lines, { bodySize, headingSizes, columnRight }) {
         type: 'list-item',
         ordered: numbered,
         text: text.replace(bullet ? BULLET : NUMBERED, ''),
+        top: line.y,
         itemIndexes: [...line.itemIndexes],
       })
       continue
     }
 
-    if (!paragraph) paragraph = { type: 'paragraph', text: '', itemIndexes: [] }
+    // `top` is the block's first baseline, which is what lets figures be placed
+    // between blocks in the order they appear down the page.
+    if (!paragraph) paragraph = { type: 'paragraph', text: '', top: line.y, itemIndexes: [] }
     paragraph.text = appendLine(paragraph.text, text)
     paragraph.itemIndexes.push(...line.itemIndexes)
 
@@ -300,6 +332,14 @@ export function blocksToHtml(blocks) {
     }
 
     closeList()
+    if (block.type === 'figure') {
+      // data-pdf-figure marks it for the tap-to-open full-screen viewer, the
+      // way WPS opens an image from the reflowed page.
+      out.push(
+        `<figure class="reflow-figure"><img src="${escapeHtml(block.src)}" alt="Figure" data-pdf-figure="1" loading="lazy" /></figure>`,
+      )
+      continue
+    }
     if (block.type === 'heading') {
       out.push(`<h${block.level}>${escapeHtml(block.text)}</h${block.level}>`)
     } else {
@@ -316,13 +356,17 @@ export function blocksToHtml(blocks) {
 /**
  * Reflow a whole PDF manifest into EPUB-shaped sections.
  *
+ * @param {object} manifest  the stored PDF manifest
+ * @param {object} [figures] usePdfFigures output: { pages: { [page]: [...] } }
  * @returns {{version:number, sections:{title:string,html:string,page:number}[], empty:boolean}}
  *   `empty` is true for a PDF with no text layer (a scan) — the caller offers
  *   Reflow disabled rather than rendering a blank reader.
  */
-export function reflowPdfManifest(manifest) {
+export function reflowPdfManifest(manifest, figures = null) {
   const pageRecords = manifest?.pages || []
   if (!pageRecords.length) return { version: PDF_REFLOW_VERSION, sections: [], empty: true }
+
+  const figuresFor = (page) => figures?.pages?.[page] || figures?.pages?.[String(page)] || []
 
   const pages = pageRecords.map((page) => ({
     page: page.page,
@@ -345,13 +389,21 @@ export function reflowPdfManifest(manifest) {
 
   const sections = []
   for (const page of pages) {
-    const kept = stripRunningHeads(page.lines, page.height, repeated)
-    if (!kept.length) continue
+    const pageFigures = figuresFor(page.page)
 
-    const blocks = detectColumns(kept, page.width).flatMap((column) => {
+    // Text painted inside a figure is part of the picture — axis labels, table
+    // cells, the words on a scanned diagram. Emitting it as prose is what made
+    // reflow read like an image had been shredded into paragraphs.
+    const kept = stripRunningHeads(page.lines, page.height, repeated)
+      .filter((line) => !lineIsInsideFigure(line, pageFigures))
+
+    if (!kept.length && !pageFigures.length) continue
+
+    const textBlocks = detectColumns(kept, page.width).flatMap((column) => {
       const columnRight = column.length ? Math.max(...column.map((line) => line.right)) : 0
       return blocksForLines(column, { bodySize, headingSizes, columnRight })
     })
+    const blocks = mergeFiguresIntoBlocks(textBlocks, pageFigures)
     if (!blocks.length) continue
 
     const html = blocksToHtml(blocks)

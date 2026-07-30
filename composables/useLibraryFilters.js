@@ -1,4 +1,5 @@
 import { computed, reactive } from 'vue'
+import { useBookishSettings } from '~/composables/useBookishSettings'
 
 // Per-page library filter state.
 //
@@ -105,12 +106,33 @@ export const useLibraryFilters = (scope, extras = {}, storage = null) => {
     ))
   ))
 
-  return { filters, setFilter, setFilters, resetFilters, hasActiveFilter }
+  // Two format controls stack, and they are not the same thing:
+  //
+  //   settings.formatFilter — Preferences → "Book format". App-wide HIDE: the
+  //     app still handles the format, it just isn't shown. Applies everywhere.
+  //   filters.format        — this page's own Filter panel. Narrows further,
+  //     and says nothing about any other page.
+  //
+  // A book has to pass both. (Neither is `enabledFormats`, which decides whether
+  // the app handles the format at all — see useFormatEnablement.)
+  const { settings } = useBookishSettings()
+
+  const matches = (book, statusOf) => {
+    const hidden = settings.value.formatFilter || 'all'
+    if (hidden !== 'all' && String(book?.format || '').toLowerCase() !== hidden) return false
+    return matchesLibraryFilters(book, scopeCache[key], statusOf)
+  }
+
+  return { filters, setFilter, setFilters, resetFilters, hasActiveFilter, matches }
 }
 
-// Drops books the scope's filters exclude. Format is compared case-insensitively
-// because books carry `format` as a free-form string.
-export const matchesLibraryFilters = (book, filters, statusOf = (b) => b?.status) => {
+// Drops books the scope's filters exclude — the PAGE's filters only. Callers
+// that also need the app-wide hide should use the `matches` returned by
+// useLibraryFilters, which folds both in.
+//
+// Format is compared case-insensitively because books carry `format` as a
+// free-form string.
+export function matchesLibraryFilters(book, filters, statusOf = (b) => b?.status) {
   const status = filters?.status || 'all'
   const format = filters?.format || 'all'
   if (status !== 'all' && (statusOf(book) || 'Unread') !== status) return false

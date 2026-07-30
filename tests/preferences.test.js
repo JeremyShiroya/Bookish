@@ -87,12 +87,14 @@ describe('appearance preferences', () => {
       expect(prefs, key).toContain(key)
     }
 
-    // The Book format row is no longer a filter: it is the app-level choice of
-    // which formats Pages handles at all, and removing one purges those books
-    // and stops the device scanner detecting the extension.
+    // TWO format rows, and they do different things. "Book format" hides
+    // (the app still handles both); "Formats Pages reads" removes (purges the
+    // books and stops the scanner detecting the extension).
+    expect(prefs).toContain("set('formatFilter'")
     expect(prefs).toContain('useFormatEnablement')
     expect(prefs).toContain('chooseFormatMode')
-    expect(prefs).not.toContain("set('formatFilter'")
+    // Hiding between formats is meaningless once only one is handled.
+    expect(prefs).toContain('v-if="enabledFormats.length > 1"')
 
     // The Favourites card section moved out of Preferences: its layout is now
     // chosen from the grid/list toggle in the Favourites page's controls row.

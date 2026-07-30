@@ -91,7 +91,7 @@
 import { computed, ref } from 'vue';
 import { useBooks } from "~/composables/useBooks";
 import { useBookishSettings } from '~/composables/useBookishSettings';
-import { matchesLibraryFilters, useLibraryFilters } from '~/composables/useLibraryFilters';
+import { useLibraryFilters } from '~/composables/useLibraryFilters';
 import { useToast } from '~/composables/useToast';
 import { useTTS } from '~/composables/useTTS';
 import EmptyState from "../shared/EmptyState.vue";
@@ -117,11 +117,9 @@ const selectedDeleteBook = ref(null);
 // ── Controls row: status + format filters, grid/list view ───────────────────
 // Scoped to this page, so filtering Favourites leaves every other shelf alone,
 // and the choice survives opening a book and coming back.
-const { filters, setFilter, resetFilters } = useLibraryFilters('favourites');
+const { filters, setFilter, resetFilters, matches } = useLibraryFilters('favourites');
 
-const displayedFavourites = computed(() => favourites.value.filter(
-  (book) => matchesLibraryFilters(book, filters.value),
-));
+const displayedFavourites = computed(() => favourites.value.filter((book) => matches(book)));
 
 const clearFilters = () => resetFilters();
 

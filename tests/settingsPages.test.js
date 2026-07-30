@@ -111,8 +111,11 @@ describe('settings pages wiring', () => {
     }
     for (const [path, scope] of Object.entries(scopes)) {
       const source = read(path)
-      expect(source, path).toContain('matchesLibraryFilters')
       expect(source, path).toContain(`useLibraryFilters(${scope}`)
+      // The scope's own `matches` folds in the app-wide hide (Preferences →
+      // "Book format") as well as this page's filter, so a page never has to
+      // remember to apply both.
+      expect(source, path).toMatch(/matches\(book[,)]/)
       expect(source, path).not.toContain('matchesFormatFilter')
     }
   })

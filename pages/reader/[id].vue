@@ -31,6 +31,8 @@
         :full-sections="chapterList"
         :toc-items="displayTocItems"
         :open-to-chunk="pagedStartChunk"
+        :pdf-figures-loading="pdfFiguresLoading"
+        :pdf-figures-progress="pdfFiguresProgress"
         @back="router.back()"
         @open-toc="tocOpen = true"
         @page-change="handlePdfPageChange"
@@ -260,6 +262,7 @@ import {
 import { getPrewarmedReaderContent } from '~/composables/useReaderPrewarm'
 import {
   extractPdfContentFromSource,
+  extractPdfFiguresFromSource,
   extractPdfTocFromSource,
   formatPdfTocTitle,
   pdfSourceToBytes,
@@ -391,8 +394,59 @@ const usePdfReflowView = computed(() => (
 // costs one pass over data that is in memory anyway — but only once the reader
 // is actually in Reflow. Vue caches it, so page turns never recompute it.
 const pdfReflow = computed(() => (
-  usePdfReflowView.value ? reflowPdfManifest(pdfManifest.value) : null
+  usePdfReflowView.value ? reflowPdfManifest(pdfManifest.value, pdfFigures.value) : null
 ))
+
+// Figures (images, diagrams, tables) are cropped out of the rendered pages once
+// and then cached with the book — see usePdfFigures. Extracting them means
+// rendering every page, so it happens the FIRST time Reflow is opened rather
+// than on every PDF open, and never for a reader who stays in Original View.
+const pdfFigures = ref(null)
+const pdfFiguresLoading = ref(false)
+const pdfFiguresProgress = ref(0)
+let _figuresRequestedFor = null
+
+async function ensurePdfFigures() {
+  if (!isPdfBook.value || !pdfSource.value) return
+  if (pdfFigures.value || pdfFiguresLoading.value) return
+
+  const id = route.params.id
+  // One attempt per book per visit: a PDF whose figures fail to extract must
+  // not retry the whole render on every switch back into Reflow.
+  if (_figuresRequestedFor === id) return
+  _figuresRequestedFor = id
+
+  pdfFiguresLoading.value = true
+  pdfFiguresProgress.value = 0
+  try {
+    const figures = await extractPdfFiguresFromSource(pdfSource.value, {
+      onProgress: (done, total) => {
+        pdfFiguresProgress.value = total ? Math.round((done / total) * 100) : 0
+      },
+    })
+    pdfFigures.value = figures
+    await saveBookContent(id, {
+      content: rawContent.value || null,
+      pages: totalPages.value || book.value?.pages || 0,
+      tocTitles: tocTitles.value,
+      tocItems: tocItems.value,
+      format: bookFormat.value,
+      pdfTocChecked: pdfTocChecked.value,
+      pdfManifest: pdfManifest.value,
+      pdfFigures: figures,
+    })
+  } catch (error) {
+    // Reflow still works without figures — it just falls back to text only.
+    console.warn('[Reader] Could not extract PDF figures for reflow:', error)
+    pdfFigures.value = { version: 0, pages: {} }
+  } finally {
+    pdfFiguresLoading.value = false
+  }
+}
+
+watch(usePdfReflowView, (reflowing) => {
+  if (reflowing) ensurePdfFigures()
+})
 
 // Only the canvas viewer counts as "renderable" — in reflow the PDF is read
 // through the EPUB surfaces instead, so every `isPdfRenderable` branch (page
@@ -1537,6 +1591,7 @@ function applyStoredReaderContent(stored) {
   pdfTocChecked.value = !!stored.pdfTocChecked
   pdfSource.value = stored.source ?? null
   pdfManifest.value = stored.pdfManifest ?? null
+  pdfFigures.value = stored.pdfFigures ?? null
   totalPages.value = stored.pages || book.value?.pages || 0
   book.value = { ...book.value, content: stored.content ?? '', tocTitles: stored.tocTitles ?? [] }
   // Seed the mobile mounting window before the DOM renders so the first paint

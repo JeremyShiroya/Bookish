@@ -63,7 +63,7 @@
             <button
               type="button"
               class="icon-action"
-              :class="{ active: playlistCount > 0 }"
+              :class="{ 'in-playlist': playlistCount > 0 }"
               :title="playlistCount > 0
                 ? `In ${playlistCount} playlist${playlistCount === 1 ? '' : 's'}`
                 : 'Add to playlist'"
@@ -422,9 +422,18 @@ watch(
   color: var(--color-brand-primary);
 }
 
+/* The favourite heart is red; every other "on" state is the brand purple, which
+   is the colour the same playlist marker uses on the library cards. Sharing one
+   `.active` rule turned the playlist button red. */
 .icon-action.active {
   border-color: #ef4444;
   color: #ef4444;
+}
+
+.icon-action.in-playlist,
+.icon-action.in-playlist i {
+  border-color: var(--color-brand-primary);
+  color: var(--color-brand-primary);
 }
 
 .icon-action.danger {

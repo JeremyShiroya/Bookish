@@ -123,24 +123,51 @@ describe('device voices', () => {
     expect(unlabelled).toBe('English (US) · Voice 1')
   })
 
-  test("Android's #gender_n token is read — \\b never matched it", () => {
-    // `_` is a word character, so /\bfemale\b/ does NOT match "#female_1" and
-    // every Google voice used to land in the unlabelled branch.
-    expect(deviceVoiceGender({ name: 'en-us-x-sfg#female_1-local' }).gender).toBe('Female')
-    expect(deviceVoiceGender({ name: 'en-us-x-iom#male_2-local' }).gender).toBe('Male')
+  // What the Capacitor plugin ACTUALLY returns on Android:
+  //   voiceURI = voice.getName()                    → "en-us-x-sfg#female_1-local"
+  //   name     = displayLanguage + displayCountry   → "English United States"
+  // The identity lives in voiceURI; `name` is the same for every voice in a
+  // locale. Reading `name` is what made the picker show four voices that were
+  // all female — each locale collapsed to whichever entry sorted first.
+  const androidVoice = (voiceURI, lang, localService = true) => ({
+    voiceURI,
+    name: lang.startsWith('en-US') ? 'English United States' : 'English United Kingdom',
+    lang,
+    localService,
+  })
+
+  test('gender comes from voiceURI, not the locale-derived name', () => {
+    // `_` is a word character, so /\bfemale\b/ does NOT match "#female_1" — the
+    // second half of the same bug.
+    expect(deviceVoiceGender(androidVoice('en-us-x-sfg#female_1-local', 'en-US')).gender).toBe('Female')
+    expect(deviceVoiceGender(androidVoice('en-us-x-iom#male_2-local', 'en-US')).gender).toBe('Male')
     // "female" contains "male" — the female test has to win.
-    expect(deviceVoiceGender({ name: 'en-gb-x-gba#female_3-local' }).gender).toBe('Female')
-    expect(describeDeviceVoice({ name: 'en-us-x-sfg#female_1-local', lang: 'en-US' }, 0))
+    expect(deviceVoiceGender(androidVoice('en-gb-x-gba#female_3-local', 'en-GB')).gender).toBe('Female')
+    expect(describeDeviceVoice(androidVoice('en-us-x-sfg#female_1-local', 'en-US'), 0))
       .toBe('English (US) · Female 1')
+  })
+
+  test('every real Android voice survives, male ones included', () => {
+    // The regression: all four locales' voices shared the name "English United
+    // States", so deduping on `name` left one voice per locale.
+    const offered = offeredDeviceVoices([
+      androidVoice('en-us-x-sfg#female_1-local', 'en-US'),
+      androidVoice('en-us-x-tpf#female_2-local', 'en-US'),
+      androidVoice('en-us-x-iom#male_1-local', 'en-US'),
+      androidVoice('en-us-x-tpd#male_2-local', 'en-US'),
+    ])
+    expect(offered).toHaveLength(4)
+    expect(offered.filter((v) => v.name.includes('Male'))).toHaveLength(2)
+    expect(offered.filter((v) => v.name.includes('Female'))).toHaveLength(2)
   })
 
   test('the network twin of a local voice is dropped', () => {
     // Google lists every voice twice. They sound identical, and the network one
     // cannot play on the offline picker that exists for exactly this case.
     const dupes = [
-      { name: 'en-us-x-sfg#female_1-local', lang: 'en-US' },
-      { name: 'en-us-x-sfg#female_1-network', lang: 'en-US' },
-      { name: 'en-us-x-iom#male_1-network', lang: 'en-US' },
+      androidVoice('en-us-x-sfg#female_1-local', 'en-US', true),
+      androidVoice('en-us-x-sfg#female_1-network', 'en-US', false),
+      androidVoice('en-us-x-iom#male_1-network', 'en-US', false),
     ]
     const offered = offeredDeviceVoices(dupes)
     expect(offered).toHaveLength(2)
@@ -149,15 +176,27 @@ describe('device voices', () => {
       'English (US) · Male 1',
     ])
     // The surviving female entry is the LOCAL one, not the network twin.
-    expect(dupes[offered[0].index].name).toBe('en-us-x-sfg#female_1-local')
+    expect(dupes[offered[0].index].voiceURI).toBe('en-us-x-sfg#female_1-local')
+  })
+
+  test('voices are never collapsed when the platform gives nothing to tell them apart', () => {
+    // No voiceURI anywhere: the only key is the shared display name, so deduping
+    // would hide every voice but one. Listing duplicates beats hiding real ones.
+    const offered = offeredDeviceVoices([
+      { name: 'English United States', lang: 'en-US' },
+      { name: 'English United States', lang: 'en-US' },
+      { name: 'English United States', lang: 'en-US' },
+    ])
+    expect(offered).toHaveLength(3)
   })
 
   test('no two offered voices share a label', () => {
     const offered = offeredDeviceVoices([
-      { name: 'en-us-x-sfg#female_1-local', lang: 'en-US' },
-      { name: 'en-us-x-tpf#female_2-local', lang: 'en-US' },
-      { name: 'en-us-x-iom#male_1-local', lang: 'en-US' },
-      { name: 'en-us-x-tpd-local', lang: 'en-US' },
+      // Two different variants both calling themselves "#female_1".
+      androidVoice('en-us-x-sfg#female_1-local', 'en-US'),
+      androidVoice('en-us-x-tpf#female_1-local', 'en-US'),
+      androidVoice('en-us-x-iom#male_1-local', 'en-US'),
+      androidVoice('en-us-x-tpd-local', 'en-US'),
     ])
     expect(new Set(offered.map((v) => v.name)).size).toBe(offered.length)
   })

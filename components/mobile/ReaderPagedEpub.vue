@@ -57,7 +57,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   "position-change", "long-press", "toggle-chrome", "selection-settled",
-  "annotation-tap", "section-rendered",
+  "annotation-tap", "section-rendered", "figure-tap",
 ]);
 
 const viewportRef = ref(null);
@@ -393,6 +393,13 @@ const onTouchCancel = () => {
 // without the top bar and dock over it.
 const onClick = (event) => {
   if (longPressFired) return;
+  // A reflowed PDF figure opens full screen rather than turning the page — the
+  // whole point of keeping the image is being able to look at it.
+  const figure = event.target?.closest?.("img[data-pdf-figure]");
+  if (figure) {
+    emit("figure-tap", figure.getAttribute("src"));
+    return;
+  }
   // Tapping an existing highlight opens it rather than turning the page.
   if (event.target?.closest?.("mark[data-annotation-id]")) {
     emit("annotation-tap", event);
@@ -676,6 +683,24 @@ defineExpose({ nextPage, prevPage, goToSection, goToSectionPage, goToChunk, getP
   padding: 0.35em 0.55em;
   border: 1px solid var(--color-reader-highlight-border, rgba(0, 0, 0, 0.12));
   text-indent: 0;
+}
+
+/* Reflowed PDF figures: a picture of the region cropped out of the page, so it
+   must never exceed one column, and it advertises that it opens full screen. */
+.reflow-figure {
+  margin: 0.9em 0;
+  text-align: center;
+  text-indent: 0;
+  break-inside: avoid;
+}
+
+.reflow-figure img {
+  max-width: 100% !important;
+  max-height: 58vh;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 4px;
+  cursor: zoom-in;
 }
 
 .paged-text .tts-active {

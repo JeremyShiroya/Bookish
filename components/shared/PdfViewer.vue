@@ -1,5 +1,5 @@
 <template>
-  <div class="pdf-viewer" ref="viewerRef">
+  <div class="pdf-viewer" :class="{ 'is-paged': pageMode === 'page' }" ref="viewerRef">
     <div v-if="pdfError" class="pdf-error">
       <i class="ri-file-damage-line"></i>
       <p>Could not render PDF.</p>
@@ -62,6 +62,15 @@ import SkeletonLoader from './SkeletonLoader.vue'
 const props = defineProps({
   src: { required: true },
   zoom: { type: Number, default: 1 },
+  // Pixels trimmed off the container before the fit-to-width scale is computed.
+  // Desktop leaves room for the page's drop shadow; mobile wants the page to
+  // reach the edges — a hardcoded 32 here (on top of the container's own
+  // padding) is what left mobile PDFs rendering at ~86% of the screen width.
+  widthInset: { type: Number, default: 32 },
+  // 'scroll' is the continuous strip of pages; 'page' snaps one whole PDF page
+  // to the screen at a time, which is what a fixed-layout document usually
+  // wants on a phone.
+  pageMode: { type: String, default: 'scroll' },
   manifest: { type: Object, default: null },
   activeChunkId: { type: Number, default: -1 },
   activeWord: { type: Object, default: null },
@@ -225,7 +234,7 @@ const buildPages = async () => {
   if (!pdfDocument) return
   const firstPage = await pdfDocument.getPage(1)
   const firstViewport = firstPage.getViewport({ scale: 1 })
-  const availableWidth = Math.max(320, (viewerRef.value?.clientWidth || 820) - 32)
+  const availableWidth = Math.max(200, (viewerRef.value?.clientWidth || 820) - props.widthInset)
   const baseScale = availableWidth / firstViewport.width
   _baseScale = baseScale
 
@@ -260,7 +269,7 @@ const relayout = async () => {
 
   const firstPage = await pdfDocument.getPage(1)
   const firstViewport = firstPage.getViewport({ scale: 1 })
-  const availableWidth = Math.max(320, (viewerRef.value?.clientWidth || 820) - 32)
+  const availableWidth = Math.max(200, (viewerRef.value?.clientWidth || 820) - props.widthInset)
   const baseScale = availableWidth / firstViewport.width
   _baseScale = baseScale
 
@@ -447,6 +456,26 @@ watch(() => props.activeWord, updateWordHighlights)
   border-radius: 3px;
   overflow: hidden;
   box-shadow: var(--shadow-reader-page);
+}
+
+/* Page mode: one PDF page per screen.
+ *
+ * Built on scroll-snap rather than a bespoke swipe pager, so page rendering,
+ * canvas eviction and scrollToPage all keep working exactly as they do in the
+ * continuous view — the only change is where scrolling is allowed to stop. */
+.pdf-viewer.is-paged {
+  height: 100dvh;
+  gap: 0;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior-y: contain;
+  padding-bottom: 0;
+}
+
+.pdf-viewer.is-paged .pdf-page-wrap {
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  margin: auto 0;
 }
 
 .pdf-canvas {

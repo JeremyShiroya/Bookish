@@ -179,7 +179,7 @@ import LibraryBookCard from '~/components/shared/LibraryBookCard.vue';
 import LibraryControlsRow from '~/components/shared/LibraryControlsRow.vue';
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch';
 import { useBookishSettings } from '~/composables/useBookishSettings';
-import { matchesLibraryFilters, useLibraryFilters } from '~/composables/useLibraryFilters';
+import { useLibraryFilters } from '~/composables/useLibraryFilters';
 import { useBooks } from '~/composables/useBooks';
 import { ensureSeriesTotal, formatSeriesCollectionProgress, propagateSeriesTotal } from '~/composables/useSeriesProgress';
 import { useSeriesSuggestions } from '~/composables/useSeriesSuggestions';
@@ -194,7 +194,7 @@ const { addToast } = useToast();
 const { settings } = useBookishSettings();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 // Each series remembers its own filters.
-const { filters, setFilter } = useLibraryFilters(`series:${route.params.id}`);
+const { filters, setFilter, matches } = useLibraryFilters(`series:${route.params.id}`);
 const viewMode = ref('grid');
 const selectedPlaylistBook = ref(null);
 const showDeleteModal = ref(false);
@@ -248,7 +248,7 @@ const normalizedStatus = (book) => {
 };
 
 const filteredBooks = computed(() => seriesBooks.value.filter(
-  (book) => matchesLibraryFilters(book, filters.value, normalizedStatus),
+  (book) => matches(book, normalizedStatus),
 ));
 
 const isBookActive = (book) => (

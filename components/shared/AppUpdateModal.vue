@@ -32,13 +32,16 @@
           </p>
 
           <div class="update-actions" :class="{ single: available.mandatory }">
+            <!-- "Later" holds only for this app session: the prompt is back the
+                 next time the app is opened from cold, but task-switching away
+                 and back will not bring it straight back. -->
             <button
               v-if="!available.mandatory"
               type="button"
               class="update-btn secondary"
-              @click="skip"
+              @click="dismiss"
             >
-              Skip this version
+              Later
             </button>
             <!-- A real link, not a click handler: Capacitor turns an external
                  navigation into an ACTION_VIEW intent, which is the reliable
@@ -49,9 +52,20 @@
               rel="noopener noreferrer"
               @click="dismiss"
             >
-              Download
+              Update
             </a>
           </div>
+
+          <!-- Kept, but demoted: skipping is permanent for this version, which
+               is a bigger decision than "not now". -->
+          <button
+            v-if="!available.mandatory"
+            type="button"
+            class="update-skip-link"
+            @click="skip"
+          >
+            Skip this version
+          </button>
         </section>
       </div>
     </Transition>
@@ -157,6 +171,20 @@ const installedName = computed(() => installed.value?.name || '')
 
 .update-actions.single {
   grid-template-columns: 1fr;
+}
+
+.update-skip-link {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
+  text-decoration: underline;
 }
 
 .update-btn {

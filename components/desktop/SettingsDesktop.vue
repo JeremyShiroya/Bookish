@@ -218,14 +218,34 @@
         <div class="setting-row">
           <div class="setting-copy">
             <h3>Book format</h3>
+            <p>Which formats appear in your library.</p>
+          </div>
+          <div class="segmented-control" aria-label="Book format filter">
+            <button
+              v-for="option in formatFilterOptions"
+              :key="option.value"
+              :class="{ active: settings.formatFilter === option.value }"
+              @click="set('formatFilter', option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Separate control, and a destructive one: this removes the format
+             from the app rather than hiding it from the list above. -->
+        <div class="setting-row">
+          <div class="setting-copy">
+            <h3>Formats Pages reads</h3>
             <p>
-              Which formats Pages handles. Removing one clears those books from your
-              library and stops the app detecting them — your files stay on the device.
+              Removing a format clears those books from your library and stops Pages
+              detecting them at all — even ones added later. Your files stay on your
+              device, so turning it back on re-imports them.
             </p>
           </div>
           <div class="segmented-control" aria-label="Book formats Pages handles">
             <button
-              v-for="option in formatOptions"
+              v-for="option in formatModeOptions"
               :key="option.value"
               :class="{ active: formatMode === option.value }"
               @click="chooseFormatMode(option.value)"
@@ -500,14 +520,20 @@ const toggleOptions = [
   { value: true, label: 'On' },
   { value: false, label: 'Off' },
 ]
-// Not a filter — the app-level format choice. See useFormatEnablement.
-const formatOptions = [
+// "Book format" — an app-wide HIDE, offering only formats still handled.
+const formatFilterOptions = computed(() => [
+  { value: 'all', label: 'All' },
+  ...enabledFormats.value.map((format) => ({ value: format, label: formatLabel(format) })),
+])
+
+// "Formats Pages reads" — the app-level choice. See useFormatEnablement.
+const formatModeOptions = [
   { value: 'both', label: 'All' },
   { value: 'pdf', label: 'PDF' },
   { value: 'epub', label: 'EPUB' },
 ]
 
-const { formatMode, countAffected, applyFormatMode } = useFormatEnablement()
+const { enabledFormats, formatMode, countAffected, applyFormatMode } = useFormatEnablement()
 
 const chooseFormatMode = async (mode) => {
   if (mode === formatMode.value) return

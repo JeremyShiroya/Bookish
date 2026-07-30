@@ -78,7 +78,17 @@ export const useFormatEnablement = () => {
     // Write the setting FIRST. If a purge fails halfway the app is already
     // refusing to import that format again, so a retry converges instead of
     // racing a scan that re-adds what is being removed.
-    updateSettings({ enabledFormats: next, formatChoiceMade: true })
+    //
+    // The app-wide HIDE (Preferences → "Book format") is a separate control, and
+    // leaving it pointed at a format that no longer exists would show an empty
+    // library with no obvious way back, so it is released here.
+    const hidden = settings.value.formatFilter
+    const orphanedHide = hidden && hidden !== 'all' && !next.includes(hidden)
+    updateSettings({
+      enabledFormats: next,
+      formatChoiceMade: true,
+      ...(orphanedHide ? { formatFilter: 'all' } : {}),
+    })
 
     let removed = 0
     for (const format of removedFormats) {

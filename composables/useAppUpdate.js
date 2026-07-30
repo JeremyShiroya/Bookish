@@ -14,10 +14,37 @@
 // that generates it.
 
 import { useState } from '#app'
-import { normalizeUpdateManifest, shouldPromptForUpdate } from '~/composables/appUpdateManifest'
+import { normalizeUpdateManifest, shouldPromptForUpdate, toVersionCode } from '~/composables/appUpdateManifest'
 import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
 
 export const SKIPPED_VERSION_KEY = 'bookish:update-skipped-code'
+
+// "Update later" has to last exactly one app session: the prompt must not come
+// straight back when the app is resumed from the background, but it MUST come
+// back the next time the app is opened from cold.
+//
+// sessionStorage is precisely that lifetime — it lives with the WebView, so it
+// survives backgrounding and dies when the app is closed (or when Android
+// reclaims the process, which is also "closed" from the user's side).
+export const DEFERRED_VERSION_KEY = 'bookish:update-deferred-code'
+
+const readDeferredCode = () => {
+  if (typeof sessionStorage === 'undefined') return null
+  try {
+    return sessionStorage.getItem(DEFERRED_VERSION_KEY)
+  } catch {
+    return null
+  }
+}
+
+const writeDeferredCode = (versionCode) => {
+  if (typeof sessionStorage === 'undefined') return
+  try {
+    sessionStorage.setItem(DEFERRED_VERSION_KEY, String(versionCode))
+  } catch {
+    // Quota or a locked-down WebView — the prompt simply reappears on resume.
+  }
+}
 
 const readSkippedCode = () => {
   if (typeof localStorage === 'undefined') return null
@@ -82,7 +109,15 @@ export const useAppUpdate = () => {
         skippedCode: force ? null : readSkippedCode(),
       })
 
-      available.value = prompt ? manifest : null
+      // "Later" holds for the rest of this app session, so resuming from the
+      // background does not re-open a dialog just dismissed. A mandatory
+      // update ignores it, exactly as it ignores a skip.
+      const deferred = !force
+        && prompt
+        && !manifest.mandatory
+        && toVersionCode(readDeferredCode()) === manifest.versionCode
+
+      available.value = prompt && !deferred ? manifest : null
       return available.value
     } catch {
       return null
@@ -99,8 +134,12 @@ export const useAppUpdate = () => {
     available.value = null
   }
 
-  // Hide for now; the next launch offers it again.
+  // "Later": hide for the rest of this session. The next COLD start offers it
+  // again — resuming from the background does not.
   const dismiss = () => {
+    if (available.value && !available.value.mandatory) {
+      writeDeferredCode(available.value.versionCode)
+    }
     available.value = null
   }
 

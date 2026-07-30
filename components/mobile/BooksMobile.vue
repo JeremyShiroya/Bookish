@@ -302,7 +302,7 @@ import {
   FORMAT_FILTER_CHOICES,
   useBookishSettings,
 } from "~/composables/useBookishSettings";
-import { matchesLibraryFilters, useLibraryFilters } from "~/composables/useLibraryFilters";
+import { useLibraryFilters } from "~/composables/useLibraryFilters";
 import { useToast } from "~/composables/useToast";
 import { useLongPress, useMultiSelect } from "~/composables/useMultiSelect";
 
@@ -362,7 +362,7 @@ const sortDirection = ref(settings.value.librarySortDirection);
 // Scoped to this page and persisted, so leaving for a book and coming back does
 // not throw the filters away, and choosing "Unread" here says nothing about the
 // Favourites or Series shelves.
-const { filters, setFilter } = useLibraryFilters("books");
+const { filters, setFilter, matches } = useLibraryFilters("books");
 const selectedStatus = computed(() => filters.value.status);
 const selectedFormat = computed(() => filters.value.format);
 const viewMode = ref(settings.value.libraryView);
@@ -470,7 +470,7 @@ watch(books, () => retainSelection(books.value.map((book) => book.id)));
 
 // Computed filtered books
 const filteredBooks = computed(() => {
-  let filtered = books.value.filter((book) => matchesLibraryFilters(book, filters.value));
+  let filtered = books.value.filter((book) => matches(book));
 
   // Sort books
   filtered.sort((a, b) => {

@@ -54,7 +54,7 @@ import { useRouter } from 'vue-router'
 import EmptyState from '~/components/shared/EmptyState.vue'
 import LibraryBookCard from '~/components/shared/LibraryBookCard.vue'
 import LibraryControlsRow from '~/components/shared/LibraryControlsRow.vue'
-import { matchesLibraryFilters, useLibraryFilters } from '~/composables/useLibraryFilters'
+import { useLibraryFilters } from '~/composables/useLibraryFilters'
 import { useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
 import MobileSettingsNav from './MobileSettingsNav.vue'
@@ -66,7 +66,7 @@ const router = useRouter()
 const hiddenBooks = ref([])
 const viewMode = ref('grid')
 // Own scope: the Hidden shelf keeps its own filters, like every other page.
-const { filters, setFilter } = useLibraryFilters('hidden')
+const { filters, setFilter, matches } = useLibraryFilters('hidden')
 const loading = ref(true)
 
 const normalizedStatus = (book) => {
@@ -77,7 +77,7 @@ const normalizedStatus = (book) => {
 }
 
 const filteredBooks = computed(() => hiddenBooks.value.filter(
-  (book) => matchesLibraryFilters(book, filters.value, normalizedStatus),
+  (book) => matches(book, normalizedStatus),
 ))
 
 const refresh = async () => {

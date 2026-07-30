@@ -171,7 +171,10 @@
 
     <main
       class="reader-mobile-content"
-      :class="{ 'is-pdf-reader': isPdfRenderable }"
+      :class="{
+        'is-pdf-reader': isPdfRenderable,
+        'is-paged-pdf': isPdfRenderable && prefs.pdfPageMode === 'page',
+      }"
     >
       <div v-if="loading || contentLoading" class="reader-state">
         <SkeletonLoader variant="reader" />
@@ -186,7 +189,10 @@
         <div
           v-if="isPdfRenderable"
           class="reader-mobile-pdf"
-          @touchend="onSelectionSettled"
+          @touchstart.passive="onPdfTouchStart"
+          @touchmove.passive="onPdfTouchMove"
+          @touchend="onPdfTouchEnd"
+          @touchcancel="cancelPdfLongPress"
           @mouseup="onSelectionSettled"
           @click="onScrollTap"
           @contextmenu.prevent
@@ -195,12 +201,30 @@
             :ref="setPdfViewer"
             :src="pdfSource"
             :zoom="mobilePdfZoom"
+            :width-inset="0"
+            :page-mode="prefs.pdfPageMode"
             :manifest="pdfManifest"
             :active-chunk-id="activeTtsChunkIndex"
             :active-word="activeWordRange"
             @page-change="$emit('page-change', $event)"
             @loaded="$emit('pdf-loaded', $event)"
           />
+
+          <!-- Long-press anywhere on a page to start narrating from it. A PDF
+               page has no sentence to select the way EPUB text does, so the page
+               itself is the unit the gesture targets. -->
+          <Transition name="read-here">
+            <div
+              v-if="pdfReadHere.visible"
+              class="read-here-menu"
+              :style="{ left: `${pdfReadHere.x}px`, top: `${pdfReadHere.y}px` }"
+            >
+              <button type="button" @click.stop="readFromPressedPage">
+                <i class="ri-play-circle-line"></i>
+                Read from page {{ pdfReadHere.page }}
+              </button>
+            </div>
+          </Transition>
         </div>
 
         <div v-else-if="isPdfBook" class="reader-state reader-error">
@@ -234,6 +258,7 @@
           @selection-settled="onSelectionSettled"
           @annotation-tap="onAnnotationTap"
           @section-rendered="repaintAnnotations"
+          @figure-tap="openFigureViewer"
         />
 
         <div
@@ -500,6 +525,48 @@
             This PDF is a scan with no text layer, so it can only be shown as the
             original page.
           </p>
+          <p v-else-if="pdfFiguresLoading" class="display-note">
+            Collecting images and tables… {{ pdfFiguresProgress }}%
+          </p>
+
+          <!-- Original View only. Reflow is text, so it uses the type controls
+               below instead of a page zoom. -->
+          <template v-if="isPdfDocument && prefs.pdfViewMode === 'original'">
+            <div class="display-row">
+              <span class="display-label">Pages</span>
+              <div class="seg-group">
+                <button
+                  v-for="mode in ['page', 'scroll']"
+                  :key="mode"
+                  type="button"
+                  class="seg-btn"
+                  :class="{ active: prefs.pdfPageMode === mode }"
+                  @click="updatePrefs({ pdfPageMode: mode })"
+                >
+                  {{ mode === 'page' ? 'One page' : 'Continuous' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="display-row">
+              <span class="display-label">Zoom</span>
+              <div class="size-stepper">
+                <button
+                  type="button"
+                  aria-label="Zoom out"
+                  :disabled="prefs.pdfZoom <= pdfZoomMin"
+                  @click="stepPdfZoom(-1)"
+                >−</button>
+                <span>{{ Math.round(prefs.pdfZoom * 100) }}%</span>
+                <button
+                  type="button"
+                  aria-label="Zoom in"
+                  :disabled="prefs.pdfZoom >= pdfZoomMax"
+                  @click="stepPdfZoom(1)"
+                >+</button>
+              </div>
+            </div>
+          </template>
 
           <template v-if="!isPdfBook">
             <div class="display-row">
@@ -733,6 +800,13 @@
         :style="heightMeasureStyle"
       ></div>
     </div>
+
+    <ReaderFigureViewer
+      v-if="figureViewer.open"
+      :figures="allFigureSources"
+      :start-index="figureViewer.index"
+      @close="closeFigureViewer"
+    />
   </div>
 </template>
 
@@ -750,6 +824,9 @@ import { isNativeCapacitorPlatform } from "~/composables/useNativePlatform";
 import { useBookishSettings } from "~/composables/useBookishSettings";
 import { mapSectionChunks } from "~/composables/useChunkSpans";
 import {
+  PDF_ZOOM_MAX,
+  PDF_ZOOM_MIN,
+  PDF_ZOOM_STEP,
   READER_FONT_OPTIONS,
   READER_FONT_SIZE_MAX,
   READER_FONT_SIZE_MIN,
@@ -778,6 +855,7 @@ import {
   saveAnnotation,
   useAnnotations,
 } from "~/composables/useAnnotations";
+import ReaderFigureViewer from "./ReaderFigureViewer.vue";
 import ReaderPagedEpub from "./ReaderPagedEpub.vue";
 import ReaderNoteEditor from "./ReaderNoteEditor.vue";
 import ReaderSelectionMenu from "./ReaderSelectionMenu.vue";
@@ -820,6 +898,10 @@ const props = defineProps({
   openToChunk: { type: Number, default: -1 },
   // The PDF has a text layer, so Reflow can be offered. False for scans.
   pdfReflowAvailable: { type: Boolean, default: false },
+  // Figures are cropped out of the rendered pages the first time Reflow is
+  // opened, which takes a moment on a long document — so it is narrated.
+  pdfFiguresLoading: { type: Boolean, default: false },
+  pdfFiguresProgress: { type: Number, default: 0 },
 });
 
 const emit = defineEmits([
@@ -910,6 +992,15 @@ const stepFontSize = (delta) => {
       Math.min(READER_FONT_SIZE_MAX, prefs.value.fontSize + delta),
     ),
   });
+};
+
+// Original View page zoom. 1.0 is fit-to-width, so the range only goes up.
+const pdfZoomMin = PDF_ZOOM_MIN;
+const pdfZoomMax = PDF_ZOOM_MAX;
+
+const stepPdfZoom = (direction) => {
+  const next = (prefs.value.pdfZoom || 1) + direction * PDF_ZOOM_STEP;
+  updatePrefs({ pdfZoom: Math.max(PDF_ZOOM_MIN, Math.min(PDF_ZOOM_MAX, next)) });
 };
 
 const usePagedReader = computed(() => !props.isPdfBook && prefs.value.readingMode === "page");
@@ -1196,7 +1287,10 @@ const isPlaying = computed(
   () => ttsBook.value?.id === props.book?.id && ttsStatus.value === "playing",
 );
 
-const mobilePdfZoom = computed(() => 1);
+// 1.0 means "the page fills the screen width". It used to be hardcoded, and the
+// viewer additionally trimmed a fixed 32px on top of this container's padding,
+// so a PDF page rendered at roughly 86% of the screen and looked zoomed out.
+const mobilePdfZoom = computed(() => prefs.value.pdfZoom || 1);
 
 const chapterLabel = computed(() => {
   if (props.isPdfRenderable) {
@@ -1251,6 +1345,14 @@ const pageForChunkLocal = (chunk) => {
 };
 
 const chunkAtVisiblePage = () => {
+  // Original View: the reader's unit of position is the PDF page, so the
+  // sentence to start from is that page's first chunk. Without this branch a
+  // PDF fell through to the EPUB scroll probe, which knows nothing about pages.
+  if (props.isPdfRenderable) {
+    const page = props.readerRefs.pdfViewerRef.value?.getVisiblePage?.() || props.currentPdfPage;
+    const chunk = firstChunkForPage(props.pdfManifest, page);
+    return Number.isFinite(chunk?.id) ? chunk.id : null;
+  }
   if (usePagedReader.value) {
     const chunk = pagedRef.value?.getPosition()?.firstChunkOfPage;
     return Number.isFinite(chunk) && chunk >= 0 ? chunk : null;
@@ -1264,6 +1366,107 @@ const chunkAtVisiblePage = () => {
   const section = Number(props.currentChapterIdx);
   if (!Number.isFinite(section)) return null;
   return sectionStartChunkLocal(section);
+};
+
+// ── Original View: long-press a page to read from it ────────────────────────
+//
+// EPUB text can be long-pressed to pick a sentence; a rendered PDF page is a
+// canvas with nothing selectable on it, so the gesture targets the PAGE and
+// narration starts at its first sentence.
+const PDF_LONG_PRESS_MS = 450;
+const PDF_MOVE_TOLERANCE = 12;
+
+const pdfReadHere = ref({ visible: false, page: 0, x: 0, y: 0 });
+
+let pdfTouchStart = null;
+let pdfLongPressTimer = null;
+let pdfLongPressFired = false;
+
+const hidePdfReadHere = () => {
+  pdfReadHere.value = { visible: false, page: 0, x: 0, y: 0 };
+};
+
+const cancelPdfLongPress = () => {
+  if (pdfLongPressTimer) clearTimeout(pdfLongPressTimer);
+  pdfLongPressTimer = null;
+  pdfTouchStart = null;
+};
+
+const pdfPageAtPoint = (x, y) => {
+  const wrap = document.elementFromPoint(x, y)?.closest?.(".pdf-page-wrap");
+  const page = Number(wrap?.dataset?.page);
+  return Number.isFinite(page) && page > 0 ? page : null;
+};
+
+const onPdfTouchStart = (event) => {
+  if (event.touches.length !== 1) return;
+  hidePdfReadHere();
+  const touch = event.touches[0];
+  pdfTouchStart = { x: touch.clientX, y: touch.clientY };
+  pdfLongPressFired = false;
+  if (pdfLongPressTimer) clearTimeout(pdfLongPressTimer);
+
+  pdfLongPressTimer = setTimeout(() => {
+    pdfLongPressTimer = null;
+    const page = pdfPageAtPoint(touch.clientX, touch.clientY);
+    if (!page) return;
+    pdfLongPressFired = true;
+    if (navigator.vibrate) navigator.vibrate(12);
+    // Keep the bubble on screen when the press is near an edge.
+    pdfReadHere.value = {
+      visible: true,
+      page,
+      x: Math.min(Math.max(12, touch.clientX - 90), window.innerWidth - 200),
+      y: Math.max(70, touch.clientY - 62),
+    };
+  }, PDF_LONG_PRESS_MS);
+};
+
+const onPdfTouchMove = (event) => {
+  if (!pdfTouchStart) return;
+  const touch = event.touches[0];
+  if (Math.hypot(touch.clientX - pdfTouchStart.x, touch.clientY - pdfTouchStart.y) > PDF_MOVE_TOLERANCE) {
+    cancelPdfLongPress();
+  }
+};
+
+const onPdfTouchEnd = () => {
+  cancelPdfLongPress();
+  onSelectionSettled();
+};
+
+// ── Reflowed PDF figures ────────────────────────────────────────────────────
+//
+// Every figure in the book, in reading order, so the viewer can swipe between
+// them rather than only showing the one that was tapped.
+const figureViewer = ref({ open: false, index: 0 });
+
+const allFigureSources = computed(() => {
+  const sources = [];
+  for (const section of props.fullSections || []) {
+    for (const match of String(section?.html || '').matchAll(/<img[^>]+data-pdf-figure[^>]*>/g)) {
+      const src = /src="([^"]+)"/.exec(match[0])?.[1];
+      if (src) sources.push(src);
+    }
+  }
+  return sources;
+});
+
+const openFigureViewer = (src) => {
+  const index = allFigureSources.value.indexOf(src);
+  figureViewer.value = { open: true, index: index === -1 ? 0 : index };
+};
+
+const closeFigureViewer = () => {
+  figureViewer.value = { open: false, index: 0 };
+};
+
+const readFromPressedPage = () => {
+  const page = pdfReadHere.value.page;
+  hidePdfReadHere();
+  const chunk = firstChunkForPage(props.pdfManifest, page);
+  if (Number.isFinite(chunk?.id)) emit("read-from-chunk", chunk.id);
+  else emit("read-current-position");
 };
 
 // Paused, then turned to a different page, then pressed play: continuing from
@@ -1422,6 +1625,23 @@ const toggleChrome = () => {
 // or a link toggles the chrome.
 const onScrollTap = (event) => {
   if (readerMode.value !== "read") return;
+  // The click that follows a long-press is not a tap: it must neither toggle the
+  // chrome nor dismiss the bubble the press just opened.
+  if (pdfLongPressFired) {
+    pdfLongPressFired = false;
+    return;
+  }
+  // Any other tap puts the bubble away.
+  if (pdfReadHere.value.visible) {
+    hidePdfReadHere();
+    return;
+  }
+  // Reflowed PDF figures open full screen instead of toggling the chrome.
+  const figure = event.target?.closest?.("img[data-pdf-figure]");
+  if (figure) {
+    openFigureViewer(figure.getAttribute("src"));
+    return;
+  }
   // A tap on an existing highlight opens it instead of toggling the chrome.
   if (onAnnotationTap(event)) return;
   if (selectionMenu.value.visible) return;
@@ -2714,6 +2934,11 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
+.size-stepper button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
 .display-pdf-note {
   margin: 0.5rem 0 1rem;
   color: var(--sheet-control-text);
@@ -2743,9 +2968,18 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
+/* A fixed-layout page has its own margins already; adding the reader's on top
+   just shrinks the text. The page runs edge to edge and the chrome floats over
+   it, exactly as it does for EPUBs. */
 .reader-mobile-content.is-pdf-reader {
-  padding: calc(env(safe-area-inset-top) + 10px) 12px
+  padding: calc(env(safe-area-inset-top) + 10px) 0
     calc(env(safe-area-inset-bottom) + 96px);
+}
+
+/* Page mode owns the whole screen: the page is sized to it, so the content
+   wrapper must not add bands above and below. */
+.reader-mobile-content.is-pdf-reader.is-paged-pdf {
+  padding: 0;
 }
 
 .reader-mobile-pdf {
