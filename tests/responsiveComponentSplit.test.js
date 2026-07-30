@@ -191,12 +191,17 @@ describe('responsive mobile component split', () => {
     expect(readerPage).not.toContain('requestIdleCallback(step')
   })
 
-  test('the chapter dock sits flush with the screen bottom', () => {
+  test('the chapter dock paints all the way to the screen bottom', () => {
     const readerMobile = read('components/mobile/ReaderMobile.vue')
-    // It used to reach that position by translating down over the app's tab
-    // bar. The reader renders no tab bar, so the dock is simply there.
-    expect(readerMobile).toMatch(/\.reader-chapter-dock\s*\{[^}]*bottom:\s*var\(--bottom-nav-space\)/s)
+    // It used to sit ON the safe-area inset (`bottom: var(--bottom-nav-space)`),
+    // which left the strip beneath it unpainted — in scroll mode the book text
+    // showed through that gap under the chapter pill. The inset moved into the
+    // padding so the dock's background reaches the bottom of the viewport.
+    expect(readerMobile).toMatch(/\.reader-chapter-dock\s*\{[^}]*bottom:\s*0/s)
+    expect(readerMobile).toMatch(/\.reader-chapter-dock\s*\{[^}]*padding:[^;]*var\(--bottom-nav-space\)/s)
     expect(readerMobile).toMatch(/--bottom-nav-space:\s*env\(safe-area-inset-bottom\)/)
+    // The end of the book still has to clear the fixed dock.
+    expect(readerMobile).toMatch(/\.reader-mobile-chapters\s*\{[^}]*padding-bottom:[^;]*var\(--bottom-nav-space\)/s)
   })
 
   test('reader chrome follows the reader theme instead of hardcoded light colors', () => {

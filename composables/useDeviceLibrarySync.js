@@ -1,6 +1,7 @@
 import { registerPlugin } from '@capacitor/core'
 import { Filesystem } from '@capacitor/filesystem'
 import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
+import { enabledExtensionPattern, useBookishSettings } from '~/composables/useBookishSettings'
 import { useBooks } from '~/composables/useBooks'
 import { useBookStorage } from '~/composables/useBookStorage'
 import { useDevicePermissionPrompt } from '~/composables/useDevicePermissionPrompt'
@@ -133,9 +134,17 @@ export function isTooLargeError(error) {
 
 // A device file needs importing when it was never imported, or when the file
 // on disk changed since (size or modification time differ).
-export function selectNewDeviceFiles(files, registry) {
+//
+// `enabledFormats` is the app-level format choice (Settings → Preferences, and
+// the first-boot chooser), NOT a display filter. This is the chokepoint that
+// makes "remove PDFs" mean the app genuinely stops seeing them: a disabled
+// extension is never scanned, so dropping a PDF onto the device later does not
+// bring it back.
+export function selectNewDeviceFiles(files, registry, enabledFormats = ['epub', 'pdf']) {
+  const extensionTest = enabledExtensionPattern(enabledFormats)
+
   return (Array.isArray(files) ? files : []).filter((file) => {
-    if (!file?.path || !/\.(pdf|epub)$/i.test(file.path)) return false
+    if (!file?.path || !extensionTest.test(file.path)) return false
     if (Number(file.size) > MAX_DEVICE_IMPORT_BYTES) return false
     // Already imported through the "Open with" flow (keyed by name + size —
     // those imports have no on-disk path); re-importing it here would
@@ -388,6 +397,15 @@ export async function syncDeviceLibrary({ silent = false } = {}) {
   const { addBook, updateBook, fetchAllData, initialized } = useBooks()
   const { saveBookContent } = useBookStorage()
   const { ask } = useDevicePermissionPrompt()
+  const { settings } = useBookishSettings()
+
+  // The first-boot chooser decides which extensions may be imported at all.
+  // Scanning before it is answered would import books the user is about to say
+  // they don't want, so the scan waits — the chooser kicks it off on confirm.
+  if (settings.value.formatChoiceMade !== true) {
+    _syncInFlight = false
+    return
+  }
 
   try {
     if (silent) {
@@ -408,7 +426,7 @@ export async function syncDeviceLibrary({ silent = false } = {}) {
     const { files } = await DeviceBooks.scan()
     const registry = readImportRegistry()
     const inFolders = (files || []).filter((file) => fileInScanFolders(file.path, scanFolders))
-    const newFiles = selectNewDeviceFiles(inFolders, registry)
+    const newFiles = selectNewDeviceFiles(inFolders, registry, settings.value.enabledFormats)
     if (!newFiles.length) {
       addToast('Device scan complete — no new books found.', 'success')
       return

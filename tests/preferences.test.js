@@ -83,9 +83,16 @@ describe('appearance preferences', () => {
     expect(settings).not.toMatch(/Preferences[^}]*comingSoon/)
 
     const prefs = read('components/mobile/PreferencesMobile.vue')
-    for (const key of ['seriesCardBackground', 'seriesCardLayout', 'playlistCardBackground', 'playlistCardLayout', 'readerHighlight', 'listenCoverBlur', 'showStreak', 'formatFilter', 'seriesSuggestions']) {
+    for (const key of ['seriesCardBackground', 'seriesCardLayout', 'playlistCardBackground', 'playlistCardLayout', 'readerHighlight', 'listenCoverBlur', 'showStreak', 'seriesSuggestions']) {
       expect(prefs, key).toContain(key)
     }
+
+    // The Book format row is no longer a filter: it is the app-level choice of
+    // which formats Pages handles at all, and removing one purges those books
+    // and stops the device scanner detecting the extension.
+    expect(prefs).toContain('useFormatEnablement')
+    expect(prefs).toContain('chooseFormatMode')
+    expect(prefs).not.toContain("set('formatFilter'")
 
     // The Favourites card section moved out of Preferences: its layout is now
     // chosen from the grid/list toggle in the Favourites page's controls row.
@@ -125,8 +132,11 @@ describe('appearance preferences', () => {
     const topNav = read('components/mobile/MobileTopNav.vue')
     expect(topNav).toContain('v-if="showStreak"')
 
+    // Format pills are drawn from the formats the app still handles, so a
+    // PDF-only (or EPUB-only) app offers nothing to choose between.
     const books = read('components/mobile/BooksMobile.vue')
-    expect(books).toContain('settings.value.formatFilter')
+    expect(books).toContain('settings.value.enabledFormats')
+    expect(books).toContain('formatFilters.length > 1')
 
     const reader = read('pages/reader/[id].vue')
     expect(reader).toContain('highlightEnabled')

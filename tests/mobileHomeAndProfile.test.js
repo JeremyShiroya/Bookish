@@ -13,10 +13,13 @@ describe('mobile home and profile refinements', () => {
     expect(home).not.toContain('const mobileSeries = computed(() => seriesList.value.slice(0, 3));')
   })
 
-  test('mobile home currently reading uses the active reader book, not recently added fallback', () => {
+  test('mobile home currently reading follows reading activity, not narration', () => {
     const home = read('components/mobile/HomeMobile.vue')
 
-    expect(home).toContain('const currentReadingBook = computed(() => ttsBook.value || recentlyReadBooks.value[0] || null)')
+    // `ttsBook` first made this card "last listened to": it outranked a book
+    // being actively scrolled or swiped through. Reading activity leads now,
+    // with narration only as the fallback.
+    expect(home).toContain('const currentReadingBook = computed(() => recentlyReadBooks.value[0] || ttsBook.value || null)')
     expect(home).toContain(':book="currentReadingBook"')
     expect(home).not.toContain('const continueReadingBooks = computed')
     expect(home).not.toContain(':book="continueReadingBooks[0]"')

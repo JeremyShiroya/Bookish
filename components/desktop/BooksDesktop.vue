@@ -400,6 +400,7 @@ import { useBooks } from "~/composables/useBooks";
 import { getGoodreadsRating, parseGoodreadsReview } from "~/composables/useGoodreadsRating";
 import { useTTS } from "~/composables/useTTS";
 import { useBookishSettings } from "~/composables/useBookishSettings";
+import { useLibraryFilters } from "~/composables/useLibraryFilters";
 import { useToast } from "~/composables/useToast";
 
 // Reactive data
@@ -437,7 +438,11 @@ const readingStatuses = ["Unread", "Reading", "Read"];
 // Filter states
 const sortBy = ref(settings.value.librarySort);
 const sortDirection = ref(settings.value.librarySortDirection);
-const selectedStatus = ref("all");
+// Shares the mobile Books scope — it is the same page, just a different
+// viewport — so the status survives navigating into a book and back.
+// Format has no control in this layout, so it is deliberately not applied here.
+const { filters, setFilter } = useLibraryFilters("books");
+const selectedStatus = computed(() => filters.value.status);
 const viewMode = ref(settings.value.libraryView);
 
 // Dropdown states
@@ -652,7 +657,7 @@ const setSort = (field, direction) => {
 };
 
 const setStatus = (value) => {
-  selectedStatus.value = value;
+  setFilter("status", value);
   activeDropdown.value = null;
 };
 

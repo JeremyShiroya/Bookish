@@ -54,8 +54,11 @@
       </header>
 
       <LibraryControlsRow
-        v-model:status="selectedStatus"
+        :status="filters.status"
+        :format="filters.format"
         v-model:view="viewMode"
+        @update:status="setFilter('status', $event)"
+        @update:format="setFilter('format', $event)"
       />
 
       <div v-if="seriesEntries.length" :class="viewMode === 'list' ? 'book-list' : 'books-grid'">
@@ -175,7 +178,8 @@ import EmptyState from '~/components/shared/EmptyState.vue';
 import LibraryBookCard from '~/components/shared/LibraryBookCard.vue';
 import LibraryControlsRow from '~/components/shared/LibraryControlsRow.vue';
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch';
-import { matchesFormatFilter, useBookishSettings } from '~/composables/useBookishSettings';
+import { useBookishSettings } from '~/composables/useBookishSettings';
+import { matchesLibraryFilters, useLibraryFilters } from '~/composables/useLibraryFilters';
 import { useBooks } from '~/composables/useBooks';
 import { ensureSeriesTotal, formatSeriesCollectionProgress, propagateSeriesTotal } from '~/composables/useSeriesProgress';
 import { useSeriesSuggestions } from '~/composables/useSeriesSuggestions';
@@ -189,7 +193,8 @@ const { books, seriesList, updateBook, deleteBook, toggleFavourite, hideBook } =
 const { addToast } = useToast();
 const { settings } = useBookishSettings();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
-const selectedStatus = ref('all');
+// Each series remembers its own filters.
+const { filters, setFilter } = useLibraryFilters(`series:${route.params.id}`);
 const viewMode = ref('grid');
 const selectedPlaylistBook = ref(null);
 const showDeleteModal = ref(false);
@@ -242,10 +247,9 @@ const normalizedStatus = (book) => {
   return 'Unread';
 };
 
-const filteredBooks = computed(() => seriesBooks.value.filter(book => (
-  matchesFormatFilter(book, settings.value.formatFilter)
-  && (selectedStatus.value === 'all' || normalizedStatus(book) === selectedStatus.value)
-)));
+const filteredBooks = computed(() => seriesBooks.value.filter(
+  (book) => matchesLibraryFilters(book, filters.value, normalizedStatus),
+));
 
 const isBookActive = (book) => (
   ttsBook.value?.id === book.id && ttsStatus.value !== 'idle'
@@ -270,8 +274,8 @@ const hideMissing = ref(false);
 const suggestionsEnabled = computed(() => (
   settings.value.seriesSuggestions === true
   && !hideMissing.value
-  && selectedStatus.value !== 'Read'
-  && selectedStatus.value !== 'Reading'
+  && filters.value.status !== 'Read'
+  && filters.value.status !== 'Reading'
 ));
 
 // Installments the library is missing, independent of whether the cards are

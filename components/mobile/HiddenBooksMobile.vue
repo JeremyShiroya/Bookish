@@ -11,8 +11,11 @@
            hidden book is browsed exactly like any other shelf. -->
       <LibraryControlsRow
         v-if="hiddenBooks.length"
-        v-model:status="selectedStatus"
+        :status="filters.status"
+        :format="filters.format"
         v-model:view="viewMode"
+        @update:status="setFilter('status', $event)"
+        @update:format="setFilter('format', $event)"
       />
 
       <div v-if="filteredBooks.length" :class="viewMode === 'list' ? 'book-list' : 'books-grid'">
@@ -51,19 +54,19 @@ import { useRouter } from 'vue-router'
 import EmptyState from '~/components/shared/EmptyState.vue'
 import LibraryBookCard from '~/components/shared/LibraryBookCard.vue'
 import LibraryControlsRow from '~/components/shared/LibraryControlsRow.vue'
-import { matchesFormatFilter, useBookishSettings } from '~/composables/useBookishSettings'
+import { matchesLibraryFilters, useLibraryFilters } from '~/composables/useLibraryFilters'
 import { useBooks } from '~/composables/useBooks'
 import { useToast } from '~/composables/useToast'
 import MobileSettingsNav from './MobileSettingsNav.vue'
 
 const { listHiddenBooks, restoreHiddenBook } = useBooks()
-const { settings } = useBookishSettings()
 const { addToast } = useToast()
 const router = useRouter()
 
 const hiddenBooks = ref([])
 const viewMode = ref('grid')
-const selectedStatus = ref('all')
+// Own scope: the Hidden shelf keeps its own filters, like every other page.
+const { filters, setFilter } = useLibraryFilters('hidden')
 const loading = ref(true)
 
 const normalizedStatus = (book) => {
@@ -73,10 +76,9 @@ const normalizedStatus = (book) => {
   return 'Unread'
 }
 
-const filteredBooks = computed(() => hiddenBooks.value.filter((book) => (
-  matchesFormatFilter(book, settings.value.formatFilter)
-  && (selectedStatus.value === 'all' || normalizedStatus(book) === selectedStatus.value)
-)))
+const filteredBooks = computed(() => hiddenBooks.value.filter(
+  (book) => matchesLibraryFilters(book, filters.value, normalizedStatus),
+))
 
 const refresh = async () => {
   loading.value = true

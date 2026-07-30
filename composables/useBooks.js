@@ -242,19 +242,28 @@ export const useBooks = () => {
     [...books.value].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 10)
   );
 
-  // "Currently reading" ordering: books actually in progress, most recently
-  // READ first (lastReadAt), so editing a book or fetching metadata — which
-  // touches updatedAt — never bumps an unrelated book to the top. Books with a
-  // "Reading" status rank above ones that merely have progress.
+  // "Currently reading" ordering: most recent READING ACTIVITY first.
+  //
+  // `lastReadAt` is stamped by the reader on every position change, so this
+  // follows silent reading — scrolling or swiping — and not just narration.
+  // updatedAt is deliberately NOT a fallback for ordering: editing a book or
+  // fetching its metadata touches updatedAt and would bump an untouched book to
+  // the top, which is the bug this ordering exists to avoid.
+  //
+  // A book counts as in progress once it has been opened at all: `lastReadAt`
+  // alone qualifies it, because a reader still on the first page has 0% progress
+  // and is unmistakably the book they are currently reading. Status only breaks
+  // ties between books last read at the same moment.
   const recentlyReadBooks = computed(() => {
-    const readingActivity = (book) => new Date(book.lastReadAt || book.updatedAt || 0).getTime();
+    const readingActivity = (book) => new Date(book.lastReadAt || 0).getTime();
     return books.value
-      .filter(b => b.status === 'Reading' || b.progress > 0)
+      .filter(b => b.status === 'Reading' || b.progress > 0 || b.lastReadAt)
       .sort((a, b) => {
+        const activity = readingActivity(b) - readingActivity(a);
+        if (activity !== 0) return activity;
         const aReading = a.status === 'Reading' ? 1 : 0;
         const bReading = b.status === 'Reading' ? 1 : 0;
-        if (aReading !== bReading) return bReading - aReading;
-        return readingActivity(b) - readingActivity(a);
+        return bReading - aReading;
       });
   });
 

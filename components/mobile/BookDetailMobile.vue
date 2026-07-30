@@ -60,8 +60,16 @@
             >
               <i :class="book.isFavourite ? 'ri-heart-fill' : 'ri-heart-line'"></i>
             </button>
-            <button type="button" class="icon-action" title="Add to playlist" @click="showPlaylistModal = true">
-              <i class="ri-play-list-2-line"></i>
+            <button
+              type="button"
+              class="icon-action"
+              :class="{ active: playlistCount > 0 }"
+              :title="playlistCount > 0
+                ? `In ${playlistCount} playlist${playlistCount === 1 ? '' : 's'}`
+                : 'Add to playlist'"
+              @click="showPlaylistModal = true"
+            >
+              <i :class="playlistCount > 0 ? 'ri-play-list-2-fill' : 'ri-play-list-2-line'"></i>
             </button>
             <button type="button" class="icon-action" title="Edit" @click="router.push(`/edit/${book.id}`)">
               <i class="ri-edit-line"></i>
@@ -148,7 +156,7 @@ import MobileSettingsNav from "./MobileSettingsNav.vue";
 
 const route = useRoute();
 const router = useRouter();
-const { books, loading, toggleFavourite, hideBook, deleteBook } = useBooks();
+const { books, collections, loading, toggleFavourite, hideBook, deleteBook } = useBooks();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const { addToast } = useToast();
 
@@ -173,6 +181,15 @@ const handleDelete = async () => {
 };
 
 const book = computed(() => books.value.find((b) => String(b.id) === String(route.params.id)));
+
+// The playlist button fills the way the heart does, so the page says whether the
+// book is filed anywhere without having to open the sheet to find out.
+const playlistCount = computed(() => {
+  const id = String(route.params.id);
+  return collections.value.filter(
+    (playlist) => (playlist.bookIds || []).some((bookId) => String(bookId) === id),
+  ).length;
+});
 const progress = computed(() => Math.max(0, Math.min(100, Math.round(Number(book.value?.progress) || 0))));
 const isListening = computed(() => ttsBook.value?.id === book.value?.id && ttsStatus.value === "playing");
 const listenLabel = computed(() => (isListening.value ? "Pause" : "Listen"));

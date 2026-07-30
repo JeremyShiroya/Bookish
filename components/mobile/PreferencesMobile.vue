@@ -232,18 +232,42 @@
         <div class="pref-row">
           <div class="pref-copy">
             <span class="pref-label">Book format</span>
-            <span class="pref-hint">Which formats appear in your library.</span>
+            <span class="pref-hint">
+              Which formats Pages handles. Removing one clears those books from your
+              library and stops the app detecting them — your files stay on the device.
+            </span>
           </div>
-          <div class="segmented" role="group" aria-label="Book format filter">
+          <div class="segmented" role="group" aria-label="Book formats Pages handles">
             <button
               v-for="opt in formatOptions"
               :key="opt.value"
               type="button"
               class="segment"
-              :class="{ active: settings.formatFilter === opt.value }"
-              @click="set('formatFilter', opt.value)"
+              :class="{ active: formatMode === opt.value }"
+              @click="chooseFormatMode(opt.value)"
             >{{ opt.label }}</button>
           </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Removing a format destroys library records, so it says how many and what
+         survives before doing it. -->
+    <div v-if="pendingFormatMode" class="format-confirm-overlay" role="presentation" @click="pendingFormatMode = null">
+      <section
+        class="format-confirm-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="format-confirm-title"
+        @click.stop
+      >
+        <h2 id="format-confirm-title">{{ pendingFormatTitle }}</h2>
+        <p>{{ pendingFormatMessage }}</p>
+        <div class="format-confirm-actions">
+          <button type="button" class="ghost" @click="pendingFormatMode = null">Cancel</button>
+          <button type="button" class="danger" :disabled="applyingFormat" @click="confirmFormatMode">
+            {{ applyingFormat ? 'Removing…' : 'Remove' }}
+          </button>
         </div>
       </section>
     </div>
@@ -251,8 +275,11 @@
 </template>
 
 <script setup>
-import { useBookishSettings } from '~/composables/useBookishSettings'
+import { computed, ref } from 'vue'
+import { enabledFormatsForMode, useBookishSettings } from '~/composables/useBookishSettings'
 import { useBooks } from '~/composables/useBooks'
+import { formatLabel, formatsRemovedBy, useFormatEnablement } from '~/composables/useFormatEnablement'
+import { useToast } from '~/composables/useToast'
 import MobileSettingsNav from './MobileSettingsNav.vue'
 import ReadingPreview from '../shared/previews/ReadingPreview.vue'
 // Playlist cards offer the same two layouts as series cards, so they share the
@@ -260,6 +287,7 @@ import ReadingPreview from '../shared/previews/ReadingPreview.vue'
 import SeriesPreview from '../shared/previews/SeriesCardPreview.vue'
 
 const { settings, updateSettings } = useBookishSettings()
+const { addToast } = useToast()
 
 const set = (key, value) => updateSettings({ [key]: value })
 
@@ -285,11 +313,69 @@ const toggleOptions = [
   { value: true, label: 'On' },
   { value: false, label: 'Off' },
 ]
+// This row is no longer a filter — it is the app-level format choice. See
+// useFormatEnablement: turning a format off purges its books and stops the
+// device scanner detecting the extension.
 const formatOptions = [
-  { value: 'all', label: 'All' },
+  { value: 'both', label: 'All' },
   { value: 'pdf', label: 'PDF' },
   { value: 'epub', label: 'EPUB' },
 ]
+
+const { formatMode, countAffected, applyFormatMode } = useFormatEnablement()
+
+const pendingFormatMode = ref(null)
+const applyingFormat = ref(false)
+
+const pendingFormatTitle = computed(() => {
+  const removed = formatsRemovedBy(
+    enabledFormatsForMode(formatMode.value),
+    enabledFormatsForMode(pendingFormatMode.value),
+  )
+  return `Remove ${removed.map(formatLabel).join(' and ')} from your library?`
+})
+
+const pendingFormatMessage = computed(() => {
+  const count = countAffected(enabledFormatsForMode(pendingFormatMode.value))
+  const books = count === 1 ? '1 book' : `${count} books`
+  return count > 0
+    ? `${books} will be cleared from your library, and Pages will stop detecting that format. Your files stay on your device, so turning it back on re-imports them.`
+    : 'Pages will stop detecting that format. Your files stay on your device.'
+})
+
+const chooseFormatMode = async (mode) => {
+  if (mode === formatMode.value) return
+  // Only a removal needs confirming; widening the set destroys nothing.
+  const removes = formatsRemovedBy(
+    enabledFormatsForMode(formatMode.value),
+    enabledFormatsForMode(mode),
+  ).length > 0
+  if (removes) {
+    pendingFormatMode.value = mode
+    return
+  }
+  await applyFormatMode(mode)
+}
+
+const confirmFormatMode = async () => {
+  if (applyingFormat.value || !pendingFormatMode.value) return
+  applyingFormat.value = true
+  try {
+    const { removed } = await applyFormatMode(pendingFormatMode.value)
+    addToast(
+      removed > 0
+        ? `Removed ${removed} book${removed === 1 ? '' : 's'} from your library.`
+        : 'Format removed.',
+      'success',
+    )
+  } catch (error) {
+    console.error('[Preferences] Could not change the format choice:', error)
+    addToast('Could not change the book formats.', 'error')
+  } finally {
+    applyingFormat.value = false
+    pendingFormatMode.value = null
+  }
+}
 </script>
 
 <style scoped>
@@ -464,5 +550,81 @@ const formatOptions = [
 
 .pref-toggle.on .knob {
   transform: translateX(19px);
+}
+
+.format-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+  display: grid;
+  align-items: end;
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.format-confirm-sheet {
+  width: 100%;
+  padding: 1.35rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+  border-radius: 20px 20px 0 0;
+  background: var(--color-background-app);
+  box-shadow: var(--shadow-modal);
+}
+
+.format-confirm-sheet h2 {
+  margin: 0 0 0.5rem;
+  color: var(--color-text-primary);
+  font-size: 1.02rem;
+}
+
+.format-confirm-sheet p {
+  margin: 0 0 1.1rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.format-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.format-confirm-actions button {
+  min-height: 44px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.format-confirm-actions .ghost {
+  border: 1px solid var(--color-border-card);
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+.format-confirm-actions .danger {
+  border: 0;
+  background: var(--color-status-error, #dc2626);
+  color: #fff;
+}
+
+.format-confirm-actions .danger:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (min-width: 640px) {
+  .format-confirm-overlay {
+    align-items: center;
+    justify-items: center;
+    padding: 1.5rem;
+  }
+
+  .format-confirm-sheet {
+    max-width: 400px;
+    border-radius: 18px;
+    padding-bottom: 1.25rem;
+  }
 }
 </style>

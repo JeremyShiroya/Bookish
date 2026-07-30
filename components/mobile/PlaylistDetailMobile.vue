@@ -61,8 +61,11 @@
 
       <LibraryControlsRow
         v-if="playlistBooks.length"
-        v-model:status="selectedStatus"
+        :status="filters.status"
+        :format="filters.format"
         v-model:view="viewMode"
+        @update:status="setFilter('status', $event)"
+        @update:format="setFilter('format', $event)"
       />
 
       <div v-if="filteredBooks.length" :class="viewMode === 'list' ? 'book-list' : 'books-grid'">
@@ -145,7 +148,7 @@ import LibraryBookCard from '~/components/shared/LibraryBookCard.vue';
 import LibraryControlsRow from '~/components/shared/LibraryControlsRow.vue';
 import PlaylistDeleteModal from '~/components/shared/PlaylistDeleteModal.vue';
 import PlaylistEditModal from '~/components/shared/PlaylistEditModal.vue';
-import { matchesFormatFilter, useBookishSettings } from '~/composables/useBookishSettings';
+import { matchesLibraryFilters, useLibraryFilters } from '~/composables/useLibraryFilters';
 import { useBooks } from '~/composables/useBooks';
 import { useToast } from '~/composables/useToast';
 import { useTTS } from '~/composables/useTTS';
@@ -154,10 +157,11 @@ import MobileSettingsNav from './MobileSettingsNav.vue';
 const route = useRoute();
 const router = useRouter();
 const { books, collections, updatePlaylist, deletePlaylist, deleteBook, toggleFavourite, hideBook } = useBooks();
-const { settings } = useBookishSettings();
 const { addToast } = useToast();
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
-const selectedStatus = ref('all');
+// Each playlist remembers its own filters — filtering one is not a statement
+// about the others.
+const { filters, setFilter } = useLibraryFilters(`playlist:${route.params.id}`);
 const viewMode = ref('grid');
 const selectedPlaylistBook = ref(null);
 const editingPlaylist = ref(null);
@@ -194,10 +198,9 @@ const normalizedStatus = (book) => {
   return 'Unread';
 };
 
-const filteredBooks = computed(() => playlistBooks.value.filter(book => (
-  matchesFormatFilter(book, settings.value.formatFilter)
-  && (selectedStatus.value === 'all' || normalizedStatus(book) === selectedStatus.value)
-)));
+const filteredBooks = computed(() => playlistBooks.value.filter(
+  (book) => matchesLibraryFilters(book, filters.value, normalizedStatus),
+));
 
 const isBookActive = (book) => (
   ttsBook.value?.id === book.id && ttsStatus.value !== 'idle'

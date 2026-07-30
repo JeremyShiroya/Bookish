@@ -9,7 +9,8 @@
         :loading="loading"
         :content-loading="contentLoading"
         :is-pdf-renderable="isPdfRenderable"
-        :is-pdf-book="isPdfBook"
+        :is-pdf-book="!readsAsEpub"
+        :pdf-reflow-available="pdfReflowAvailable"
         :pdf-source="pdfSource"
         :zoom-level="zoomLevel"
         :pdf-manifest="pdfManifest"
@@ -29,7 +30,7 @@
         :section-counts="epubSectionCounts"
         :full-sections="chapterList"
         :toc-items="displayTocItems"
-        :open-to-chunk="openToChunk"
+        :open-to-chunk="pagedStartChunk"
         @back="router.back()"
         @open-toc="tocOpen = true"
         @page-change="handlePdfPageChange"
@@ -264,7 +265,16 @@ import {
   pdfSourceToBytes,
 } from '~/composables/usePdfExtractor'
 import { PDF_MANIFEST_VERSION, firstChunkForPage, pageForChunk } from '~/composables/usePdfManifest'
+import { reflowPdfManifest } from '~/composables/usePdfReflow'
+import { useMobileReaderPrefs } from '~/composables/useMobileReaderPrefs'
 import { pdfProgressForPage } from '~/composables/useReaderPosition'
+import {
+  READING_POSITION_SAVE_DELAY_MS,
+  progressForChunk,
+  readingPositionUpdate,
+  resolveStartChunk,
+  statusForProgress,
+} from '~/composables/useReadingPosition'
 import ReaderMobile from '~/components/mobile/ReaderMobile.vue'
 import PdfViewer from '~/components/shared/PdfViewer.vue'
 import ResponsiveViewSwitch from '~/components/shared/ResponsiveViewSwitch.vue'
@@ -332,6 +342,17 @@ const openToChunk = (() => {
   const n = Number(route.query?.chunk)
   return Number.isFinite(n) && n >= 0 ? n : -1
 })()
+
+// The sentence the reader is on, in BOTH modes. Paged reports it per page turn,
+// scroll resolves it from the anchor line — so switching modes keeps the place.
+const currentReadingChunk = ref(-1)
+
+// Where the paged surface should open. "Open in book" (?chunk=N) wins; otherwise
+// it is the shared reading position, which is what carries a switch out of
+// scroll mode onto the right page instead of back to chapter one.
+const pagedStartChunk = computed(() => (
+  openToChunk >= 0 ? openToChunk : currentReadingChunk.value
+))
 const currentPdfPage = ref(1)
 const totalPages = ref(0)
 const restoredInitialPdfScroll = ref(false)
@@ -343,7 +364,48 @@ const pendingReadFromHereWasPlaying = ref(false)
 
 const bookFormat = computed(() => (book.value?.format || '').toLowerCase())
 const isPdfBook = computed(() => bookFormat.value === 'pdf')
-const isPdfRenderable = computed(() => isPdfBook.value && !!pdfSource.value)
+
+// ── PDF Reflow (mobile) ─────────────────────────────────────────────────────
+//
+// WPS-style: 'original' renders the fixed page on canvas as before; 'reflow'
+// rebuilds the text into EPUB-shaped sections (see usePdfReflow) and hands them
+// to the very same reading surfaces EPUBs use, which is how it inherits paged
+// and scroll mode, the typography controls and the narration highlight.
+//
+// A scan has no text layer, so there is nothing to reflow. This has to be a
+// CHEAP test: it decides whether to offer the control on every PDF open, and
+// running the full reflow to answer it would put a pass over every page of a
+// 500-page document on the main thread before the reader had even painted.
+const pdfReflowAvailable = computed(() => (
+  isPdfBook.value && (pdfManifest.value?.chunks?.length || 0) > 0
+))
+
+const usePdfReflowView = computed(() => (
+  isPdfBook.value
+  && isMobileViewport.value
+  && mobileReaderPrefs.value.pdfViewMode === 'reflow'
+  && pdfReflowAvailable.value
+))
+
+// The reflow itself is derived from the manifest the app already stores, so it
+// costs one pass over data that is in memory anyway — but only once the reader
+// is actually in Reflow. Vue caches it, so page turns never recompute it.
+const pdfReflow = computed(() => (
+  usePdfReflowView.value ? reflowPdfManifest(pdfManifest.value) : null
+))
+
+// Only the canvas viewer counts as "renderable" — in reflow the PDF is read
+// through the EPUB surfaces instead, so every `isPdfRenderable` branch (page
+// scrolling, page-based progress, the page counter) correctly stands down.
+const isPdfRenderable = computed(() => (
+  isPdfBook.value && !!pdfSource.value && !usePdfReflowView.value
+))
+
+// The reading pipeline's real question is not "is this file a PDF" but "is this
+// being read as flowing text". A reflowed PDF answers yes, so it takes the EPUB
+// path for chapters, chunking, narration, highlights and position — one code
+// path, not a parallel PDF-shaped copy of it.
+const readsAsEpub = computed(() => !isPdfBook.value || usePdfReflowView.value)
 
 function hasCoverVal() {
   const cover = book.value?.cover
@@ -360,7 +422,7 @@ const currentChapterTitle = computed(() => {
 // Position among real TOC chapters (sections are page-level file splits,
 // so "section 214 / 369" would misrepresent the chapter count).
 const tocPosition = computed(() => {
-  if (isPdfBook.value) return null
+  if (!readsAsEpub.value) return null
   const entries = displayTocItems.value
   if (!entries.length) return null
   let pos = 0
@@ -372,7 +434,7 @@ const tocPosition = computed(() => {
 })
 
 const epubStyle = computed(() => {
-  if (!rawContent.value || isPdfBook.value) return ''
+  if (!rawContent.value || !readsAsEpub.value) return ''
   const match = rawContent.value.match(/<style[^>]*>([\s\S]*?)<\/style>/i)
   return match?.[1] ?? ''
 })
@@ -383,6 +445,13 @@ const epubStyle = computed(() => {
 const isMobileViewport = ref(false)
 let _viewportQuery = null
 const _syncViewport = () => { isMobileViewport.value = Boolean(_viewportQuery?.matches) }
+
+// Which reading surface is live. The page needs this (not just ReaderMobile) so
+// it can hand the reading position across when the two are swapped.
+const { prefs: mobileReaderPrefs } = useMobileReaderPrefs()
+const usePagedReader = computed(() => (
+  isMobileViewport.value && readsAsEpub.value && mobileReaderPrefs.value.readingMode === 'page'
+))
 
 useHead(() => ({
   style: epubStyle.value && !isMobileViewport.value
@@ -413,7 +482,7 @@ function extractTitle(html, index) {
 }
 
 function parseChapters(content) {
-  if (!content || isPdfBook.value) return []
+  if (!content || !readsAsEpub.value) return []
 
   const html = content
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -428,6 +497,10 @@ function parseChapters(content) {
 }
 
 const chapterList = computed(() => {
+  // Reflowed PDFs arrive already shaped like chapters — one section per page —
+  // so they flow into the EPUB pipeline without a second representation.
+  if (usePdfReflowView.value) return pdfReflow.value?.sections ?? []
+
   const chapters = parseChapters(rawContent.value)
   if (!chapters.length) return []
 
@@ -495,15 +568,29 @@ const mobileChapterList = computed(() => {
   ))
 })
 
+// The chunk this book should open at. Narration wins while it is playing;
+// otherwise it is the saved reading position, which both surfaces write.
+function initialReadingChunk() {
+  if (ttsBook.value?.id === book.value?.id && ttsStatus.value !== 'idle') {
+    return Math.max(0, Number(ttsChunkIdx.value) || 0)
+  }
+  return resolveStartChunk(book.value, allReadableChunks.value.length)
+}
+
 function initialSectionIndex() {
   const total = chapterList.value.length
-  // Opened while this book is narrating (e.g. from the mini playing bar):
-  // start at the section being read aloud, not the saved progress.
-  if (total > 1 && ttsBook.value?.id === book.value?.id && ttsStatus.value !== 'idle') {
-    return Math.max(0, Math.min(total - 1, sectionForChunk(ttsChunkIdx.value)))
+  if (total <= 1) return 0
+
+  // Chunk-derived, so the section is the one holding the exact saved sentence
+  // rather than a percentage-of-chapters estimate that drifted every time the
+  // book's chunk count changed.
+  const counts = epubSectionCounts.value
+  if (counts.length) {
+    return Math.max(0, Math.min(total - 1, sectionForChunk(initialReadingChunk())))
   }
+
   const progress = Number(book.value?.progress) || 0
-  if (total <= 1 || progress <= 0) return 0
+  if (progress <= 0) return 0
   return Math.max(0, Math.min(total - 1, Math.round((progress / 100) * (total - 1))))
 }
 
@@ -613,12 +700,12 @@ function mountSection(index) {
 }
 
 const pdfTocItems = computed(() => {
-  if (!isPdfBook.value) return []
+  if (readsAsEpub.value) return []
   return tocItems.value || []
 })
 
 const displayTocItems = computed(() => {
-  if (isPdfBook.value) {
+  if (!readsAsEpub.value) {
     return (pdfTocItems.value || [])
       .filter(item => item?.title && item?.page)
       .map(item => ({
@@ -634,7 +721,7 @@ const displayTocItems = computed(() => {
 })
 
 const tocEmptyMessage = computed(() => {
-  if (isPdfBook.value && !isPdfRenderable.value) {
+  if (!readsAsEpub.value && !isPdfRenderable.value) {
     return 'Re-upload this PDF to load its table of contents.'
   }
 
@@ -670,13 +757,13 @@ const isCurrentBookNarrating = computed(() => (
 const readableChunkData = computed(() => buildReadableChunks(rawContent.value || ''))
 const epubSectionCounts = computed(() => readableChunkData.value.sectionCounts)
 const allReadableChunks = computed(() => (
-  isPdfBook.value
+  !readsAsEpub.value
     ? (pdfManifest.value?.chunks || []).map(chunk => chunk.text)
     : readableChunkData.value.chunks
 ))
 
 const activeTtsChunkPage = computed(() => {
-  if (!isPdfBook.value || activeTtsChunkIndex.value < 0) return 0
+  if (readsAsEpub.value || activeTtsChunkIndex.value < 0) return 0
   return pageForChunk(pdfManifest.value, activeTtsChunkIndex.value) || 0
 })
 
@@ -684,7 +771,7 @@ const activeTtsChunkPage = computed(() => {
 // Chapters usually span many sections (EPUBs split files per few pages),
 // so an exact index match would almost never highlight anything.
 const activeTocEntryIdx = computed(() => {
-  if (isPdfBook.value) return -1
+  if (!readsAsEpub.value) return -1
   const entries = displayTocItems.value
   if (!entries.length) return -1
   let active = -1
@@ -719,6 +806,13 @@ function handleMobilePosition(position) {
   const section = Number(position?.section)
   if (!Number.isFinite(section)) return
   if (section !== currentChapterIdx.value) currentChapterIdx.value = section
+
+  // The page's own chunk, so a page turn inside one chapter is a real position
+  // change — that is what scroll mode reads back when the modes are swapped.
+  const chunk = Number(position?.chunk)
+  if (Number.isFinite(chunk) && chunk >= 0 && chunk !== currentReadingChunk.value) {
+    currentReadingChunk.value = chunk
+  }
 }
 
 // Mobile Listen stepper (scroll mode) jumping to the section that owns a page.
@@ -777,7 +871,7 @@ function chunkIndexForCurrentPosition() {
   const chunks = allReadableChunks.value
   if (!chunks.length) return 0
 
-  if (isPdfBook.value) {
+  if (!readsAsEpub.value) {
     return firstChunkForPage(pdfManifest.value, currentPdfPage.value)?.id ?? 0
   }
 
@@ -818,10 +912,10 @@ function requestReadCurrentPosition() {
     ? pdfViewerRef.value?.getVisiblePage?.()
     : null
   const targetPage = visiblePdfPage || currentPdfPage.value
-  const targetPdfChunk = isPdfBook.value
+  const targetPdfChunk = !readsAsEpub.value
     ? firstChunkForPage(pdfManifest.value, targetPage)
     : null
-  const targetChunkId = isPdfBook.value
+  const targetChunkId = !readsAsEpub.value
     ? targetPdfChunk?.id
     : chunkIndexForCurrentPosition()
   if (targetChunkId === null || targetChunkId === undefined) return
@@ -853,10 +947,10 @@ async function playFromCurrentPosition() {
     ? pdfViewerRef.value?.getVisiblePage?.()
     : null
   const targetPage = visiblePdfPage || currentPdfPage.value
-  const targetPdfChunk = isPdfBook.value
+  const targetPdfChunk = !readsAsEpub.value
     ? firstChunkForPage(pdfManifest.value, targetPage)
     : null
-  const targetChunkId = isPdfBook.value
+  const targetChunkId = !readsAsEpub.value
     ? targetPdfChunk?.id
     : chunkIndexForCurrentPosition()
   if (targetChunkId === null || targetChunkId === undefined) return
@@ -889,7 +983,7 @@ async function confirmReadFromHere() {
   // Move the reading marker back to the page being read from, so saved
   // progress reflects the new (earlier) position rather than where narration
   // previously was.
-  if (isPdfBook.value) {
+  if (!readsAsEpub.value) {
     currentPdfPage.value = targetPage
   } else {
     currentChapterIdx.value = sectionForChunk(pendingReadFromHereChunk.value)
@@ -898,14 +992,14 @@ async function confirmReadFromHere() {
   await playTTS(book.value, {
     startChunkIdx: pendingReadFromHereChunk.value,
     ignoreSavedSession: true,
-    chunks: isPdfBook.value ? allReadableChunks.value : undefined,
+    chunks: !readsAsEpub.value ? allReadableChunks.value : undefined,
   })
   if (isPdfRenderable.value) {
     currentPdfPage.value = targetPage
     await nextTick()
     pdfViewerRef.value?.scrollToPage(targetPage, 'instant', 'start')
   }
-  await saveReadingProgress(isPdfBook.value ? { pdfPage: targetPage } : undefined)
+  await saveReadingProgress(!readsAsEpub.value ? { pdfPage: targetPage } : undefined)
 }
 
 // Locate the sentence under a touch point for the mobile long-press menu.
@@ -914,7 +1008,7 @@ function resolveChunkAtPoint(x, y) {
   if (!import.meta.client || !allReadableChunks.value.length) return -1
 
   // PDF: resolve the page under the finger → that page's first readable chunk.
-  if (isPdfBook.value) {
+  if (!readsAsEpub.value) {
     const pageEl = document.elementFromPoint(x, y)?.closest?.('[data-page]')
     const page = Number(pageEl?.dataset?.page)
     if (Number.isNaN(page)) return -1
@@ -963,7 +1057,7 @@ async function playFromChunk(chunkIdx) {
   pendingReadFromHereWasPlaying.value = false
   // For a PDF, resolve the page that owns the pressed chunk so playback and the
   // saved reading marker land on the long-pressed page.
-  pendingReadFromHerePage.value = isPdfBook.value
+  pendingReadFromHerePage.value = !readsAsEpub.value
     ? (pageForChunk(pdfManifest.value, target) || currentPdfPage.value)
     : currentPdfPage.value
   pendingReadFromHereChunk.value = target
@@ -981,7 +1075,7 @@ function jumpToNarration() {
 
 function observeChapters() {
   if (_observer) _observer.disconnect()
-  if (isPdfBook.value) return
+  if (!readsAsEpub.value) return
 
   // Track the latest ratio of EVERY section, not just the entries in one
   // callback batch — a batch only contains sections whose ratio crossed a
@@ -1118,7 +1212,7 @@ let _chunkMapCursor = 0
 function _buildChunkMap() {
   _cancelScheduledChunkMapBuild()
   const container = chaptersContainerRef.value
-  if (!container || !rawContent.value || isPdfBook.value) return
+  if (!container || !rawContent.value || !readsAsEpub.value) return
 
   clearHtmlHighlight()
   unwrapTtsSpans(container)
@@ -1184,7 +1278,7 @@ function _isNearViewport(el) {
 function _highlightChunk(index) {
   const previousEl = _activeEl
   clearHtmlHighlight()
-  if (isPdfBook.value || index < 0) return
+  if (!readsAsEpub.value || index < 0) return
 
   let el = _chunkEls[index]
   if (!el) {
@@ -1222,7 +1316,7 @@ function _updateEpubWordHighlight() {
   const highlight = _ensureWordHighlight()
   if (!highlight) return
   highlight.clear()
-  if (isPdfBook.value) return
+  if (!readsAsEpub.value) return
 
   const chunkIdx = activeTtsChunkIndex.value
   const range = activeWordRange.value
@@ -1278,38 +1372,61 @@ async function ensurePdfToc(bookId) {
   }
 }
 
+// The reading position both surfaces agree on, expressed as a chunk index. PDFs
+// resolve theirs from the visible page; EPUBs use whatever the active surface
+// last reported (a page turn, or the chunk under the scroll anchor line).
+function currentPositionChunk({ pdfPage } = {}) {
+  if (!readsAsEpub.value) {
+    return firstChunkForPage(pdfManifest.value, pdfPage ?? currentPdfPage.value)?.id ?? 0
+  }
+  if (currentReadingChunk.value >= 0) return currentReadingChunk.value
+  // Nothing reported yet (the chunk map may still be building) — fall back to
+  // the top of the section in view rather than to the top of the book.
+  return sectionStartChunk(Math.max(0, currentChapterIdx.value))
+}
+
 function readingProgressSnapshot({ pdfPage } = {}) {
-  let progress = 0
-  let status = 'Unread'
-
+  // PDFs keep the page-based percentage: pages are what the reader shows and
+  // what the user counts in, and the chunk map can be empty for scanned files.
   if (isPdfRenderable.value && totalPages.value > 0) {
-    const pdfProgress = pdfProgressForPage(pdfPage ?? currentPdfPage.value, totalPages.value)
-    progress = pdfProgress.progress
-    status = pdfProgress.status
-  } else if (!isPdfBook.value && chapterList.value.length > 0) {
-    const idx = Math.max(0, currentChapterIdx.value)
-    progress = chapterList.value.length > 1
-      ? Math.round((idx / (chapterList.value.length - 1)) * 100)
-      : 100
-    status = progress > 95 ? 'Read' : idx > 0 ? 'Reading' : 'Unread'
+    return pdfProgressForPage(pdfPage ?? currentPdfPage.value, totalPages.value)
   }
 
-  return {
-    progress: Math.max(0, Math.min(100, progress)),
-    status,
+  const total = allReadableChunks.value.length
+  if (readsAsEpub.value && total > 0) {
+    const progress = progressForChunk(currentPositionChunk(), total)
+    return { progress, status: statusForProgress(progress) }
   }
+
+  // No chunk map (an EPUB with no readable text) — fall back to chapters so the
+  // book still records that it was opened.
+  if (readsAsEpub.value && chapterList.value.length > 1) {
+    const idx = Math.max(0, currentChapterIdx.value)
+    const progress = Math.round((idx / (chapterList.value.length - 1)) * 100)
+    return { progress, status: statusForProgress(progress) }
+  }
+
+  return { progress: 0, status: 'Unread' }
 }
 
 let _progressSaveTimer = null
 
 async function saveReadingProgress(position) {
   if (!readerReady.value || !book.value) return
-  const next = readingProgressSnapshot(position)
-  if (next.progress === (book.value.progress || 0) && next.status === (book.value.status || 'Unread')) return
 
-  // Stamp when the book was actually read so "Currently Reading" can order by
-  // real reading activity, not by unrelated edits that bump updatedAt.
-  const updated = { ...book.value, ...next, lastReadAt: new Date().toISOString() }
+  const snapshot = readingProgressSnapshot(position)
+  const next = readingPositionUpdate(book.value, {
+    chunk: currentPositionChunk(position),
+    totalChunks: allReadableChunks.value.length,
+    progress: snapshot.progress,
+    status: snapshot.status,
+  })
+  // Nothing moved. Note this compares the CHUNK too, so turning pages inside one
+  // chapter is a real change — the old percentage-only guard swallowed those and
+  // with them the lastReadAt stamp "Currently Reading" depends on.
+  if (!next) return
+
+  const updated = { ...book.value, ...next }
   book.value = updated
   try {
     await updateBook(updated)
@@ -1324,7 +1441,7 @@ function queueProgressSave() {
   _progressSaveTimer = setTimeout(() => {
     _progressSaveTimer = null
     saveReadingProgress()
-  }, 450)
+  }, READING_POSITION_SAVE_DELAY_MS)
 }
 
 function updateBookEdge() {
@@ -1359,7 +1476,7 @@ function updateBookEdge() {
 let _scrollRaf = null
 
 function updateCurrentChapterFromScroll() {
-  if (isPdfBook.value || !chapterList.value.length || !import.meta.client) return
+  if (!readsAsEpub.value || !chapterList.value.length || !import.meta.client) return
 
   // O(1) hit-test at the reading anchor line instead of measuring every
   // section each frame. Reading a book with dozens of chapters used to call
@@ -1370,6 +1487,15 @@ function updateCurrentChapterFromScroll() {
   const index = Number(section?.id?.slice(3))
   if (!Number.isNaN(index) && index !== currentChapterIdx.value) {
     currentChapterIdx.value = index
+  }
+
+  // Scroll mode's half of the shared position. Resolving the exact sentence at
+  // the anchor line is what lets a switch to page mode land on the same page
+  // instead of at the top of the chapter.
+  const chunk = chunkIndexForCurrentPosition()
+  if (Number.isFinite(chunk) && chunk >= 0 && chunk !== currentReadingChunk.value) {
+    currentReadingChunk.value = chunk
+    queueProgressSave()
   }
 }
 
@@ -1501,19 +1627,29 @@ async function loadBook(id) {
   updateBookEdge()
   ensurePdfToc(id)
 
-  if (!isPdfBook.value && chapterList.value.length > 0
-    && (book.value?.progress > 0 || isCurrentBookNarrating.value)) {
+  const hasSavedPosition = Number(book.value?.readingChunk) > 0 || book.value?.progress > 0
+
+  if (readsAsEpub.value && chapterList.value.length > 0
+    && (hasSavedPosition || isCurrentBookNarrating.value)) {
     // Same formula as the mounting window seed, so the target is mounted.
     const safeIndex = initialSectionIndex()
     currentChapterIdx.value = safeIndex
+    // Seed the shared position BEFORE the surface reports one, so a mode switch
+    // straight after opening still knows where the reader actually is.
+    currentReadingChunk.value = initialReadingChunk()
+
     const el = document.getElementById(`ch-${safeIndex}`)
     if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' })
 
-    // Refine to the exact sentence once the highlight spans exist.
+    // Refine to the exact sentence once the highlight spans exist. Scroll mode
+    // restores the sentence, not just the chapter — landing at the top of a long
+    // chapter was the visible half of "scroll mode starts at the beginning".
     if (isCurrentBookNarrating.value) {
       setTimeout(() => {
         if (isCurrentBookNarrating.value) jumpToNarration()
       }, 400)
+    } else if (!usePagedReader.value) {
+      setTimeout(() => scrollToChunk(currentReadingChunk.value), 400)
     }
   }
 
@@ -1521,6 +1657,23 @@ async function loadBook(id) {
     readerReady.value = true
     updateCurrentChapterFromScroll()
   }
+}
+
+// Scroll mode's counterpart to the paged reader's goToChunk: mount the owning
+// section, then bring that sentence to the reading anchor line.
+function scrollToChunk(chunkIndex) {
+  if (!import.meta.client || !readsAsEpub.value) return
+  const target = Number(chunkIndex)
+  if (!Number.isFinite(target) || target < 0) return
+
+  const section = sectionForChunk(target)
+  mountSection(section)
+  nextTick(() => {
+    _mapOneSection(section)
+    const el = _chunkEls[target]
+    if (el?.isConnected) el.scrollIntoView({ behavior: 'instant', block: 'start' })
+    else document.getElementById(`ch-${section}`)?.scrollIntoView({ behavior: 'instant', block: 'start' })
+  })
 }
 
 watch(rawContent, async () => {
@@ -1537,14 +1690,14 @@ watch(rawContent, async () => {
 // those spans, so without this they had nothing to attach to until the book was
 // reopened.
 watch(chaptersContainerRef, async (el) => {
-  if (!el || isPdfBook.value) return
+  if (!el || !readsAsEpub.value) return
   await nextTick()
   _scheduleChunkMapBuild()
   observeChapters()
 })
 
 watch(activeTtsChunkIndex, async (index) => {
-  if (isPdfBook.value) return
+  if (!readsAsEpub.value) return
   if (index < 0) {
     clearHtmlHighlight()
     return
@@ -1565,10 +1718,68 @@ watch(activeTtsChunkIndex, async (index) => {
 })
 
 watch([activeTtsChunkIndex, ttsWordIdx], () => {
-  if (!isPdfBook.value) _updateEpubWordHighlight()
+  if (readsAsEpub.value) _updateEpubWordHighlight()
 })
 
-watch([currentPdfPage, currentChapterIdx], queueProgressSave)
+watch([currentPdfPage, currentChapterIdx, currentReadingChunk], queueProgressSave)
+
+// Original ⇄ Reflow. The two views count in different units — fixed pages on one
+// side, reflowed text chunks on the other — so the PAGE is what carries across.
+// Reflow keeps one section per page, which makes the mapping exact in both
+// directions.
+//
+// Leaving Reflow tears the reflow down (it is only computed while in use), so
+// the page under the reader is recorded as it moves rather than read back after
+// the fact.
+const reflowPageInView = ref(0)
+
+watch([currentChapterIdx, usePdfReflowView], () => {
+  if (!usePdfReflowView.value) return
+  const page = pdfReflow.value?.sections?.[currentChapterIdx.value]?.page
+  if (page) reflowPageInView.value = page
+})
+
+watch(usePdfReflowView, async (reflowing) => {
+  if (!isPdfBook.value) return
+  await nextTick()
+
+  if (reflowing) {
+    const sections = pdfReflow.value?.sections || []
+    const index = sections.findIndex((section) => section.page >= currentPdfPage.value)
+    const target = index === -1 ? Math.max(0, sections.length - 1) : index
+    currentChapterIdx.value = target
+    mountSection(target)
+    currentReadingChunk.value = sectionStartChunk(target)
+    return
+  }
+
+  // Back to the fixed page the reflowed section came from.
+  const page = reflowPageInView.value
+  if (page) {
+    currentPdfPage.value = page
+    nextTick(() => pdfViewerRef.value?.scrollToPage?.(page, 'instant'))
+  }
+})
+
+// Page ⇄ scroll. Each surface is built fresh with no idea where the other one
+// was, so the position is handed over explicitly. The paged reader takes it as
+// its `start-chunk` prop; scroll mode has to be told to go there once its
+// sections exist.
+watch(usePagedReader, async (paged) => {
+  if (!readsAsEpub.value) return
+  const target = currentReadingChunk.value
+  if (!Number.isFinite(target) || target < 0) return
+
+  if (paged) {
+    // The paged reader remounts with start-chunk already pointing here.
+    currentChapterIdx.value = sectionForChunk(target)
+    return
+  }
+
+  await nextTick()
+  await nextTick()
+  scrollToChunk(target)
+})
 
 watch(tocOpen, async (open) => {
   if (open) {

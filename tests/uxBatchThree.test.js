@@ -127,12 +127,15 @@ describe('open-in-book lands on the annotation', () => {
   test('the reader page passes the chunk down, and the paged reader honours it', () => {
     const page = read('pages/reader/[id].vue')
     expect(page).toContain('openToChunk')
-    expect(page).toContain(':open-to-chunk="openToChunk"')
+    // ?chunk=N still wins; otherwise the paged reader opens at the shared
+    // reading position, which is what carries a switch out of scroll mode.
+    expect(page).toContain(':open-to-chunk="pagedStartChunk"')
+    expect(page).toContain('openToChunk >= 0 ? openToChunk : currentReadingChunk.value')
 
     const paged = read('components/mobile/ReaderPagedEpub.vue')
     expect(paged).toContain('goToChunk')
     // The open-jump wins over the restored position.
-    expect(paged).toContain('_openJumpPending')
+    expect(paged).toContain('openJumpPending()')
     // And it lands instantly rather than animating a page-turn across the book.
     expect(paged).toMatch(/animate\.value = false;\s*\n\s*page\.value = Math\.max/)
   })

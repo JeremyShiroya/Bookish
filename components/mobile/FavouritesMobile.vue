@@ -12,8 +12,11 @@
              view toggle look and behave identically here. -->
         <div v-if="favourites.length > 0" class="favourites-controls">
           <LibraryControlsRow
-            v-model:status="selectedStatus"
+            :status="filters.status"
+            :format="filters.format"
             :view="favouritesLayout"
+            @update:status="setFilter('status', $event)"
+            @update:format="setFilter('format', $event)"
             @update:view="setLayout"
           />
         </div>
@@ -87,10 +90,8 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { useBooks } from "~/composables/useBooks";
-import {
-  matchesFormatFilter,
-  useBookishSettings,
-} from '~/composables/useBookishSettings';
+import { useBookishSettings } from '~/composables/useBookishSettings';
+import { matchesLibraryFilters, useLibraryFilters } from '~/composables/useLibraryFilters';
 import { useToast } from '~/composables/useToast';
 import { useTTS } from '~/composables/useTTS';
 import EmptyState from "../shared/EmptyState.vue";
@@ -114,18 +115,15 @@ const showDeleteModal = ref(false);
 const selectedDeleteBook = ref(null);
 
 // ── Controls row: status + format filters, grid/list view ───────────────────
-const selectedStatus = ref('all');
-const selectedFormat = computed(() => settings.value.formatFilter || 'all');
+// Scoped to this page, so filtering Favourites leaves every other shelf alone,
+// and the choice survives opening a book and coming back.
+const { filters, setFilter, resetFilters } = useLibraryFilters('favourites');
 
-const displayedFavourites = computed(() => favourites.value.filter((book) => (
-  matchesFormatFilter(book, selectedFormat.value)
-  && (selectedStatus.value === 'all' || book.status === selectedStatus.value)
-)));
+const displayedFavourites = computed(() => favourites.value.filter(
+  (book) => matchesLibraryFilters(book, filters.value),
+));
 
-const clearFilters = () => {
-  selectedStatus.value = 'all';
-  updateSettings({ formatFilter: 'all' });
-};
+const clearFilters = () => resetFilters();
 
 // The view choice is the same setting the Preferences page used to own; the
 // controls row is where it actually belongs.

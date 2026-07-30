@@ -7,6 +7,9 @@ import { readonly, ref } from 'vue'
 export const MOBILE_READER_PREFS_KEY = 'bookish:mobile-reader-prefs'
 
 export const READING_MODE_OPTIONS = Object.freeze(['page', 'scroll'])
+// PDFs only. 'original' is the fixed-page canvas render; 'reflow' rebuilds the
+// text into a continuous flow for phone screens, the way WPS Office does.
+export const PDF_VIEW_MODE_OPTIONS = Object.freeze(['original', 'reflow'])
 export const READER_BACKGROUND_OPTIONS = Object.freeze(['default', 'sepia'])
 // Every reader font must carry real 300-700 weights, otherwise the thickness
 // control does nothing: CSS font-matching silently collapses 300 and 500 onto
@@ -31,6 +34,7 @@ export const READER_FONT_SIZE_MAX = 24
 
 export const DEFAULT_MOBILE_READER_PREFS = Object.freeze({
   readingMode: 'page',      // 'page' (ReadEra-style page turns) | 'scroll'
+  pdfViewMode: 'original',  // PDFs: 'original' (fixed page) | 'reflow'
   background: 'default',    // 'default' (theme) | 'sepia' (book brown)
   fontSize: 17,             // px
   fontFamily: 'serif',      // READER_FONT_OPTIONS id
@@ -50,6 +54,9 @@ export function normalizeMobileReaderPrefs(value) {
     readingMode: READING_MODE_OPTIONS.includes(source.readingMode)
       ? source.readingMode
       : DEFAULT_MOBILE_READER_PREFS.readingMode,
+    pdfViewMode: PDF_VIEW_MODE_OPTIONS.includes(source.pdfViewMode)
+      ? source.pdfViewMode
+      : DEFAULT_MOBILE_READER_PREFS.pdfViewMode,
     background: READER_BACKGROUND_OPTIONS.includes(source.background)
       ? source.background
       : DEFAULT_MOBILE_READER_PREFS.background,

@@ -187,7 +187,15 @@ const mobileRecentBooks = computed(() => (
     : books.value.slice(0, 3)
 ))
 
-const currentReadingBook = computed(() => ttsBook.value || recentlyReadBooks.value[0] || null)
+// The book you are READING, not the one you last listened to. `ttsBook` used to
+// win unconditionally, which is why the card was really "last narrated" — it
+// outranked a book being actively scrolled or swiped through.
+//
+// recentlyReadBooks already orders by lastReadAt, and every page turn and scroll
+// settle now stamps that (see useReadingPosition), so silent reading takes the
+// slot. Narration still stamps it too, so a book being listened to naturally
+// appears here while it genuinely is the most recent activity.
+const currentReadingBook = computed(() => recentlyReadBooks.value[0] || ttsBook.value || null)
 const mobileSeries = computed(() => seriesList.value.slice(0, 2));
 
 // Ranked so the very first typed letter already surfaces the right books.

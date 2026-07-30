@@ -16,7 +16,7 @@
         :sections="filterSections"
         :values="filterValues"
         hide-view
-        @update:values="filterValues = $event"
+        @update:values="setFilters($event)"
       >
         <template v-if="selectionMode" #actions>
           <SelectionActionsBar
@@ -118,6 +118,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
 import { useToast } from "~/composables/useToast";
+import { useLibraryFilters } from "~/composables/useLibraryFilters";
 import { useLongPress, useMultiSelect } from "~/composables/useMultiSelect";
 import EmptyState from "../shared/EmptyState.vue";
 import PlaylistDeleteModal from "../shared/PlaylistDeleteModal.vue";
@@ -164,7 +165,11 @@ const filterSections = [
   },
 ];
 
-const filterValues = ref({ sort: 'az', contents: 'all' });
+// Persisted under this page's own scope (see useLibraryFilters).
+const { filters: filterValues, setFilters } = useLibraryFilters('playlists', {
+  sort: ['az', 'za', 'largest', 'smallest'],
+  contents: ['all', 'filled', 'empty'],
+});
 
 // ── Bulk selection ──────────────────────────────────────────────────────────
 const {

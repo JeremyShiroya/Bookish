@@ -54,42 +54,92 @@ export function isOfferedDeviceLocale(voice) {
   return DEVICE_VOICE_LOCALES.some((locale) => lang === locale.toLowerCase())
 }
 
-// Android's Google voices are named like "en-us-x-tpf-local" — the variant code
-// carries no documented gender, so gender is only claimed when the name really
-// says so (some OEM engines do label theirs). Everything else is offered
-// unlabelled rather than guessed at.
-const FEMALE_NAME_HINT = /\b(?:female|woman)\b|zira|jenny|aria|sonia|natasha|samantha|karen|moira|tessa|fiona/i
-const MALE_NAME_HINT = /\b(?:male|man)\b|david|guy|ryan|christopher|davis|daniel|alex|fred|oliver|arthur|william/i
+// Android's Google voices are named like "en-us-x-sfg#female_1-local": the
+// gender and its ordinal live in a `#gender_n` token. Matching that token has to
+// come FIRST and without a trailing \b — `_` is a word character, so
+// /\bfemale\b/ never matches "#female_1" and every voice used to fall through to
+// the unlabelled "Voice N" branch. Older Google names ("en-us-x-tpf-local") and
+// most OEM engines carry no token, so the word hints are the second pass and
+// anything still unknown is offered unlabelled rather than guessed at.
+const GENDER_TOKEN = /#(female|male)_?(\d*)/i
+const FEMALE_NAME_HINT = /female|woman|zira|jenny|aria|sonia|natasha|samantha|karen|moira|tessa|fiona/i
+const MALE_NAME_HINT = /male|man|david|guy|ryan|christopher|davis|daniel|alex|fred|oliver|arthur|william/i
 
-export function describeDeviceVoice(voice, indexWithinLocale = 0) {
+// 'Female' | 'Male' | '' — plus the ordinal the OS itself assigned, when it
+// names one. Order matters: FEMALE_NAME_HINT would match the "male" inside
+// "female", so the female test always runs first.
+export function deviceVoiceGender(voice) {
+  const raw = String(voice?.name || '')
+  const token = GENDER_TOKEN.exec(raw)
+  if (token) {
+    return {
+      gender: token[1].toLowerCase() === 'female' ? 'Female' : 'Male',
+      ordinal: Number(token[2]) || 0,
+    }
+  }
+  if (FEMALE_NAME_HINT.test(raw)) return { gender: 'Female', ordinal: 0 }
+  if (MALE_NAME_HINT.test(raw)) return { gender: 'Male', ordinal: 0 }
+  return { gender: '', ordinal: 0 }
+}
+
+export function describeDeviceVoice(voice, indexWithinGroup = 0) {
   const lang = normalizeLocale(voice?.lang)
   const localeLabel = LOCALE_LABELS[lang] || voice?.lang || 'Device voice'
-  const raw = String(voice?.name || '')
-  const gender = FEMALE_NAME_HINT.test(raw)
-    ? 'Female'
-    : MALE_NAME_HINT.test(raw)
-      ? 'Male'
-      : ''
-  const variant = gender || `Voice ${indexWithinLocale + 1}`
+  const { gender, ordinal } = deviceVoiceGender(voice)
+  const number = ordinal || indexWithinGroup + 1
+  const variant = gender ? `${gender} ${number}` : `Voice ${number}`
   return `${localeLabel} · ${variant}`
 }
 
-// Every offered voice, in locale order, keyed by its ORIGINAL index so the
-// engine can still select it. Deduping by display name used to collapse the
-// several variants each locale ships — which is why only one voice per locale
-// (and so seemingly only female ones) ever showed up.
+// Google ships each voice twice — "…-local" and "…-network" — which sound
+// identical. The network twin is useless to a picker that exists precisely
+// because the device is offline, so a local voice always wins its pair.
+const VOICE_INSTALL_SUFFIX = /-(?:local|network)$/i
+
+const voiceIdentity = (voice) => (
+  `${normalizeLocale(voice?.lang)}|${String(voice?.name || '').replace(VOICE_INSTALL_SUFFIX, '').toLowerCase()}`
+)
+
+const isNetworkVoice = (voice) => /-network$/i.test(String(voice?.name || ''))
+
+// Every distinct offered voice, in locale order, keyed by its ORIGINAL index so
+// the engine can still select it. Deduping by DISPLAY name used to collapse the
+// several variants each locale ships; deduping by nothing at all listed the same
+// voice three times. The key is the OS voice's own identity, ignoring the
+// install-location suffix.
 export function offeredDeviceVoices(voices) {
   const list = Array.isArray(voices) ? voices : []
   const out = []
+
   for (const locale of DEVICE_VOICE_LOCALES) {
     const target = locale.toLowerCase()
-    let seenInLocale = 0
+    const byIdentity = new Map()
+
     list.forEach((voice, index) => {
       if (normalizeLocale(voice?.lang) !== target) return
-      out.push({ index, name: describeDeviceVoice(voice, seenInLocale), lang: voice?.lang })
-      seenInLocale += 1
+      const key = voiceIdentity(voice)
+      const existing = byIdentity.get(key)
+      // First one wins, unless it is the network twin of a local voice.
+      if (existing && !(isNetworkVoice(existing.voice) && !isNetworkVoice(voice))) return
+      byIdentity.set(key, { voice, index })
     })
+
+    // Female before male before unlabelled, so the list reads as a roster rather
+    // than as whatever order the OS happened to enumerate in.
+    const rank = { Female: 0, Male: 1, '': 2 }
+    const entries = [...byIdentity.values()].sort((a, b) => (
+      rank[deviceVoiceGender(a.voice).gender] - rank[deviceVoiceGender(b.voice).gender]
+    ))
+
+    const seenPerGroup = new Map()
+    for (const { voice, index } of entries) {
+      const { gender } = deviceVoiceGender(voice)
+      const seen = seenPerGroup.get(gender) || 0
+      seenPerGroup.set(gender, seen + 1)
+      out.push({ index, name: describeDeviceVoice(voice, seen), lang: voice?.lang })
+    }
   }
+
   return out
 }
 
@@ -111,10 +161,9 @@ export function pickNativeVoiceIndex(voices, edgeVoiceId) {
 
   const fullLang = langForEdgeVoice(edgeVoiceId)
   const baseLang = fullLang.slice(0, 2)
-  const wantsFemale = FEMALE_EDGE_VOICES.has(String(edgeVoiceId))
-  const femaleHint = /female|woman|zira|jenny|aria|sonia|natasha|samantha|karen|moira|tessa|fiona/i
-  const maleHint = /male|man|david|guy|ryan|christopher|davis|daniel|alex|fred|oliver/i
-  const genderTest = wantsFemale ? femaleHint : maleHint
+  // Same gender detection the picker uses, so "matches the Edge voice" and
+  // "labelled Female in the list" can never disagree.
+  const wantsGender = FEMALE_EDGE_VOICES.has(String(edgeVoiceId)) ? 'Female' : 'Male'
 
   const lang = (v) => String(v?.lang || '').replace('_', '-').toLowerCase()
   const exact = voices.map((v, i) => ({ v, i })).filter(({ v }) => lang(v) === fullLang.toLowerCase())
@@ -122,7 +171,7 @@ export function pickNativeVoiceIndex(voices, edgeVoiceId) {
   const pool = exact.length ? exact : base
 
   if (!pool.length) return -1
-  const gendered = pool.find(({ v }) => genderTest.test(v?.name || ''))
+  const gendered = pool.find(({ v }) => deviceVoiceGender(v).gender === wantsGender)
   return (gendered || pool[0]).i
 }
 

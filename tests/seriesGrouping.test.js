@@ -57,8 +57,8 @@ describe('series suggestion placeholders', () => {
     expect(source).toContain('missing-book-card')
     // A missing book has no file format, so the format filter must not hide
     // it; only the Read/Reading status filters exclude suggestions.
-    expect(source).toMatch(/selectedStatus\.value !== 'Read'/)
-    expect(source).not.toMatch(/suggestionsEnabled[\s\S]{0,200}formatFilter/)
+    expect(source).toMatch(/filters\.value\.status !== 'Read'/)
+    expect(source).not.toMatch(/suggestionsEnabled[\s\S]{0,200}\.format\b/)
   })
 
   test('missing installments resolve through the Goodreads series roster', () => {

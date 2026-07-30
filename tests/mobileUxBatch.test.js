@@ -59,7 +59,10 @@ describe('mobile UX batch', () => {
     expect(layout).toContain('MobilePlayingBar')
 
     const reader = read('pages/reader/[id].vue')
-    expect(reader).toContain('sectionForChunk(ttsChunkIdx.value)')
+    // Narration outranks the saved reading position while it is playing, and
+    // the section is derived from that chunk.
+    expect(reader).toContain('ttsChunkIdx.value')
+    expect(reader).toContain('sectionForChunk(initialReadingChunk())')
     expect(reader).toContain('jumpToNarration()')
   })
 
@@ -93,9 +96,15 @@ describe('mobile UX batch', () => {
     const useBooks = read('composables/useBooks.js')
     expect(useBooks).toContain('lastReadAt')
     expect(useBooks).toContain("a.status === 'Reading'")
+    // A book opened but not yet scrolled has 0% progress and is still the book
+    // being read, so lastReadAt alone qualifies it.
+    expect(useBooks).toContain('b.lastReadAt')
 
-    const reader = read('pages/reader/[id].vue')
-    expect(reader).toContain('lastReadAt: new Date().toISOString()')
+    // The stamp lives in the shared position module now, so both reading
+    // surfaces write it — the reader used to stamp it only when the rounded
+    // percentage changed, which silent page turns never did.
+    const position = read('composables/useReadingPosition.js')
+    expect(position).toContain('lastReadAt: new Date().toISOString()')
   })
 
   test('device import reads bytes through the native plugin', () => {

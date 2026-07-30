@@ -477,6 +477,30 @@
           <div class="sheet-grabber"></div>
           <h2>Display</h2>
 
+          <!-- PDFs only. Original View is the fixed page as the publisher laid
+               it out; Reflow rebuilds the text to fit the phone, which is what
+               unlocks every control below it. -->
+          <div v-if="isPdfDocument" class="display-row">
+            <span class="display-label">PDF view</span>
+            <div class="seg-group">
+              <button
+                v-for="mode in ['original', 'reflow']"
+                :key="mode"
+                type="button"
+                class="seg-btn"
+                :class="{ active: prefs.pdfViewMode === mode }"
+                :disabled="mode === 'reflow' && !pdfReflowAvailable"
+                @click="updatePrefs({ pdfViewMode: mode })"
+              >
+                {{ mode === 'original' ? 'Original' : 'Reflow' }}
+              </button>
+            </div>
+          </div>
+          <p v-if="isPdfDocument && !pdfReflowAvailable" class="display-note">
+            This PDF is a scan with no text layer, so it can only be shown as the
+            original page.
+          </p>
+
           <template v-if="!isPdfBook">
             <div class="display-row">
               <span class="display-label">Reading mode</span>
@@ -794,6 +818,8 @@ const props = defineProps({
   // >= 0 when "Open in book" was used from a highlight or note: land on that
   // chunk instead of the reader's last saved position.
   openToChunk: { type: Number, default: -1 },
+  // The PDF has a text layer, so Reflow can be offered. False for scans.
+  pdfReflowAvailable: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -887,6 +913,11 @@ const stepFontSize = (delta) => {
 };
 
 const usePagedReader = computed(() => !props.isPdfBook && prefs.value.readingMode === "page");
+
+// `isPdfBook` means "render as a fixed page" — a reflowed PDF is false there,
+// because it reads through the EPUB surfaces. The PDF-view control needs the
+// FILE's format instead, so it stays on screen once Reflow is chosen.
+const isPdfDocument = computed(() => String(props.book?.format || "").toLowerCase() === "pdf");
 const layoutHash = computed(() => readerPrefsLayoutHash(prefs.value));
 
 const readerStyleVars = computed(() => ({
@@ -2638,6 +2669,19 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
+.seg-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* Explains a disabled control rather than leaving it looking broken. */
+.display-note {
+  margin: -2px 0 10px;
+  color: var(--sheet-muted, var(--color-text-muted));
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
 .seg-sepia.active {
   background: #ecdfc8;
   color: #43331f;
@@ -2722,6 +2766,10 @@ onUnmounted(() => {
 .reader-mobile-chapters {
   display: grid;
   gap: 0;
+  /* The chapter dock is a fixed, opaque layer over the text, so the end of the
+     book needs room to clear it — otherwise the last lines can only ever be
+     scrolled to underneath the pill. Matches the dock's own height + inset. */
+  padding-bottom: calc(64px + var(--bottom-nav-space));
 }
 
 /* Sections are deliberately plain boxes — no browser-level off-screen skipping.
@@ -3014,16 +3062,21 @@ onUnmounted(() => {
  * the same duration and curve, so the dock glides down into the exact space
  * the nav vacates — no gap and no compositor jank on mobile.
  */
+/* Anchored at the screen edge, not at the safe-area inset: sitting ON the inset
+   left the strip beneath the dock unpainted, and in scroll mode the book text
+   ran through that gap under the pill. The inset moves into the padding instead,
+   so the dock's background reaches the bottom of the viewport while the pill
+   keeps the exact height it had. */
 .reader-chapter-dock {
   position: fixed;
   right: 0;
-  bottom: var(--bottom-nav-space);
+  bottom: 0;
   left: 0;
   z-index: 1160;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  padding: 10px 82px 12px 20px;
+  padding: 10px 82px calc(12px + var(--bottom-nav-space)) 20px;
   background: var(--mobile-reader-bg);
   box-shadow: 0 -8px 18px rgba(15, 23, 42, 0.04);
   transition:

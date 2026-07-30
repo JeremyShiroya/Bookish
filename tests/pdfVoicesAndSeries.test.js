@@ -5,6 +5,7 @@ import { resolvePlaybackChunks } from '../composables/useTTS.js'
 import { buildPdfManifest } from '../composables/usePdfManifest.js'
 import {
   describeDeviceVoice,
+  deviceVoiceGender,
   offeredDeviceVoices,
   DEVICE_VOICE_LOCALES,
 } from '../composables/tts/nativeSpeech.js'
@@ -117,9 +118,48 @@ describe('device voices', () => {
   test('gender is labelled only when the OS voice name actually says so', () => {
     expect(describeDeviceVoice({ name: 'English Male 2', lang: 'en-GB' }, 0)).toContain('Male')
     expect(describeDeviceVoice({ name: 'Sonia', lang: 'en-GB' }, 0)).toContain('Female')
-    // Google's variant codes carry no documented gender, so none is claimed.
+    // Google's older variant codes carry no documented gender, so none is claimed.
     const unlabelled = describeDeviceVoice({ name: 'en-us-x-tpf-local', lang: 'en-US' }, 0)
     expect(unlabelled).toBe('English (US) · Voice 1')
+  })
+
+  test("Android's #gender_n token is read — \\b never matched it", () => {
+    // `_` is a word character, so /\bfemale\b/ does NOT match "#female_1" and
+    // every Google voice used to land in the unlabelled branch.
+    expect(deviceVoiceGender({ name: 'en-us-x-sfg#female_1-local' }).gender).toBe('Female')
+    expect(deviceVoiceGender({ name: 'en-us-x-iom#male_2-local' }).gender).toBe('Male')
+    // "female" contains "male" — the female test has to win.
+    expect(deviceVoiceGender({ name: 'en-gb-x-gba#female_3-local' }).gender).toBe('Female')
+    expect(describeDeviceVoice({ name: 'en-us-x-sfg#female_1-local', lang: 'en-US' }, 0))
+      .toBe('English (US) · Female 1')
+  })
+
+  test('the network twin of a local voice is dropped', () => {
+    // Google lists every voice twice. They sound identical, and the network one
+    // cannot play on the offline picker that exists for exactly this case.
+    const dupes = [
+      { name: 'en-us-x-sfg#female_1-local', lang: 'en-US' },
+      { name: 'en-us-x-sfg#female_1-network', lang: 'en-US' },
+      { name: 'en-us-x-iom#male_1-network', lang: 'en-US' },
+    ]
+    const offered = offeredDeviceVoices(dupes)
+    expect(offered).toHaveLength(2)
+    expect(offered.map((v) => v.name)).toEqual([
+      'English (US) · Female 1',
+      'English (US) · Male 1',
+    ])
+    // The surviving female entry is the LOCAL one, not the network twin.
+    expect(dupes[offered[0].index].name).toBe('en-us-x-sfg#female_1-local')
+  })
+
+  test('no two offered voices share a label', () => {
+    const offered = offeredDeviceVoices([
+      { name: 'en-us-x-sfg#female_1-local', lang: 'en-US' },
+      { name: 'en-us-x-tpf#female_2-local', lang: 'en-US' },
+      { name: 'en-us-x-iom#male_1-local', lang: 'en-US' },
+      { name: 'en-us-x-tpd-local', lang: 'en-US' },
+    ])
+    expect(new Set(offered.map((v) => v.name)).size).toBe(offered.length)
   })
 })
 

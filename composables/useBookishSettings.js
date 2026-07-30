@@ -26,10 +26,53 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   readerHighlight: true,           // highlight the section being read
   listenCoverBlur: true,           // blurred cover backdrop in Listen mode
   showStreak: true,                // reading-streak pill in the top nav
-  formatFilter: 'all',             // 'all' | 'pdf' | 'epub'
+  formatFilter: 'all',             // 'all' | 'pdf' | 'epub' — legacy, see useLibraryFilters
   hideContent: false,              // preview the app as though the library were empty
   seriesSuggestions: false,        // show the series installments you don't own yet
+  // Which formats the app handles AT ALL. Removing one is not a filter: those
+  // books are purged from the library and the device scanner stops detecting
+  // that extension, so the app really does become an EPUB-only (or PDF-only)
+  // reader. Files on the device are never touched.
+  enabledFormats: ['epub', 'pdf'],
+  formatChoiceMade: false,         // the first-boot chooser has been answered
 })
+
+export const SUPPORTED_FORMATS = Object.freeze(['epub', 'pdf'])
+
+// 'both' | 'epub' | 'pdf' — the shape the chooser and the Preferences row speak.
+export const formatModeFor = (enabledFormats) => {
+  const list = normalizeEnabledFormats(enabledFormats)
+  if (list.length === SUPPORTED_FORMATS.length) return 'both'
+  return list[0]
+}
+
+export const enabledFormatsForMode = (mode) => (
+  mode === 'epub' || mode === 'pdf' ? [mode] : [...SUPPORTED_FORMATS]
+)
+
+// An empty list would leave the app unable to open anything, so it falls back to
+// every supported format rather than bricking the library.
+export function normalizeEnabledFormats(value) {
+  const list = Array.isArray(value)
+    ? [...new Set(value.map((entry) => String(entry || '').toLowerCase()))]
+        .filter((entry) => SUPPORTED_FORMATS.includes(entry))
+    : []
+  return list.length ? SUPPORTED_FORMATS.filter((format) => list.includes(format)) : [...SUPPORTED_FORMATS]
+}
+
+export const isFormatEnabled = (book, enabledFormats) => (
+  normalizeEnabledFormats(enabledFormats).includes(String(book?.format || '').toLowerCase())
+)
+
+// The extension test the device scanner and the file picker share, so "the app
+// no longer sees PDFs" is true at every entry point rather than at some of them.
+export const enabledExtensionPattern = (enabledFormats) => (
+  new RegExp(`\\.(${normalizeEnabledFormats(enabledFormats).join('|')})$`, 'i')
+)
+
+export const enabledAcceptAttribute = (enabledFormats) => (
+  normalizeEnabledFormats(enabledFormats).map((format) => `.${format}`).join(',')
+)
 
 export const CARD_BACKGROUND_OPTIONS = Object.freeze(['blank', 'blur'])
 export const SERIES_CARD_LAYOUT_OPTIONS = Object.freeze(['fan', 'cover'])
@@ -170,6 +213,8 @@ export function normalizeBookishSettings(value) {
       : DEFAULT_BOOKISH_SETTINGS.formatFilter,
     hideContent: source.hideContent === true,
     seriesSuggestions: source.seriesSuggestions === true,
+    enabledFormats: normalizeEnabledFormats(source.enabledFormats),
+    formatChoiceMade: source.formatChoiceMade === true,
   }
 }
 

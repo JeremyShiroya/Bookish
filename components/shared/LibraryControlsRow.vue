@@ -79,6 +79,13 @@ const props = defineProps({
     type: String,
     default: 'all',
   },
+  // Format is a PER-PAGE filter now (see useLibraryFilters). It used to be read
+  // and written straight from the library-wide setting here, which is why
+  // choosing "PDF" on Favourites also changed Series.
+  format: {
+    type: String,
+    default: 'all',
+  },
   view: {
     type: String,
     default: 'grid',
@@ -109,40 +116,52 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['update:status', 'update:view', 'update:values']);
+const emit = defineEmits(['update:status', 'update:format', 'update:view', 'update:values']);
 
-const { settings, updateSettings } = useBookishSettings();
+const { settings } = useBookishSettings();
 
 const readingStatuses = ['Unread', 'Reading', 'Read'];
-const formatFilters = FORMAT_FILTER_CHOICES;
 const filterOpen = ref(false);
 
-// Format is a library-wide setting, so every Filter panel reads and writes the
-// same value rather than keeping its own copy.
-const selectedFormat = computed(() => settings.value.formatFilter || 'all');
+// Only formats the app actually handles are offered. With PDFs removed there is
+// nothing to filter between, so the whole Format group disappears rather than
+// showing a pill that can only ever match everything.
+const formatFilters = computed(() => {
+  const enabled = settings.value.enabledFormats || ['epub', 'pdf'];
+  return FORMAT_FILTER_CHOICES.filter(
+    (choice) => choice.value === 'all' || enabled.includes(choice.value),
+  );
+});
+
+const selectedFormat = computed(() => props.format || 'all');
 
 const STATUS_KEY = '__status';
 const FORMAT_KEY = '__format';
 
-const builtInSections = computed(() => (props.builtInFilters
-  ? [
-    {
-      key: STATUS_KEY,
-      label: 'Status',
-      icon: 'ri-bookmark-line',
-      options: [
-        { value: 'all', label: 'All' },
-        ...readingStatuses.map((option) => ({ value: option, label: option })),
-      ],
-    },
-    {
+const builtInSections = computed(() => {
+  if (!props.builtInFilters) return [];
+
+  const sections = [{
+    key: STATUS_KEY,
+    label: 'Status',
+    icon: 'ri-bookmark-line',
+    options: [
+      { value: 'all', label: 'All' },
+      ...readingStatuses.map((option) => ({ value: option, label: option })),
+    ],
+  }];
+
+  if (formatFilters.value.length > 1) {
+    sections.push({
       key: FORMAT_KEY,
       label: 'Format',
       icon: 'ri-file-list-2-line',
-      options: formatFilters.map((format) => ({ value: format.value, label: format.label })),
-    },
-  ]
-  : []));
+      options: formatFilters.value.map((format) => ({ value: format.value, label: format.label })),
+    });
+  }
+
+  return sections;
+});
 
 const resolvedSections = computed(() => [...builtInSections.value, ...props.sections]);
 
@@ -156,7 +175,7 @@ const valueFor = (section) => {
 
 const select = (section, value) => {
   if (section.key === STATUS_KEY) emit('update:status', value);
-  else if (section.key === FORMAT_KEY) updateSettings({ formatFilter: value });
+  else if (section.key === FORMAT_KEY) emit('update:format', value);
   else emit('update:values', { ...props.values, [section.key]: value });
   filterOpen.value = false;
 };

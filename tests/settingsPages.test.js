@@ -72,8 +72,10 @@ describe('settings pages wiring', () => {
     expect(books).toContain('filter-panel')
     expect(books).toContain("setStatus('all')")
     expect(books).toContain('readingStatuses')
-    // All is the default selection.
-    expect(books).toContain('ref("all")')
+    // All is the default, and the choice is scoped to this page and persisted
+    // rather than living in a ref that dies when the page unmounts.
+    expect(books).toContain('useLibraryFilters("books")')
+    expect(books).toContain('filters.value.status')
     // The old sliding-chip status selector is gone.
     expect(books).not.toContain('status-chips')
   })
@@ -90,20 +92,28 @@ describe('settings pages wiring', () => {
       const source = read(path)
       expect(source, path).toContain('FORMAT_FILTER_CHOICES')
       expect(source, path).toContain('Format')
-      // LibraryControlsRow renders its pills from a section list rather than a
-      // hand-written block, so it writes the setting through one `select`.
-      expect(source, path).toMatch(/setFormat|formatFilter: value/)
+      // Format is a PER-PAGE filter now. It used to be written straight into the
+      // library-wide setting from every panel, which is why choosing "PDF" on
+      // Favourites also changed Series.
+      expect(source, path).toMatch(/setFormat|update:format/)
+      expect(source, path).not.toContain('formatFilter: value')
     }
 
-    // Format is a single library-wide setting, so choosing it anywhere applies
-    // to the Books, Favourites, series-detail and playlist-detail lists alike.
-    for (const path of [
-      'components/mobile/BooksMobile.vue',
-      'components/mobile/FavouritesMobile.vue',
-      'components/mobile/SeriesDetailMobile.vue',
-      'components/mobile/PlaylistDetailMobile.vue',
-    ]) {
-      expect(read(path), path).toContain('matchesFormatFilter')
+    // Every list filters through its OWN scope. Sharing one setting is what made
+    // the filters bleed across pages, and holding status in a component-local
+    // ref is what reset them on the way back from a book.
+    const scopes = {
+      'components/mobile/BooksMobile.vue': '"books"',
+      'components/mobile/FavouritesMobile.vue': "'favourites'",
+      'components/mobile/HiddenBooksMobile.vue': "'hidden'",
+      'components/mobile/SeriesDetailMobile.vue': '`series:${route.params.id}`',
+      'components/mobile/PlaylistDetailMobile.vue': '`playlist:${route.params.id}`',
+    }
+    for (const [path, scope] of Object.entries(scopes)) {
+      const source = read(path)
+      expect(source, path).toContain('matchesLibraryFilters')
+      expect(source, path).toContain(`useLibraryFilters(${scope}`)
+      expect(source, path).not.toContain('matchesFormatFilter')
     }
   })
 })

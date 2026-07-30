@@ -162,14 +162,14 @@
             </div>
             <div class="doc-info">
               <span class="doc-title">{{ isProcessing ? 'Processing File...' : (documentFile ? documentFile.name : 'Select Book Document') }}</span>
-              <span class="doc-subtitle">{{ documentFile && !isProcessing ? formatFileSize(documentFile.size) : 'Supports .epub, .pdf, .txt' }}</span>
+              <span class="doc-subtitle">{{ documentFile && !isProcessing ? formatFileSize(documentFile.size) : supportedFormatsHint }}</span>
             </div>
           </div>
           <input
             type="file"
             ref="documentInput"
             @change="handleDocumentChange"
-            accept=".epub,.pdf,.mobi,.azw3,.txt"
+            :accept="documentAccept"
             style="display: none"
             required
           />
@@ -362,6 +362,7 @@ import { fetchCoverImageResults } from '~/composables/useCoverSearch'
 import { propagateSeriesTotal } from '~/composables/useSeriesProgress'
 import { useCoverImageCache } from '~/composables/useCoverImageCache'
 import { useApiEndpoint } from '~/composables/useApiEndpoint'
+import { useBookishSettings } from '~/composables/useBookishSettings'
 import BookishSelect from './BookishSelect.vue'
 import CoverImageModal from './CoverImageModal.vue'
 import GoodreadsRatingDisplay from './GoodreadsRatingDisplay.vue'
@@ -373,6 +374,7 @@ const { addToast } = useToast()
 const { saveBookContent } = useBookStorage()
 const { cacheCoverImage } = useCoverImageCache()
 const { apiUrl } = useApiEndpoint()
+const { settings } = useBookishSettings()
 const extractedContent = ref(null)
 const extractedTocTitles = ref([])
 const extractedSource = ref(null)
@@ -549,9 +551,25 @@ const generateCoverPlaceholder = (title) => {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
+// Plain text is always accepted — it is not one of the two book formats the
+// app-level choice governs. EPUB and PDF are offered only while enabled, and the
+// check is repeated below because `accept` is a hint the file picker may ignore.
+const enabledBookFormats = computed(() => settings.value.enabledFormats || ['epub', 'pdf'])
+const documentAccept = computed(() => (
+  [...enabledBookFormats.value.map((format) => `.${format}`), '.txt'].join(',')
+))
+const supportedFormatsHint = computed(() => `Supports ${documentAccept.value.split(',').join(', ')}`)
+
 const handleDocumentChange = async (event) => {
   const file = event.target.files[0]
   if (!file) return
+
+  const chosenExtension = file.name.split('.').pop().toLowerCase()
+  if (['epub', 'pdf'].includes(chosenExtension) && !enabledBookFormats.value.includes(chosenExtension)) {
+    extractionError.value = `${chosenExtension.toUpperCase()} files are turned off in Settings → Preferences.`
+    event.target.value = ''
+    return
+  }
 
   extractionError.value = null
   documentFile.value = file

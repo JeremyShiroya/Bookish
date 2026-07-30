@@ -66,7 +66,8 @@
                     </div>
                   </div>
 
-                  <div class="sfp-section">
+                  <!-- Nothing to choose between once the app handles one format. -->
+                  <div v-if="formatFilters.length > 1" class="sfp-section">
                     <div class="sfp-section-header">
                       <i class="ri-file-list-2-line"></i>
                       Format
@@ -299,9 +300,9 @@ import { getGoodreadsRating } from "~/composables/useGoodreadsRating";
 import { useTTS } from "~/composables/useTTS";
 import {
   FORMAT_FILTER_CHOICES,
-  matchesFormatFilter,
   useBookishSettings,
 } from "~/composables/useBookishSettings";
+import { matchesLibraryFilters, useLibraryFilters } from "~/composables/useLibraryFilters";
 import { useToast } from "~/composables/useToast";
 import { useLongPress, useMultiSelect } from "~/composables/useMultiSelect";
 
@@ -346,15 +347,24 @@ const router = useRouter();
 
 // Filter options
 const readingStatuses = ["Unread", "Reading", "Read"];
-const formatFilters = FORMAT_FILTER_CHOICES;
+// Only formats the app still handles are worth offering — with PDFs removed
+// there is nothing to choose between.
+const formatFilters = computed(() => {
+  const enabled = settings.value.enabledFormats || ["epub", "pdf"];
+  return FORMAT_FILTER_CHOICES.filter(
+    (choice) => choice.value === "all" || enabled.includes(choice.value),
+  );
+});
 
 // Filter states
 const sortBy = ref(settings.value.librarySort);
 const sortDirection = ref(settings.value.librarySortDirection);
-const selectedStatus = ref("all");
-// Format lives in settings so the Books, Favourites, Series- and Playlist-detail
-// filters all agree on which formats the library is showing.
-const selectedFormat = computed(() => settings.value.formatFilter || "all");
+// Scoped to this page and persisted, so leaving for a book and coming back does
+// not throw the filters away, and choosing "Unread" here says nothing about the
+// Favourites or Series shelves.
+const { filters, setFilter } = useLibraryFilters("books");
+const selectedStatus = computed(() => filters.value.status);
+const selectedFormat = computed(() => filters.value.format);
 const viewMode = ref(settings.value.libraryView);
 
 // Modal states
@@ -460,12 +470,7 @@ watch(books, () => retainSelection(books.value.map((book) => book.id)));
 
 // Computed filtered books
 const filteredBooks = computed(() => {
-  let filtered = books.value.filter((book) => matchesFormatFilter(book, selectedFormat.value));
-
-  // Filter by status
-  if (selectedStatus.value !== "all") {
-    filtered = filtered.filter((book) => book.status === selectedStatus.value);
-  }
+  let filtered = books.value.filter((book) => matchesLibraryFilters(book, filters.value));
 
   // Sort books
   filtered.sort((a, b) => {
@@ -562,12 +567,12 @@ const setSort = (field, direction) => {
 
 // Methods
 const setStatus = (value) => {
-  selectedStatus.value = value;
+  setFilter("status", value);
   filterOpen.value = false;
 };
 
 const setFormat = (value) => {
-  updateSettings({ formatFilter: value });
+  setFilter("format", value);
   filterOpen.value = false;
 };
 

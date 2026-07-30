@@ -218,14 +218,17 @@
         <div class="setting-row">
           <div class="setting-copy">
             <h3>Book format</h3>
-            <p>Which formats appear in your library.</p>
+            <p>
+              Which formats Pages handles. Removing one clears those books from your
+              library and stops the app detecting them — your files stay on the device.
+            </p>
           </div>
-          <div class="segmented-control" aria-label="Book format filter">
+          <div class="segmented-control" aria-label="Book formats Pages handles">
             <button
               v-for="option in formatOptions"
               :key="option.value"
-              :class="{ active: settings.formatFilter === option.value }"
-              @click="set('formatFilter', option.value)"
+              :class="{ active: formatMode === option.value }"
+              @click="chooseFormatMode(option.value)"
             >
               {{ option.label }}
             </button>
@@ -382,10 +385,12 @@
 import { computed, ref } from 'vue'
 import { useBooks } from '~/composables/useBooks'
 import {
+  enabledFormatsForMode,
   useBookishSettings,
   LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS,
   LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS,
 } from '~/composables/useBookishSettings'
+import { formatLabel, formatsRemovedBy, useFormatEnablement } from '~/composables/useFormatEnablement'
 import { useToast } from '~/composables/useToast'
 import SettingsAudioPanel from '../shared/SettingsAudioPanel.vue'
 import ConnectionTestPanel from '../shared/ConnectionTestPanel.vue'
@@ -495,11 +500,39 @@ const toggleOptions = [
   { value: true, label: 'On' },
   { value: false, label: 'Off' },
 ]
+// Not a filter — the app-level format choice. See useFormatEnablement.
 const formatOptions = [
-  { value: 'all', label: 'All' },
+  { value: 'both', label: 'All' },
   { value: 'pdf', label: 'PDF' },
   { value: 'epub', label: 'EPUB' },
 ]
+
+const { formatMode, countAffected, applyFormatMode } = useFormatEnablement()
+
+const chooseFormatMode = async (mode) => {
+  if (mode === formatMode.value) return
+
+  const removed = formatsRemovedBy(
+    enabledFormatsForMode(formatMode.value),
+    enabledFormatsForMode(mode),
+  )
+  if (removed.length) {
+    const count = countAffected(enabledFormatsForMode(mode))
+    const label = removed.map(formatLabel).join(' and ')
+    const confirmed = typeof window === 'undefined' || window.confirm(
+      `Remove ${label} from your library?\n\n${count} book${count === 1 ? '' : 's'} will be cleared. Your files stay on your device, so turning it back on re-imports them.`,
+    )
+    if (!confirmed) return
+  }
+
+  try {
+    const { removed: purged } = await applyFormatMode(mode)
+    if (purged > 0) addToast(`Removed ${purged} book${purged === 1 ? '' : 's'} from your library.`, 'success')
+  } catch (error) {
+    console.error('[Settings] Could not change the format choice:', error)
+    addToast('Could not change the book formats.', 'error')
+  }
+}
 
 const gridItemsPerPageOptions = LIBRARY_GRID_ITEMS_PER_PAGE_OPTIONS
 const tableItemsPerPageOptions = LIBRARY_TABLE_ITEMS_PER_PAGE_OPTIONS

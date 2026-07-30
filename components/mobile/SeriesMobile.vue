@@ -13,7 +13,7 @@
         :sections="filterSections"
         :values="filterValues"
         hide-view
-        @update:values="filterValues = $event"
+        @update:values="setFilters($event)"
       />
     </div>
 
@@ -55,6 +55,7 @@
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useBooks } from "~/composables/useBooks";
+import { useLibraryFilters } from "~/composables/useLibraryFilters";
 import EmptyState from "../shared/EmptyState.vue";
 import LibraryControlsRow from "../shared/LibraryControlsRow.vue";
 import SeriesCollageCard from "../shared/SeriesCollageCard.vue";
@@ -124,7 +125,12 @@ const filterSections = [
   },
 ];
 
-const filterValues = ref({ sort: 'az', status: 'all', collected: 'any' });
+// Persisted under this page's own scope, so backing out of a series and
+// returning keeps the sort and status you chose.
+const { filters: filterValues, setFilters } = useLibraryFilters('series', {
+  sort: ['az', 'za'],
+  collected: ['any', 'complete', 'partial'],
+});
 
 const bookStatus = (book) => {
   const status = String(book?.status || 'Unread').toLowerCase();

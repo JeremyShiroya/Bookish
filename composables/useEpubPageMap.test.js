@@ -81,6 +81,7 @@ describe('useMobileReaderPrefs', () => {
   it('keeps valid preferences', () => {
     const prefs = normalizeMobileReaderPrefs({
       readingMode: 'scroll',
+      pdfViewMode: 'reflow',
       background: 'sepia',
       fontSize: 19,
       fontFamily: 'sans',
@@ -90,6 +91,7 @@ describe('useMobileReaderPrefs', () => {
     })
     expect(prefs).toEqual({
       readingMode: 'scroll',
+      pdfViewMode: 'reflow',
       background: 'sepia',
       fontSize: 19,
       fontFamily: 'sans',

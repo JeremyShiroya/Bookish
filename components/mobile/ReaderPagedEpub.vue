@@ -48,8 +48,10 @@ const props = defineProps({
   geometry: { type: Object, required: true },
   layoutHash: { type: String, default: "" },
   startSection: { type: Number, default: 0 },
-  // >= 0 means "Open in book" was used: start on the page holding this chunk
-  // rather than the reader's last saved position.
+  // >= 0 means "start on the page holding this chunk". Two callers: "Open in
+  // book" from a highlight or note, and the reader's own saved reading position
+  // (see useReadingPosition) — which is how switching out of scroll mode lands
+  // on the sentence that was on screen rather than at the top of the chapter.
   startChunk: { type: Number, default: -1 },
 });
 
@@ -90,6 +92,9 @@ const persistPosition = () => {
   } catch {}
 };
 
+// Fallback only. The book record's `readingChunk` is the source of truth (it is
+// what scroll mode also writes); this local cache covers books saved before that
+// existed, and books whose chunk map has not been built yet.
 const restorePosition = () => {
   try {
     const saved = JSON.parse(localStorage.getItem(posStorageKey()) || "null");
@@ -141,6 +146,10 @@ const emitPosition = () => {
     section: section.value,
     pageInSection: page.value,
     sectionPages: sectionPages.value,
+    // The chunk on the visible page is the reader's shared unit of position:
+    // it is what the scroll surface reports too, so the two modes can hand the
+    // reading position back and forth without losing the sentence.
+    chunk: firstChunkOnCurrentPage(),
   });
   persistPosition();
 };
@@ -408,14 +417,19 @@ const onClick = (event) => {
 // runs at the default width, so the page number is wrong until then). The flag
 // clears once the geometry has been re-measured, after which typography changes
 // and page turns are the user's, not ours.
-let _openJumpPending = props.startChunk >= 0;
+// Read live rather than captured at setup: the saved reading position arrives
+// with the book content, which can be after this component mounts. Capturing it
+// once meant the first paged render fell back to the local cache even when the
+// book record knew exactly which sentence to open on.
+let _landed = false;
 let _geometrySettled = false;
+const openJumpPending = () => !_landed && props.startChunk >= 0;
 
 const renderPendingOrSection = async (fallbackSection, fallbackPage) => {
-  if (_openJumpPending && props.sections.length) {
+  if (openJumpPending() && props.sections.length) {
     await goToChunk(props.startChunk);
     // Once the geometry has settled, the landing page is final; stop overriding.
-    if (_geometrySettled) _openJumpPending = false;
+    if (_geometrySettled) _landed = true;
     return;
   }
   await renderSection(fallbackSection, fallbackPage);
@@ -439,14 +453,22 @@ watch(() => props.sections.length, async (length) => {
 });
 
 onMounted(async () => {
-  if (_openJumpPending && props.sections.length) {
+  if (openJumpPending() && props.sections.length) {
     await goToChunk(props.startChunk);
     return;
   }
-  if (_openJumpPending) return; // sections not ready; a watch will land it
+  if (openJumpPending()) return; // sections not ready; a watch will land it
   const restored = restorePosition();
   const startAt = restored?.section ?? props.startSection;
   await renderSection(startAt, restored?.page ?? 0);
+});
+
+// A saved position that arrives after mount (the book content loads
+// asynchronously) still gets honoured, once.
+watch(() => props.startChunk, async (chunk) => {
+  if (_landed || chunk < 0 || !props.sections.length) return;
+  await goToChunk(chunk);
+  if (_geometrySettled) _landed = true;
 });
 
 onUnmounted(() => {
