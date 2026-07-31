@@ -143,6 +143,215 @@ const fetchRoster = async (seedTitle, author, seriesName) => {
   }
 }
 
+// Ask the configured model which books the series contains. This is the
+// fallback for the ONE question the metadata providers cannot answer — "what is
+// book #31 called?" — used when the Goodreads series page (the only scrapeable
+// source that enumerates a series) is rate-limiting us. Returns candidates only;
+// resolveGapsWithAi verifies each one before anything is stored. Never throws:
+// a failure here must leave the roster path exactly as it was.
+const fetchAiSeriesOrder = async ({ seriesName, author, anchors = {}, missing = [] }) => {
+  const empty = { books: [], provider: null, anchored: false }
+  const { apiUrl, apiBaseUrl } = useApiEndpoint()
+  const native = isNativeCapacitorPlatform()
+
+  const onDevice = async () => {
+    const { enumerateSeriesOnDevice } = await loadDeviceSearch()
+    return enumerateSeriesOnDevice({ seriesName, author, anchors, missing })
+  }
+
+  try {
+    if (native && !apiBaseUrl) return await onDevice()
+
+    const query = new URLSearchParams({ series: seriesName })
+    if (author) query.set('author', author)
+    const anchorParam = Object.entries(anchors)
+      .map(([installment, title]) => `${installment}:${String(title).replace(/[|]/g, ' ')}`)
+      .join('|')
+    if (anchorParam) query.set('anchors', anchorParam)
+    if (missing.length) query.set('missing', missing.join(','))
+
+    const response = await fetch(apiUrl(`/api/books/series-order?${query.toString()}`))
+    if (!response.ok) throw new Error(`Series ordering failed with ${response.status}`)
+    return await response.json()
+  } catch {
+    if (native) {
+      try {
+        return await onDevice()
+      } catch {
+        return empty
+      }
+    }
+    return empty
+  }
+}
+
+// The author every AI-proposed title is checked against. Owned books are the
+// most trustworthy source; the roster's own entries are the fallback. Verifying
+// against an author gives the check a second axis, which is what makes an
+// unattended write safe — see resolveGapsWithAi.
+export const dominantSeriesAuthor = (seedBooks = [], installments = {}) => {
+  const counts = new Map()
+  const add = (value) => {
+    const name = String(value ?? '').trim()
+    if (!name) return
+    const key = name.toLowerCase()
+    const entry = counts.get(key)
+    if (entry) entry.count += 1
+    else counts.set(key, { name, count: 1 })
+  }
+
+  for (const book of seedBooks || []) add(book?.author)
+  for (const entry of Object.values(installments || {})) add(entry?.author)
+
+  let best = null
+  for (const entry of counts.values()) {
+    if (!best || entry.count > best.count) best = entry
+  }
+  return best?.name || null
+}
+
+// THE step that makes an AI-proposed book safe to store — and the one that
+// makes the whole idea work.
+//
+// Measured behaviour, not theory: asked for the Lucas Davenport installments a
+// walled roster could not supply, a model recited every confirmed book perfectly
+// and then answered "33: Ocean Prey", "31: Righteous Prey", "34: Hellfire" —
+// two real books at the WRONG numbers and one that is not in this series at all.
+// Its numbering is simply not reliable.
+//
+// But its TITLES are useful, and a title is the one thing the providers cannot
+// guess. So the model's numbering is discarded outright: we search for the title
+// it suggested and let the provider say where the book belongs — Goodreads
+// search answers "Ocean Prey → Lucas Davenport #31" even while the series PAGE
+// is rate-limited, which is the whole reason the gap existed. The model points
+// at a book; the providers place it. Every stored fact, the number included,
+// comes from a provider, so a misnumbered or invented suggestion cannot corrupt
+// the series — it just finds nothing, or lands correctly somewhere else.
+export const confirmPlacement = (results = [], { title, author, seriesName } = {}) => {
+  for (const result of results || []) {
+    if (!installmentMatchesBook({ title, author: author || '' }, result)) continue
+    // The provider must place it in THIS series...
+    if (!seriesMatches(result?.series, seriesName)) continue
+    // ...at a whole number. A half-number (novella "#4.5") is not a slot.
+    const stated = Number(result?.seriesInstallment)
+    if (!Number.isSafeInteger(stated) || stated < 1) continue
+    return { result, installment: stated }
+  }
+
+  return null
+}
+
+// At least this many roster-confirmed books must exist before an AI ordering is
+// used for writes. The model's contribution is POSITION — which title sits at
+// which number — and anchors are the only way to check it got positions right.
+// With too few, a plausible-but-shifted ordering would be undetectable.
+const MIN_AI_ANCHORS = 2
+
+// A 40-book roster would make an unwieldy URL and a needlessly expensive prompt,
+// so the model gets an evenly-spread SAMPLE of the confirmed books. Spread
+// rather than the first N, because early books alone would not catch a model
+// that drifts in the later stretch — which is exactly where the gaps are.
+export const sampleAnchors = (anchors = {}, max = 12) => {
+  const entries = Object.entries(anchors)
+    .map(([installment, title]) => [Number(installment), title])
+    .filter(([installment, title]) => Number.isSafeInteger(installment) && installment >= 1 && !!title)
+    .sort((a, b) => a[0] - b[0])
+  if (entries.length <= max) return Object.fromEntries(entries)
+
+  const step = (entries.length - 1) / (max - 1)
+  const picked = new Map()
+  for (let i = 0; i < max; i += 1) {
+    const [installment, title] = entries[Math.round(i * step)]
+    picked.set(installment, title)
+  }
+  return Object.fromEntries(picked)
+}
+
+// Turn AI candidates into stored installments — but only ones the real metadata
+// providers confirm. For each proposed title we search the cross-checked
+// pipeline (Google Books, Open Library, Kobo, Internet Archive, Goodreads) and
+// require a title AND author match, then keep the PROVIDER'S cover, author and
+// year. Nothing the model said about a book is stored; it only suggested where
+// to look. A hallucinated title finds no match and is silently dropped.
+export const resolveGapsWithAi = async ({
+  seriesName,
+  cached = {},
+  missing = [],
+  seedBooks = [],
+  shouldStop,
+  onCandidate,
+} = {}) => {
+  const gaps = (missing || []).filter((installment) => !cached[installment]?.title)
+  if (!seriesName || !gaps.length) return {}
+
+  // Anchors: what the roster already told us, which both steers the model and
+  // catches it when it is reconstructing rather than recalling.
+  const anchors = {}
+  for (const [installment, entry] of Object.entries(cached)) {
+    if (entry?.title) anchors[installment] = entry.title
+  }
+  if (Object.keys(anchors).length < MIN_AI_ANCHORS) return {}
+
+  const author = dominantSeriesAuthor(seedBooks, cached)
+  // Without a known author the verification has only the title to go on, which
+  // is not enough to safely place someone else's book into this series.
+  if (!author) return {}
+
+  const { books, anchored } = await fetchAiSeriesOrder({
+    seriesName,
+    author,
+    anchors: sampleAnchors(anchors),
+    missing: gaps,
+  })
+  if (!anchored || !books?.length) return {}
+
+  // Titles already placed somewhere in the series — a proposal that repeats one
+  // is the model shuffling a book it knows into a slot it does not.
+  const placed = new Set(
+    Object.values(cached).map((entry) => normalizeSeriesKey(entry?.title)).filter(Boolean),
+  )
+
+  const wanted = new Set(gaps.map(Number))
+  const resolved = {}
+
+  for (const proposal of books) {
+    if (shouldStop?.()) break
+    // Stop as soon as every gap is closed — no point paying for more lookups.
+    if (Object.keys(resolved).length >= wanted.size) break
+    const proposedKey = normalizeSeriesKey(proposal.title)
+    // Already sitting somewhere in this series: the model is recycling a book
+    // it knows rather than naming the one we are missing.
+    if (!proposedKey || placed.has(proposedKey)) continue
+
+    try {
+      const results = await fetchBookMetadataResults(proposal.title, author, undefined, { light: true })
+      // Ask the providers where this book belongs — the model's own number is
+      // deliberately ignored, because it is the part it gets wrong.
+      const placement = confirmPlacement(results, { title: proposal.title, author, seriesName })
+      if (!placement) continue
+
+      const { result: match, installment } = placement
+      // The providers may place it at a number we already have, or outside the
+      // gaps entirely. Either way it is not something we need.
+      if (!wanted.has(installment) || resolved[installment] || cached[installment]?.title) continue
+
+      resolved[installment] = {
+        title: match.title || proposal.title,
+        author: match.author || author,
+        cover: match.cover || null,
+        // The provider's year is authoritative; the model's is a last resort.
+        year: Number(match.publishYear) || proposal.year || null,
+      }
+      placed.add(proposedKey)
+      onCandidate?.({ installment, title: match.title || proposal.title })
+    } catch {
+      // Providers unreachable — leave this gap for a later sweep.
+    }
+  }
+
+  return resolved
+}
+
 // Roster payload → the { [installment]: { title, author, cover, year } } map
 // the detail page indexes into. Rejects a roster whose series name is clearly a
 // different series (a seed like "The Girl…" matches many unrelated books).
@@ -430,6 +639,43 @@ export const fillMissingInstallmentDetails = async ({
   let sourceThrew = false
   onProgress?.({ done, total, filled, unresolved, current: null })
 
+  // ── AI gap fill ────────────────────────────────────────────────────────────
+  // Installments the roster never named cannot be filled by the metadata
+  // providers, because searching for them requires a title we do not have. Ask
+  // the model which books belong at those numbers, then verify every proposal
+  // against the real providers before storing it (resolveGapsWithAi). This is
+  // what finally closes gaps left by a Goodreads series page we cannot reach.
+  const rosterGaps = missing.filter((installment) => !cached[installment]?.title)
+  if (rosterGaps.length && !shouldStop?.()) {
+    onProgress?.({ done, total, filled, unresolved, current: 'Working out which books are missing…' })
+    try {
+      const resolved = await resolveGapsWithAi({
+        seriesName,
+        cached,
+        missing: rosterGaps,
+        seedBooks,
+        shouldStop,
+        onCandidate: ({ title }) => {
+          onProgress?.({ done, total, filled, unresolved, current: title })
+        },
+      })
+
+      for (const [installment, entry] of Object.entries(resolved)) {
+        if (installmentImproved(cached[installment], entry)) improvedInstallments.add(Number(installment))
+        cached[installment] = entry
+      }
+      if (Object.keys(resolved).length) {
+        filled = improvedInstallments.size
+        unresolved = countIncompleteInstallments(cached, missing)
+        writeCache(seriesName, cached)
+        store.value = { ...store.value, [key]: { ...cached } }
+      }
+    } catch {
+      // The ordering fallback is best-effort; the roster pass still stands.
+      sourceThrew = true
+    }
+  }
+
   for (const installment of missing) {
     if (shouldStop?.()) break
     const entry = cached[installment]
@@ -620,7 +866,13 @@ export const runSeriesSuggestionSweep = async ({ seriesList, settings }) => {
     // little more than a title, so a series page is complete before it is
     // opened rather than after.
     const detailed = await topUpSuggestionDetails(seriesList?.value || [])
-    return detailed || 'idle'
+    if (detailed) return detailed
+
+    // Anything the roster could not name at all (a Goodreads series page we
+    // cannot reach) gets the AI ordering fallback, verified against the real
+    // providers before it is stored.
+    const named = await fillRosterGapsWithAi(seriesList?.value || [])
+    return named || 'idle'
   } finally {
     _sweepInFlight = false
   }
@@ -629,6 +881,68 @@ export const runSeriesSuggestionSweep = async ({ seriesList, settings }) => {
 // How many under-detailed suggestions to enrich per cycle. Small on purpose:
 // this shares the metadata sources with the automatic book-details backfill.
 const DETAIL_BATCH = 2
+
+// The AI ordering costs a paid API call, and a series' book list does not change
+// hour to hour — so the unattended sweep asks at most once a day per series.
+// The manual "Search for missing books" button ignores this: the reader asked.
+const AI_ATTEMPT_PREFIX = 'bookish:series-ai-attempt:'
+const AI_RETRY_AFTER_MS = 1000 * 60 * 60 * 24
+
+const aiAttemptedRecently = (seriesName) => {
+  if (typeof localStorage === 'undefined') return false
+  const at = Number(localStorage.getItem(AI_ATTEMPT_PREFIX + normalizeSeriesKey(seriesName))) || 0
+  return Date.now() - at < AI_RETRY_AFTER_MS
+}
+
+const markAiAttempt = (seriesName) => {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(AI_ATTEMPT_PREFIX + normalizeSeriesKey(seriesName), String(Date.now()))
+  } catch {
+    // Quota/private mode — worst case the sweep asks again next cycle.
+  }
+}
+
+// Background counterpart to the AI phase of the visible sweep: find the first
+// series whose roster still has unnamed installments and try to close them,
+// so a series page is complete before it is ever opened. Same verification —
+// every proposed title is confirmed by the real providers before it is stored.
+const fillRosterGapsWithAi = async (seriesList) => {
+  const store = useSuggestionsStore()
+
+  for (const series of seriesList) {
+    const books = series?.books || []
+    const totals = books.map((book) => Number(book.seriesTotal)).filter((total) => Number.isSafeInteger(total) && total > 0)
+    const total = totals.length ? Math.max(...totals) : 0
+    if (!total) continue
+
+    const cached = readCacheRaw(series?.name)
+    if (!cached) continue
+
+    const owned = new Set(books.map((book) => Number(book.seriesInstallment)).filter((n) => Number.isSafeInteger(n) && n >= 1))
+    const gaps = []
+    for (let n = 1; n <= total; n += 1) {
+      if (!owned.has(n) && !cached[n]?.title) gaps.push(n)
+    }
+    if (!gaps.length || aiAttemptedRecently(series.name)) continue
+
+    markAiAttempt(series.name)
+    const resolved = await resolveGapsWithAi({
+      seriesName: series.name,
+      cached,
+      missing: gaps,
+      seedBooks: books,
+    })
+    if (!Object.keys(resolved).length) continue
+
+    const merged = { ...cached, ...resolved }
+    writeCache(series.name, merged)
+    store.value = { ...store.value, [normalizeSeriesKey(series.name)]: merged }
+    return `named:${series.name}`
+  }
+
+  return null
+}
 
 // Find the first series holding suggestions that are missing a cover, author or
 // year, fill a couple of them from the cross-checked metadata engine, and write

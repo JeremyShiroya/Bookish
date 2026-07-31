@@ -312,6 +312,44 @@ export async function fetchSeriesBooksOnDevice(seedTitle, author, seriesName) {
   return withTimeout(fetchGoodreadsSeriesBooks(seedTitle, author, seriesName), { series: null, books: [] }, 30000)
 }
 
+// On-device port of server/api/books/series-order.get.ts: ask the configured
+// model which books a series contains, for the case the Goodreads series page
+// (the only scrapeable source that can enumerate a series) is rate-limiting
+// this device. Returns CANDIDATES only — useSeriesSuggestions verifies every
+// proposed title against the real providers before storing anything.
+//
+// The key comes from public runtime config because the bundled app has no
+// server to keep it behind, exactly like the Books key above. When it is not
+// set, this returns nothing and the roster stays the only source.
+export async function enumerateSeriesOnDevice({ seriesName, author, anchors, missing }) {
+  const { enumerateSeriesWithAi } = await import('~/server/utils/aiSeriesEnumerator')
+
+  let publicConfig
+  try {
+    publicConfig = useRuntimeConfig()?.public
+  } catch {
+    publicConfig = null
+  }
+  const apiKey = publicConfig?.aiSeriesApiKey
+  if (!apiKey) return { books: [], provider: null, anchored: false }
+
+  const provider = String(publicConfig?.aiSeriesProvider || '').toLowerCase() === 'groq' ? 'groq' : 'gemini'
+  const model = publicConfig?.aiSeriesModel
+    || (provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gemini-2.5-flash')
+
+  return withTimeout(
+    enumerateSeriesWithAi({
+      seriesName,
+      author,
+      anchors,
+      missing,
+      config: { provider, apiKey, model },
+    }),
+    { books: [], provider: null, anchored: false },
+    20000,
+  )
+}
+
 // On-device port of server/api/books/series-total.get.ts.
 export async function fetchSeriesTotalOnDevice(title, author) {
   const searchResults = await withTimeout(searchGoodreads(title, author), [], 15000)

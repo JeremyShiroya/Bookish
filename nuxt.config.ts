@@ -58,6 +58,19 @@ export default defineNuxtConfig({
       // (and to the Android package) so a leak can only spend Books quota.
       googleBooksApiKey: process.env.GOOGLE_BOOKS_API_KEY || process.env.NUXT_GOOGLE_BOOKS_API_KEY || '',
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || process.env.BOOKISH_API_BASE_URL || '',
+      // AI series ordering (see server/utils/aiSeriesEnumerator.ts). Used only
+      // to PROPOSE which books a series contains when the Goodreads series page
+      // is unreachable; every proposed title is then verified against the real
+      // metadata providers before anything is stored.
+      //
+      // Set these ONLY for native builds, and only knowingly: like the Books key
+      // above, anything public is baked into the APK and can be extracted. The
+      // server path (BOOKISH_AI_* / *_API_KEY without the NUXT_PUBLIC_ prefix)
+      // keeps the key server-side and is preferred wherever a server exists.
+      // Leaving these empty simply disables the fallback on device.
+      aiSeriesProvider: process.env.NUXT_PUBLIC_AI_SERIES_PROVIDER || '',
+      aiSeriesApiKey: process.env.NUXT_PUBLIC_AI_SERIES_API_KEY || '',
+      aiSeriesModel: process.env.NUXT_PUBLIC_AI_SERIES_MODEL || '',
       // Where the native build looks for version.json (see
       // scripts/generate-version-manifest.mjs). Empty disables the update
       // check entirely, which is the right default for web and desktop.

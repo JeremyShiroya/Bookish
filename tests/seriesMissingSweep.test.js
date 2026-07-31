@@ -157,6 +157,37 @@ describe('the two-phase sweep is wired correctly', () => {
     expect(suggestions).toMatch(/onProgress\?\.\(\{ done, total, filled, unresolved, current/)
   })
 
+  test('the AI ordering fallback only ever PROPOSES — providers verify before storage', () => {
+    // The model names books the Goodreads roster could not; nothing it says is
+    // stored until the real providers confirm it.
+    expect(suggestions).toContain('export const resolveGapsWithAi')
+    expect(suggestions).toContain('fetchBookMetadataResults(proposal.title, author')
+    // The model's NUMBERING is discarded — measured to be unreliable. The
+    // provider states where the book belongs, and only gaps get filled.
+    expect(suggestions).toContain('export const confirmPlacement')
+    expect(suggestions).toContain('confirmPlacement(results, { title: proposal.title, author, seriesName })')
+    expect(suggestions).toMatch(/const \{ result: match, installment \} = placement/)
+    expect(suggestions).toMatch(/if \(!wanted\.has\(installment\)/)
+    expect(suggestions).toMatch(/seriesMatches\(result\?\.series, seriesName\)/)
+    // Cover/author/year come from the verified provider result, not the model.
+    expect(suggestions).toMatch(/cover: match\.cover/)
+    // Two independent safety gates: a known author, and enough roster anchors.
+    expect(suggestions).toContain('MIN_AI_ANCHORS')
+    expect(suggestions).toMatch(/if \(!author\) return \{\}/)
+    // A model that contradicts confirmed books is refused outright.
+    expect(suggestions).toMatch(/if \(!anchored \|\| !books\?\.length\) return \{\}/)
+  })
+
+  test('the AI fallback runs both on demand and in the background, but is rate-limited', () => {
+    // The visible sweep uses it for installments the roster never named.
+    expect(suggestions).toMatch(/const rosterGaps = missing\.filter/)
+    // The unattended sweep does too, so pages are complete before being opened.
+    expect(suggestions).toContain('fillRosterGapsWithAi')
+    // ...but at most once a day per series, because each call is billable.
+    expect(suggestions).toContain('AI_RETRY_AFTER_MS')
+    expect(suggestions).toContain('aiAttemptedRecently')
+  })
+
   test('phase 2 links owned-but-untagged books and never overwrites the right one', () => {
     expect(suggestions).toContain('export const reconcileSeriesWithLibrary')
     // Sets series + installment on the matched book.
