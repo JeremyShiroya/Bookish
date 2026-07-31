@@ -12,6 +12,7 @@ import {
   confirmPlacement,
   dominantSeriesAuthor,
   sampleAnchors,
+  yearFitsBetweenAnchors,
 } from '../composables/useSeriesSuggestions.js'
 
 const groqReply = (payload) => ({
@@ -311,6 +312,52 @@ describe('the PROVIDER decides the position, never the model', () => {
     ]
     expect(confirmPlacement(results, { title: 'Ocean Prey', author, seriesName }))
       .toMatchObject({ result: { cover: 'c.jpg' }, installment: 31 })
+  })
+})
+
+// Goodreads is the only provider that reports an installment, so on a device it
+// is rate-limiting NOTHING can state a position. Publication years are the way
+// back in: a series runs forward in time, so a slot must sit between the years
+// of the books already dated either side of it.
+describe('years corroborate a placement when no provider will state one', () => {
+  // The reader's real roster.
+  const anchors = {
+    1: { year: 1989 }, 20: { year: 2010 }, 24: { year: 2014 },
+    27: { year: 2017 }, 30: { year: 2020 }, 36: { year: 2025 },
+  }
+
+  test('a correct slot between two dated anchors is accepted', () => {
+    // Ocean Prey 2021 at 31, between 30 (2020) and 36 (2025).
+    expect(yearFitsBetweenAnchors({ installment: 31, year: 2021, anchors })).toBe(true)
+    expect(yearFitsBetweenAnchors({ installment: 34, year: 2024, anchors })).toBe(true)
+  })
+
+  test('a real book offered at the wrong slot is rejected on its year', () => {
+    // The measured failure: "Storm Prey" (2010) proposed as book 33. Book 30 is
+    // already dated 2020, so 33 cannot be 2010.
+    expect(yearFitsBetweenAnchors({ installment: 33, year: 2010, anchors })).toBe(false)
+    // "Field of Prey" (2014) at 34, and "Golden Prey" (2017) at 35 — same story.
+    expect(yearFitsBetweenAnchors({ installment: 34, year: 2014, anchors })).toBe(false)
+    expect(yearFitsBetweenAnchors({ installment: 35, year: 2017, anchors })).toBe(false)
+  })
+
+  test('a slot later than a dated anchor cannot predate it', () => {
+    expect(yearFitsBetweenAnchors({ installment: 35, year: 2026, anchors })).toBe(false)
+  })
+
+  test('two installments in one year are allowed', () => {
+    expect(yearFitsBetweenAnchors({ installment: 31, year: 2020, anchors })).toBe(true)
+  })
+
+  test('too little dated history to judge means no', () => {
+    expect(yearFitsBetweenAnchors({ installment: 3, year: 2001, anchors: { 1: { year: 1999 } } })).toBe(false)
+    expect(yearFitsBetweenAnchors({ installment: 3, year: 2001, anchors: {} })).toBe(false)
+  })
+
+  test('a missing or absurd year is never corroboration', () => {
+    expect(yearFitsBetweenAnchors({ installment: 31, year: null, anchors })).toBe(false)
+    expect(yearFitsBetweenAnchors({ installment: 31, year: 99999, anchors })).toBe(false)
+    expect(yearFitsBetweenAnchors({ installment: 0, year: 2021, anchors })).toBe(false)
   })
 })
 

@@ -321,20 +321,31 @@ export async function fetchSeriesBooksOnDevice(seedTitle, author, seriesName) {
 // The key comes from public runtime config because the bundled app has no
 // server to keep it behind, exactly like the Books key above. When it is not
 // set, this returns nothing and the roster stays the only source.
-export async function enumerateSeriesOnDevice({ seriesName, author, anchors, missing }) {
+// `config` comes from the caller, because useRuntimeConfig() cannot be read this
+// far from a Nuxt context — see the note in useSeriesSuggestions. Reading it
+// here is only a fallback for a caller that still has a live instance.
+export async function enumerateSeriesOnDevice({ seriesName, author, anchors, missing, config }) {
   const { enumerateSeriesWithAi } = await import('~/server/utils/aiSeriesEnumerator')
 
-  let publicConfig
-  try {
-    publicConfig = useRuntimeConfig()?.public
-  } catch {
-    publicConfig = null
+  let resolved = config?.apiKey ? config : null
+  if (!resolved) {
+    let publicConfig
+    try {
+      publicConfig = useRuntimeConfig()?.public
+    } catch {
+      publicConfig = null
+    }
+    if (!publicConfig?.aiSeriesApiKey) return { books: [], provider: null, anchored: false }
+    resolved = {
+      provider: publicConfig.aiSeriesProvider,
+      apiKey: publicConfig.aiSeriesApiKey,
+      model: publicConfig.aiSeriesModel,
+    }
   }
-  const apiKey = publicConfig?.aiSeriesApiKey
-  if (!apiKey) return { books: [], provider: null, anchored: false }
 
-  const provider = String(publicConfig?.aiSeriesProvider || '').toLowerCase() === 'groq' ? 'groq' : 'gemini'
-  const model = publicConfig?.aiSeriesModel
+  const provider = String(resolved.provider || '').toLowerCase() === 'groq' ? 'groq' : 'gemini'
+  const apiKey = resolved.apiKey
+  const model = resolved.model
     // Evergreen alias: pinned Gemini versions retire and 404 on new keys.
     || (provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gemini-flash-latest')
 

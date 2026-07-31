@@ -18,7 +18,7 @@
 // series page updates live as the sweep resolves its gaps.
 
 import { computed } from 'vue'
-import { useState } from '#app'
+import { useState, useRuntimeConfig } from '#app'
 import { useApiEndpoint } from '~/composables/useApiEndpoint'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
@@ -27,6 +27,38 @@ import { mergeMetadataIntoBook } from '~/composables/useDeviceLibrarySync'
 import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
 
 const loadDeviceSearch = () => import('~/composables/useDeviceMetadataSearch')
+
+// Public runtime config, captured while a Nuxt instance is definitely active.
+//
+// useRuntimeConfig() only resolves inside setup or before the first await —
+// after that it throws "nuxt instance unavailable". The AI fallback runs from a
+// click handler and from a background timer, both well past that point, so
+// reading the config down there returned nothing and the whole feature quietly
+// did nothing at all: no key found, no request made, no error logged. Grab it
+// once from a context that is guaranteed valid and hand it down instead.
+let _publicConfig = null
+
+const rememberPublicConfig = () => {
+  if (_publicConfig) return _publicConfig
+  try {
+    _publicConfig = useRuntimeConfig()?.public || null
+  } catch {
+    // Called outside a Nuxt context — a later call from one will fill this in.
+  }
+  return _publicConfig
+}
+
+// The AI provider settings a native build carries, or null when none are set.
+const nativeAiConfig = () => {
+  const config = rememberPublicConfig()
+  const apiKey = config?.aiSeriesApiKey
+  if (!apiKey) return null
+  return {
+    provider: String(config.aiSeriesProvider || '').toLowerCase() === 'groq' ? 'groq' : 'gemini',
+    apiKey,
+    model: config.aiSeriesModel || '',
+  }
+}
 
 const CACHE_PREFIX = 'bookish:series-suggestions:'
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 30 // 30 days
@@ -154,9 +186,18 @@ const fetchAiSeriesOrder = async ({ seriesName, author, anchors = {}, missing = 
   const { apiUrl, apiBaseUrl } = useApiEndpoint()
   const native = isNativeCapacitorPlatform()
 
+  // Read BEFORE any await, while the Nuxt instance is still reachable.
+  const aiConfig = nativeAiConfig()
+
   const onDevice = async () => {
+    if (!aiConfig) {
+      // Loud on purpose: an unset key is the single likeliest reason this
+      // feature appears to do nothing on a phone, and it used to fail silently.
+      console.warn('[AI series] No on-device AI key configured (NUXT_PUBLIC_AI_SERIES_API_KEY) — skipping the ordering fallback.')
+      return empty
+    }
     const { enumerateSeriesOnDevice } = await loadDeviceSearch()
-    return enumerateSeriesOnDevice({ seriesName, author, anchors, missing })
+    return enumerateSeriesOnDevice({ seriesName, author, anchors, missing, config: aiConfig })
   }
 
   try {
@@ -239,6 +280,52 @@ export const confirmPlacement = (results = [], { title, author, seriesName } = {
   }
 
   return null
+}
+
+// SECOND route to a verified placement, for when the first cannot run.
+//
+// confirmPlacement needs a provider to state "this book is installment N", and
+// Goodreads is the ONLY provider that reports an installment at all — Google
+// Books and Open Library return none. So on a device Goodreads is rate-limiting
+// (HTTP 202, measured on the reader's phone) nothing can ever confirm a
+// position, and the AI fallback is blocked by the very wall it exists to route
+// around.
+//
+// Publication years are the way out, because the reachable providers DO supply
+// them. A series runs forward in time, so a proposed slot has to sit between the
+// years of the books already confirmed either side of it. That is a real
+// structural test, not a softening: it rejects every misplacement measured from
+// a weaker model — "Storm Prey" (2010) offered as book 33 lands before book 30's
+// 2020 and is thrown out — while accepting a correct 31=2021 between 30=2020 and
+// 36=2025.
+//
+// The year checked is always the PROVIDER's, never the model's, so no fact the
+// model asserted is ever what justifies the write.
+export const yearFitsBetweenAnchors = ({ installment, year, anchors = {} } = {}) => {
+  const slot = Number(installment)
+  const value = Number(year)
+  if (!Number.isSafeInteger(slot) || slot < 1) return false
+  if (!Number.isFinite(value) || value < 1400 || value > 2200) return false
+
+  const known = Object.entries(anchors || {})
+    .map(([number, entry]) => [Number(number), Number(entry?.year)])
+    .filter(([number, entryYear]) => (
+      Number.isSafeInteger(number) && number >= 1
+      && Number.isFinite(entryYear) && entryYear > 1400
+      && number !== slot
+    ))
+
+  // Two dated books is the least that can establish a direction of travel.
+  if (known.length < 2) return false
+
+  for (const [number, entryYear] of known) {
+    // Earlier books cannot be published after this one, later ones cannot come
+    // before it. Equality is allowed: two installments do ship in one year.
+    if (number < slot && entryYear > value) return false
+    if (number > slot && entryYear < value) return false
+  }
+
+  return true
 }
 
 // At least this many roster-confirmed books must exist before an AI ordering is
@@ -325,12 +412,36 @@ export const resolveGapsWithAi = async ({
 
     try {
       const results = await fetchBookMetadataResults(proposal.title, author, undefined, { light: true })
-      // Ask the providers where this book belongs — the model's own number is
-      // deliberately ignored, because it is the part it gets wrong.
-      const placement = confirmPlacement(results, { title: proposal.title, author, seriesName })
-      if (!placement) continue
 
-      const { result: match, installment } = placement
+      // FIRST choice: a provider states the number outright. Strongest evidence,
+      // and it overrides whatever the model believed the number was.
+      let match = null
+      let installment = 0
+      const stated = confirmPlacement(results, { title: proposal.title, author, seriesName })
+      if (stated) {
+        match = stated.result
+        installment = stated.installment
+      } else {
+        // FALLBACK: no provider will state a position — the usual case when
+        // Goodreads is rate-limiting this device, since nothing else reports an
+        // installment. Confirm the book exists, then require the PROVIDER's
+        // publication year to sit correctly among the books already dated. The
+        // model's number is only a hypothesis the years have to support.
+        const found = bestResultForInstallment({ title: proposal.title, author }, results)
+        const providerYear = Number(found?.publishYear)
+        const candidate = Number(proposal.installment)
+        if (
+          found
+          && Number.isFinite(providerYear)
+          && wanted.has(candidate)
+          && yearFitsBetweenAnchors({ installment: candidate, year: providerYear, anchors: cached })
+        ) {
+          match = found
+          installment = candidate
+        }
+      }
+
+      if (!match || !installment) continue
       // The providers may place it at a number we already have, or outside the
       // gaps entirely. Either way it is not something we need.
       if (!wanted.has(installment) || resolved[installment] || cached[installment]?.title) continue
@@ -809,6 +920,9 @@ let _hydrated = false
 
 // Live view of one series' resolved suggestions, for the detail page.
 export const useSeriesSuggestions = (seriesNameRef) => {
+  // Runs in setup, so the runtime config is reachable here — capture it now for
+  // the sweep, which runs from handlers and timers where it would not be.
+  rememberPublicConfig()
   const store = useSuggestionsStore()
   // The native plugin hydrates on app open; this covers the web and any route
   // reached before that ran. Once per session either way.
@@ -1000,6 +1114,9 @@ const topUpSuggestionDetails = async (seriesList) => {
 // app start.
 export const startSeriesSuggestionSweep = ({ seriesList }) => {
   if (_sweepTimer !== null || typeof setInterval !== 'function') return
+  // Started from a plugin, so a Nuxt instance is live — the background sweep
+  // later runs on a timer, where it would not be.
+  rememberPublicConfig()
   const { settings } = useBookishSettings()
 
   const tick = () => {

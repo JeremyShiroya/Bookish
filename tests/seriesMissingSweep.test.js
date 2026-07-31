@@ -166,9 +166,16 @@ describe('the two-phase sweep is wired correctly', () => {
     // provider states where the book belongs, and only gaps get filled.
     expect(suggestions).toContain('export const confirmPlacement')
     expect(suggestions).toContain('confirmPlacement(results, { title: proposal.title, author, seriesName })')
-    expect(suggestions).toMatch(/const \{ result: match, installment \} = placement/)
+    // A stated position wins outright and overrides the model's number.
+    expect(suggestions).toMatch(/if \(stated\) \{[\s\S]*?installment = stated\.installment/)
     expect(suggestions).toMatch(/if \(!wanted\.has\(installment\)/)
     expect(suggestions).toMatch(/seriesMatches\(result\?\.series, seriesName\)/)
+    // Second route for a device Goodreads is rate-limiting: nothing else
+    // reports an installment, so the PROVIDER's year must corroborate the slot.
+    expect(suggestions).toContain('export const yearFitsBetweenAnchors')
+    expect(suggestions).toContain('yearFitsBetweenAnchors({ installment: candidate, year: providerYear')
+    // Still the provider's year that justifies the write, never the model's.
+    expect(suggestions).toContain('const providerYear = Number(found?.publishYear)')
     // Cover/author/year come from the verified provider result, not the model.
     expect(suggestions).toMatch(/cover: match\.cover/)
     // Two independent safety gates: a known author, and enough roster anchors.
