@@ -110,7 +110,9 @@ Optional AI metadata verification:
 ```env
 BOOKISH_AI_PROVIDER=gemini
 GEMINI_API_KEY=<your-google-ai-studio-key>
-GEMINI_MODEL=gemini-2.5-flash
+# Evergreen alias — pinned versions (e.g. gemini-2.5-flash) eventually retire
+# and return 404 "no longer available to new users" on newly issued keys.
+GEMINI_MODEL=gemini-flash-latest
 
 # Or use Groq instead
 # BOOKISH_AI_PROVIDER=groq

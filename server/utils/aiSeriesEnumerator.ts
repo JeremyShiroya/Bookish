@@ -54,7 +54,11 @@ export type AiSeriesOptions = {
   config?: AiSeriesConfig | null
 }
 
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash'
+// Evergreen alias on purpose. A pinned version silently retires — Google
+// answers 404 "no longer available to new users" for gemini-2.5-flash on any
+// recently issued key, which made this feature look like it had no knowledge
+// when it was never reaching a model at all.
+const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest'
 const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile'
 
 // How many anchors must come back right before we believe anything else the
@@ -76,22 +80,32 @@ const normalize = (value: unknown) => compact(value)
 // Same provider-selection rules as the metadata verifier, so one setting
 // (BOOKISH_AI_PROVIDER / the *_API_KEY vars) governs every AI feature.
 export function resolveAiSeriesConfig(env: Record<string, string | undefined> = {}): AiSeriesConfig | null {
+  return resolveAiSeriesConfigs(env)[0] || null
+}
+
+// Every provider that has a key, preferred one first. When two are configured
+// the second is a genuine fallback rather than a spare: a provider that is out
+// of quota, rate-limited, or simply does not know a series returns nothing, and
+// a series left blank because the FIRST provider was unavailable is the exact
+// failure this feature exists to remove. Both are equally safe to consult,
+// since nothing either proposes is stored without provider confirmation.
+export function resolveAiSeriesConfigs(env: Record<string, string | undefined> = {}): AiSeriesConfig[] {
   const requested = compact(env.BOOKISH_AI_PROVIDER).toLowerCase()
-  if (requested === 'off' || requested === 'none' || requested === 'false') return null
+  if (requested === 'off' || requested === 'none' || requested === 'false') return []
 
   const geminiKey = env.GEMINI_API_KEY || env.GOOGLE_AI_API_KEY
   const groqKey = env.GROQ_API_KEY
 
-  const gemini = (): AiSeriesConfig | null => (geminiKey
+  const gemini: AiSeriesConfig | null = geminiKey
     ? { provider: 'gemini', apiKey: geminiKey, model: compact(env.GEMINI_MODEL) || DEFAULT_GEMINI_MODEL }
-    : null)
-  const groq = (): AiSeriesConfig | null => (groqKey
+    : null
+  const groq: AiSeriesConfig | null = groqKey
     ? { provider: 'groq', apiKey: groqKey, model: compact(env.GROQ_MODEL) || DEFAULT_GROQ_MODEL }
-    : null)
+    : null
 
-  if (requested === 'gemini') return gemini()
-  if (requested === 'groq') return groq()
-  return gemini() || groq()
+  // An explicit choice leads; the other still stands by.
+  const ordered = requested === 'groq' ? [groq, gemini] : [gemini, groq]
+  return ordered.filter((config): config is AiSeriesConfig => !!config)
 }
 
 // The prompt leans on two things that keep a model honest: it is told the books
@@ -276,37 +290,48 @@ export async function enumerateSeriesWithAi(options: AiSeriesOptions): Promise<{
   if (!seriesName) return empty
 
   const env = options.env || (typeof process !== 'undefined' ? process.env : {})
-  const config = options.config ?? resolveAiSeriesConfig(env)
-  if (!config?.apiKey) return empty
+  // An explicit config (the on-device path) is used alone; otherwise every
+  // configured provider gets a turn until one gives a usable answer.
+  const configs = options.config ? [options.config] : resolveAiSeriesConfigs(env)
+  if (!configs.length) return empty
 
   const fetchFn = options.fetchFn || globalThis.fetch
   if (!fetchFn) return empty
 
-  try {
-    const prompt = buildSeriesOrderPrompt({
-      seriesName,
-      author: options.author,
-      anchors: options.anchors,
-      missing: options.missing,
-    })
-    const payload = config.provider === 'groq'
-      ? await callGroq(config, prompt, fetchFn)
-      : await callGemini(config, prompt, fetchFn)
+  const prompt = buildSeriesOrderPrompt({
+    seriesName,
+    author: options.author,
+    anchors: options.anchors,
+    missing: options.missing,
+  })
 
-    const books = parseSeriesOrderPayload(payload, seriesName)
-    if (!books.length) return { ...empty, provider: config.provider }
+  let lastProvider: AiSeriesProvider | null = null
 
-    const anchored = anchorsAgree(options.anchors, books)
-    // Disagreeing with known books means the model is not recalling this
-    // series. Discard the whole answer rather than cherry-picking from it.
-    if (!anchored) {
-      console.warn(`[AI series] Discarded "${seriesName}" ordering: it contradicts books already confirmed.`)
-      return { books: [], provider: config.provider, anchored: false }
+  for (const config of configs) {
+    if (!config.apiKey) continue
+    lastProvider = config.provider
+    try {
+      const payload = config.provider === 'groq'
+        ? await callGroq(config, prompt, fetchFn)
+        : await callGemini(config, prompt, fetchFn)
+
+      const books = parseSeriesOrderPayload(payload, seriesName)
+      // Nothing usable — let the next provider try rather than giving up.
+      if (!books.length) continue
+
+      // Disagreeing with books we have confirmed means this model is not
+      // recalling the series. Discard its answer whole and move on; a second
+      // provider may well know it.
+      if (!anchorsAgree(options.anchors, books)) {
+        console.warn(`[AI series] Discarded "${seriesName}" ordering from ${config.provider}: it contradicts confirmed books.`)
+        continue
+      }
+
+      return { books, provider: config.provider, anchored: true }
+    } catch (error) {
+      console.warn(`[AI series] ${config.provider} unavailable for "${seriesName}":`, error)
     }
-
-    return { books, provider: config.provider, anchored: true }
-  } catch (error) {
-    console.warn('[AI series] Series enumeration unavailable:', error)
-    return empty
   }
+
+  return { ...empty, provider: lastProvider }
 }

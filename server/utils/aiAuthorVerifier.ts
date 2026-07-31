@@ -31,7 +31,8 @@ type AiProviderConfig = {
   model: string
 }
 
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash'
+// Evergreen alias — a pinned version retires and 404s on new keys.
+const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest'
 const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile'
 
 function compact(value: unknown) {

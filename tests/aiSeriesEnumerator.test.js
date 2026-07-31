@@ -6,6 +6,7 @@ import {
   enumerateSeriesWithAi,
   parseSeriesOrderPayload,
   resolveAiSeriesConfig,
+  resolveAiSeriesConfigs,
 } from '../server/utils/aiSeriesEnumerator.ts'
 import {
   confirmPlacement,
@@ -35,6 +36,73 @@ describe('provider selection matches the rest of the app', () => {
 
   test('no key means no feature', () => {
     expect(resolveAiSeriesConfig({})).toBeNull()
+  })
+
+  test('the retired pinned model is not the default any more', () => {
+    // gemini-2.5-flash 404s with "no longer available to new users" on newly
+    // issued keys, which silently disabled the feature entirely.
+    expect(resolveAiSeriesConfig({ GEMINI_API_KEY: 'g' }).model).toBe('gemini-flash-latest')
+  })
+
+  test('both providers are offered, the requested one first', () => {
+    const env = { BOOKISH_AI_PROVIDER: 'groq', GEMINI_API_KEY: 'g', GROQ_API_KEY: 'q' }
+    expect(resolveAiSeriesConfigs(env).map((c) => c.provider)).toEqual(['groq', 'gemini'])
+  })
+})
+
+describe('a second provider covers for the first', () => {
+  const env = { GEMINI_API_KEY: 'g', GROQ_API_KEY: 'q' }
+  const anchors = { 16: 'Broken Prey', 30: 'Masked Prey' }
+  const good = {
+    books: [
+      { installment: 16, title: 'Broken Prey', year: 2005 },
+      { installment: 30, title: 'Masked Prey', year: 2020 },
+      { installment: 31, title: 'Ocean Prey', year: 2021 },
+    ],
+  }
+  const geminiReply = (payload) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(payload) }] } }] }),
+  })
+
+  test('a rate-limited first provider hands over instead of giving up', async () => {
+    // Exactly the real failure: Gemini quota gone, Groq still available.
+    const fetchFn = vi.fn(async (url) => (String(url).includes('googleapis')
+      ? { ok: false, status: 429, json: async () => ({}) }
+      : groqReply(good)))
+
+    const result = await enumerateSeriesWithAi({
+      seriesName: 'Prey', author: 'John Sandford', anchors, env, fetchFn,
+    })
+    expect(result.provider).toBe('groq')
+    expect(result.books.find((b) => b.installment === 31)).toMatchObject({ title: 'Ocean Prey' })
+  })
+
+  test('a provider that knows nothing hands over too', async () => {
+    const fetchFn = vi.fn(async (url) => (String(url).includes('googleapis')
+      ? geminiReply({ books: [] })
+      : groqReply(good)))
+
+    const result = await enumerateSeriesWithAi({ seriesName: 'Prey', anchors, env, fetchFn })
+    expect(result.provider).toBe('groq')
+    expect(result.books).toHaveLength(3)
+  })
+
+  test('a provider contradicting confirmed books hands over rather than corrupting', async () => {
+    const fetchFn = vi.fn(async (url) => (String(url).includes('googleapis')
+      ? geminiReply({ books: [{ installment: 16, title: 'Winter Prey' }, { installment: 30, title: 'Silent Prey' }] })
+      : groqReply(good)))
+
+    const result = await enumerateSeriesWithAi({ seriesName: 'Prey', anchors, env, fetchFn })
+    expect(result.provider).toBe('groq')
+    expect(result.anchored).toBe(true)
+  })
+
+  test('when both fail nothing is returned, and nothing throws', async () => {
+    const fetchFn = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }))
+    const result = await enumerateSeriesWithAi({ seriesName: 'Prey', anchors, env, fetchFn })
+    expect(result.books).toEqual([])
   })
 })
 

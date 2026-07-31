@@ -24,7 +24,10 @@ type AiPatch = {
   warnings?: string[]
 }
 
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash'
+// Evergreen alias: a pinned version retires and then answers 404 "no longer
+// available to new users" on newly issued keys, which silently disabled this
+// verifier while looking like the model simply had nothing to say.
+const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest'
 const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile'
 
 function compact(value: unknown) {

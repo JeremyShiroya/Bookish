@@ -335,7 +335,8 @@ export async function enumerateSeriesOnDevice({ seriesName, author, anchors, mis
 
   const provider = String(publicConfig?.aiSeriesProvider || '').toLowerCase() === 'groq' ? 'groq' : 'gemini'
   const model = publicConfig?.aiSeriesModel
-    || (provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gemini-2.5-flash')
+    // Evergreen alias: pinned Gemini versions retire and 404 on new keys.
+    || (provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gemini-flash-latest')
 
   return withTimeout(
     enumerateSeriesWithAi({
