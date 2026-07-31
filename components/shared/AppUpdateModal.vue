@@ -1,10 +1,12 @@
 <template>
   <Teleport to="body">
     <Transition name="update-modal">
+      <!-- A tap outside must not close the dialog mid-download: the transfer
+           would carry on with nothing left on screen reporting it. -->
       <div
         v-if="available"
         class="update-overlay"
-        @click.self="available.mandatory ? null : dismiss()"
+        @click.self="available.mandatory || busy ? null : dismiss()"
       >
         <section
           class="update-modal"
@@ -27,11 +29,46 @@
                text. Never swap this for v-html. -->
           <p v-if="available.notes" class="update-notes">{{ available.notes }}</p>
 
-          <p class="update-hint">
-            The download opens in your browser. Tap it when it finishes to install.
+          <!-- Downloading in the app: our own progress, so the user never has
+               to go and find the file in the browser's downloads. -->
+          <div v-if="busy" class="update-progress" role="status" aria-live="polite">
+            <div class="progress-track">
+              <div
+                class="progress-fill"
+                :class="{ indeterminate: install.status === 'downloading' && !install.totalBytes }"
+                :style="install.totalBytes ? { width: `${install.percent}%` } : null"
+              ></div>
+            </div>
+            <p class="progress-label">
+              <template v-if="install.status === 'opening'">Opening the installer…</template>
+              <template v-else-if="install.totalBytes">
+                Downloading {{ install.percent }}% · {{ formatMb(install.receivedBytes) }} of {{ formatMb(install.totalBytes) }}
+              </template>
+              <template v-else>Downloading…</template>
+            </p>
+          </div>
+
+          <!-- Android 8+ keeps a per-app "install unknown apps" toggle that the
+               user has to grant themselves; without it the installer never
+               appears and nothing explains why. -->
+          <p v-else-if="install.status === 'needs-permission'" class="update-hint warn">
+            {{ install.message }} Turn on “Allow from this source”, then tap Update again.
           </p>
 
-          <div class="update-actions" :class="{ single: available.mandatory }">
+          <p v-else-if="install.status === 'error'" class="update-hint warn">
+            {{ install.message }}
+          </p>
+
+          <p v-else class="update-hint">
+            <template v-if="inAppCapable">
+              Downloads in the app. Android will ask you to confirm the install.
+            </template>
+            <template v-else>
+              The download opens in your browser. Tap it when it finishes to install.
+            </template>
+          </p>
+
+          <div v-if="!busy" class="update-actions" :class="{ single: available.mandatory }">
             <!-- "Later" holds only for this app session: the prompt is back the
                  next time the app is opened from cold, but task-switching away
                  and back will not bring it straight back. -->
@@ -43,10 +80,28 @@
             >
               Later
             </button>
-            <!-- A real link, not a click handler: Capacitor turns an external
-                 navigation into an ACTION_VIEW intent, which is the reliable
-                 way out of the WebView (window.open is a no-op there). -->
+
+            <button
+              v-if="install.status === 'needs-permission'"
+              type="button"
+              class="update-btn primary"
+              @click="openInstallSettings"
+            >
+              Open settings
+            </button>
+            <!-- In-app path is a button; everything else keeps the real link,
+                 because Capacitor turns an external navigation into an
+                 ACTION_VIEW intent and window.open is a no-op in the WebView. -->
+            <button
+              v-else-if="inAppCapable"
+              type="button"
+              class="update-btn primary"
+              @click="startUpdate"
+            >
+              {{ install.status === 'error' ? 'Try again' : 'Update' }}
+            </button>
             <a
+              v-else
               class="update-btn primary"
               :href="available.apkUrl"
               rel="noopener noreferrer"
@@ -59,7 +114,7 @@
           <!-- Kept, but demoted: skipping is permanent for this version, which
                is a bigger decision than "not now". -->
           <button
-            v-if="!available.mandatory"
+            v-if="!available.mandatory && !busy"
             type="button"
             class="update-skip-link"
             @click="skip"
@@ -73,12 +128,34 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useAppUpdate } from '~/composables/useAppUpdate'
+import { useApkUpdateInstall } from '~/composables/useApkUpdateInstall'
 
 const { available, installed, skip, dismiss } = useAppUpdate()
+const {
+  state: install,
+  canInstallInApp,
+  downloadAndInstall,
+  openInstallSettings,
+  reset,
+} = useApkUpdateInstall()
 
 const installedName = computed(() => installed.value?.name || '')
+
+// Only native builds carrying the installer plugin download in-app; everything
+// else keeps the browser hand-off rather than showing a button that can't work.
+const inAppCapable = ref(false)
+onMounted(async () => { inAppCapable.value = await canInstallInApp() })
+
+const busy = computed(() => ['downloading', 'opening'].includes(install.value.status))
+
+// A fresh prompt should not inherit the previous attempt's error or progress.
+watch(available, (next) => { if (next) reset() })
+
+const startUpdate = () => downloadAndInstall(available.value)
+
+const formatMb = (bytes) => `${(Number(bytes || 0) / (1024 * 1024)).toFixed(1)} MB`
 </script>
 
 <style scoped>
@@ -160,6 +237,53 @@ const installedName = computed(() => installed.value?.name || '')
   color: var(--color-text-muted);
   font-size: 12.5px;
   line-height: 1.45;
+}
+
+.update-hint.warn {
+  color: var(--color-text-secondary);
+}
+
+.update-progress {
+  margin-top: 4px;
+}
+
+.progress-track {
+  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-surface-secondary);
+}
+
+.progress-fill {
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-brand-primary);
+  transition: width 0.2s ease;
+}
+
+/* No content-length means no honest percentage — sweep instead of inventing
+   one, so the bar never sits at a number that isn't real. */
+.progress-fill.indeterminate {
+  width: 40%;
+  animation: update-sweep 1.1s ease-in-out infinite;
+}
+
+@keyframes update-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+.progress-label {
+  margin: 10px 0 0;
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill { transition: none; }
+  .progress-fill.indeterminate { animation: none; width: 100%; opacity: 0.55; }
 }
 
 .update-actions {

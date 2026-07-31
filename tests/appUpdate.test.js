@@ -174,3 +174,71 @@ describe('update checker wiring', () => {
     expect(script).toContain('BOOKISH_BUILD_NUMBER')
   })
 })
+
+describe('in-app APK download and install', () => {
+  const composable = readCode('composables/useApkUpdateInstall.js')
+  const modal = readCode('components/shared/AppUpdateModal.vue')
+  const plugin = readCode('android/app/src/main/java/com/bookish/app/ApkInstallerPlugin.java')
+  const manifestXml = read('android/app/src/main/AndroidManifest.xml')
+
+  test('the install permission is checked BEFORE the download starts', () => {
+    // Sending the user to a settings screen only after an 11MB transfer, then
+    // throwing that transfer away, is the wrong order.
+    const permissionAt = composable.indexOf('installer.canInstall()')
+    const downloadAt = composable.indexOf('Filesystem.downloadFile')
+    expect(permissionAt).toBeGreaterThan(-1)
+    expect(downloadAt).toBeGreaterThan(permissionAt)
+  })
+
+  test('the progress listener is always detached', () => {
+    // A listener left attached keeps writing into a closed modal on the next
+    // download, so removal belongs in finally, not the happy path.
+    expect(composable).toContain('finally')
+    expect(composable).toContain('listener?.remove()')
+  })
+
+  test('the APK lands where the app FileProvider can serve it', () => {
+    // The installer is another process: it reads through the FileProvider, and
+    // the existing cache-path entry is what covers this directory.
+    expect(composable).toContain("APK_DIRECTORY = 'CACHE'")
+    expect(plugin).toContain('FileProvider.getUriForFile')
+    expect(plugin).toContain('.fileprovider')
+    expect(plugin).toContain('FLAG_GRANT_READ_URI_PERMISSION')
+  })
+
+  test('a missing or empty download is reported instead of "problem parsing the package"', () => {
+    expect(plugin).toContain('apk.exists()')
+    expect(plugin).toContain('apk.length() <= 0')
+  })
+
+  test('the manifest declares the permission the installer needs', () => {
+    expect(manifestXml).toContain('android.permission.REQUEST_INSTALL_PACKAGES')
+    expect(read('android/app/src/main/java/com/bookish/app/MainActivity.java'))
+      .toContain('registerPlugin(ApkInstallerPlugin.class)')
+  })
+
+  test('a missing per-app install permission is recoverable, not a dead end', () => {
+    expect(composable).toContain('openInstallSettings')
+    expect(plugin).toContain('ACTION_MANAGE_UNKNOWN_APP_SOURCES')
+    // Deep-linked to this app, not the full app list.
+    expect(plugin).toContain('"package:" + getContext().getPackageName()')
+    expect(modal).toContain("install.status === 'needs-permission'")
+  })
+
+  test('the browser hand-off survives where in-app install cannot work', () => {
+    // Web, and any native build without the plugin, must still be able to update.
+    expect(composable).toContain('isPluginAvailable')
+    expect(modal).toContain('v-else')
+    expect(modal).toContain(':href="available.apkUrl"')
+  })
+
+  test('the dialog cannot be dismissed out from under a running download', () => {
+    expect(modal).toContain('available.mandatory || busy ? null : dismiss()')
+    expect(modal).toContain('v-if="!busy"')
+  })
+
+  test('a download with no content-length shows no invented percentage', () => {
+    expect(composable).toContain('total > 0 ? Math.min(100')
+    expect(modal).toContain('indeterminate')
+  })
+})

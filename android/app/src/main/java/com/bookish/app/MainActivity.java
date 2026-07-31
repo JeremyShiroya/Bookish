@@ -19,6 +19,7 @@ import com.getcapacitor.BridgeWebViewClient;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(ApkInstallerPlugin.class);
         registerPlugin(DeviceBooksPlugin.class);
         registerPlugin(MediaSessionPlugin.class);
         registerPlugin(SystemBarsPlugin.class);
