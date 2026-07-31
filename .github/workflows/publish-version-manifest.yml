@@ -1,0 +1,138 @@
+# Publishes version.json when a GitHub Release is published, so sideloaded
+# Pages installs learn that a newer APK exists.
+#
+# The app fetches ONE stable url — the "latest release" alias — so it never has
+# to be rebuilt to learn about a new version:
+#
+#   https://github.com/<owner>/<repo>/releases/latest/download/version.json
+#
+# Set that as BOOKISH_UPDATE_MANIFEST_URL when building the APK. It is baked in
+# at build time (nuxt.config.ts runtimeConfig.public.updateManifestUrl), and an
+# empty value disables the update check completely — which is why a build made
+# without it never prompts, however many releases are published afterwards.
+#
+# This workflow publishes the MANIFEST only; it does not build or sign the APK.
+# Attach the APK to the release yourself (named bookish-<version>.apk), and the
+# manifest will be generated to point at it. The job fails loudly rather than
+# publishing a manifest whose download url would 404.
+
+name: Publish version manifest
+
+on:
+  release:
+    types: [published]
+  # Lets a release that was published before this workflow existed — or one
+  # whose manifest step failed — be fixed without cutting a new release.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to (re)publish the manifest for
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve target tag
+        id: target
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: echo "tag=${EVENT_TAG:-$INPUT_TAG}" >> "$GITHUB_OUTPUT"
+
+      # fetch-depth: 0 is REQUIRED, not tidiness. versionCode is the git commit
+      # count (mirrored in android/app/build.gradle and nuxt.config.ts), and a
+      # shallow clone would silently produce a tiny number — every device would
+      # then consider itself already up to date.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.tag }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # The generator only needs package.json, git history and one composable,
+      # so the full dependency install is unnecessary here.
+      - name: Check the tag matches package.json
+        id: version
+        env:
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::Tag $TAG does not match package.json version $VERSION."
+            echo "::error::The manifest would advertise $VERSION while the release is $TAG, so the download url would not resolve."
+            exit 1
+          fi
+
+      # A manifest pointing at a missing APK is worse than no manifest: the app
+      # would prompt for an update and then open a 404.
+      - name: Find the APK attached to the release
+        id: apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.target.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          EXPECTED="bookish-${VERSION}.apk"
+          FOUND="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json assets --jq ".assets[] | select(.name == \"$EXPECTED\") | .name")"
+          if [ -z "$FOUND" ]; then
+            echo "::error::Release $TAG has no asset named $EXPECTED."
+            echo "::error::Attach the signed APK under that exact name, then re-run this workflow."
+            echo "Assets currently on $TAG:"
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' || true
+            exit 1
+          fi
+          # Built from the documented pattern rather than read back from the API,
+          # so the url in the manifest is the same stable download path a user
+          # would follow, and is guaranteed https (the app rejects anything else).
+          echo "url=https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$EXPECTED" >> "$GITHUB_OUTPUT"
+
+      - name: Generate version.json
+        env:
+          NOTES: ${{ github.event.release.body }}
+        run: |
+          set -euo pipefail
+          # The generator reads --notes as a single argv value, but rejects one
+          # that begins with "--" (it would look like another flag), and release
+          # bodies are free text. Pass it only when it is safe, so an unusual
+          # changelog can never fail the release.
+          if [ -n "${NOTES:-}" ] && [ "${NOTES#--}" = "$NOTES" ]; then
+            node scripts/generate-version-manifest.mjs \
+              --apk-url "${{ steps.apk.outputs.url }}" --notes "$NOTES"
+          else
+            node scripts/generate-version-manifest.mjs \
+              --apk-url "${{ steps.apk.outputs.url }}"
+          fi
+          cat version.json
+
+      # clobber so re-running replaces the asset instead of failing on conflict.
+      - name: Attach version.json to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.target.outputs.tag }}
+        run: gh release upload "$TAG" version.json --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Summary
+        env:
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          {
+            echo "### Update manifest published"
+            echo
+            echo "- version: \`${{ steps.version.outputs.version }}\` (versionCode \`${{ steps.version.outputs.code }}\`)"
+            echo "- manifest: https://github.com/$GITHUB_REPOSITORY/releases/latest/download/version.json"
+            echo
+            echo "Devices running a build with \`BOOKISH_UPDATE_MANIFEST_URL\` set to that url will offer this release."
+          } >> "$GITHUB_STEP_SUMMARY"

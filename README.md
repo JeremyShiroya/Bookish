@@ -120,6 +120,33 @@ GEMINI_MODEL=gemini-flash-latest
 # GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
+### Sideloaded update checks
+
+Pages APKs install outside the Play Store, so nothing tells a user a newer build
+exists. On native startup the app fetches a small `version.json` and offers the
+download when its `versionCode` beats the installed one.
+
+```env
+BOOKISH_UPDATE_MANIFEST_URL=https://github.com/<owner>/<repo>/releases/latest/download/version.json
+```
+
+This is **baked into the APK at build time**, and an empty value disables the
+update check completely — a build made without it will never prompt, however
+many releases are published afterwards. The `releases/latest/download/...` alias
+always resolves to the newest release, so the URL never has to change.
+
+To cut a release:
+
+1. Bump `version` in `package.json` and commit (`versionCode` is the git commit
+   count, so it must move forward — Android refuses a lower one).
+2. Tag `v<version>` and publish a GitHub Release.
+3. Attach the signed APK named exactly `bookish-<version>.apk`.
+
+`.github/workflows/publish-version-manifest.yml` then generates `version.json`
+and attaches it to that release. It fails loudly if the tag disagrees with
+`package.json`, or if the APK asset is missing — a manifest pointing at a
+missing download would make the app prompt and then open a 404.
+
 Optional build number override:
 
 ```env
