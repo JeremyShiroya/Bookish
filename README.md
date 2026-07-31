@@ -120,6 +120,57 @@ GEMINI_MODEL=gemini-flash-latest
 # GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
+### Release signing (and not losing the library)
+
+Android refuses to install an APK whose signing certificate differs from the one
+already installed, and uninstalling takes the app's data with it — the books,
+covers and PDFs. The JSON backup in Settings → Storage exports IndexedDB, but
+covers and PDFs live on the filesystem, so it is **not** a complete safety net on
+its own.
+
+So moving a phone from a debug-signed build to a properly signed one is done by
+**key rotation**, not by uninstalling. APK Signature Scheme v3 lets the old key
+sign a "lineage" authorising the new key; a release APK carrying that lineage
+installs straight over the debug-signed app, keeping everything.
+
+```bash
+# 1. Create the release keystore (once). Pick your own password.
+keytool -genkeypair -v -keystore android/bookish-release.jks \
+  -alias bookish -keyalg RSA -keysize 4096 -validity 10000
+
+# 2. Record it for Gradle (android/keystore.properties — git-ignored)
+#    storeFile=bookish-release.jks
+#    storePassword=...
+#    keyAlias=bookish
+#    keyPassword=...
+
+# 3. Bless the new key with the old one (once)
+./scripts/sign-release-apk.sh rotate
+
+# 4. Build, then sign with the lineage (every release)
+npm run cap:sync && (cd android && ./gradlew assembleRelease)
+./scripts/sign-release-apk.sh sign android/app/build/outputs/apk/release/app-release.apk
+
+# 5. Installs over the existing app, library intact
+adb install -r android/app/build/outputs/apk/release/app-release-signed.apk
+```
+
+**Back up `bookish-release.jks` AND `signing-lineage.bin` somewhere private.**
+Lose the keystore and no future build can ever update an installed app; lose the
+lineage and release builds stop being able to replace anything signed with the
+old key. Both are git-ignored and must never be committed.
+
+Without a keystore configured the release build is simply left unsigned rather
+than failing, so a fresh clone and CI still work.
+
+While the installed build is still debuggable, a complete raw backup can be
+taken over USB — this captures the filesystem assets and the databases that the
+in-app JSON export does not:
+
+```bash
+adb exec-out "run-as com.bookish.app tar -cf - ." > bookish-appdata.tar
+```
+
 ### Sideloaded update checks
 
 Pages APKs install outside the Play Store, so nothing tells a user a newer build

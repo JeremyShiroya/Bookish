@@ -66,6 +66,34 @@ ext.resolveVersionCode = {
     return count
 }
 
+// Release signing.
+//
+// Credentials live in android/keystore.properties (git-ignored) or in the
+// environment, so nothing secret is ever committed. When neither is present the
+// release build simply stays unsigned instead of failing — a debug build, CI
+// checkout, or fresh clone must still work without the keystore.
+//
+// IMPORTANT — read scripts/sign-release-apk.sh before switching a phone that
+// already has a debug-signed install: Android refuses an update whose signature
+// differs, and uninstalling wipes the library. The rotation lineage in that
+// script is what lets a release-signed APK replace a debug-signed one in place.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
+def resolveSigning = { String key, String envName ->
+    def value = keystoreProperties.getProperty(key) ?: System.getenv(envName)
+    return value?.trim() ? value.trim() : null
+}
+
+ext.releaseStoreFile = resolveSigning('storeFile', 'BOOKISH_KEYSTORE_FILE')
+ext.releaseStorePassword = resolveSigning('storePassword', 'BOOKISH_KEYSTORE_PASSWORD')
+ext.releaseKeyAlias = resolveSigning('keyAlias', 'BOOKISH_KEY_ALIAS')
+ext.releaseKeyPassword = resolveSigning('keyPassword', 'BOOKISH_KEY_PASSWORD')
+ext.hasReleaseSigning = ext.releaseStoreFile && ext.releaseStorePassword && ext.releaseKeyAlias && ext.releaseKeyPassword
+
 android {
     namespace = "com.bookish.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -82,10 +110,29 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (project.ext.hasReleaseSigning) {
+            release {
+                storeFile file(project.ext.releaseStoreFile)
+                storePassword project.ext.releaseStorePassword
+                keyAlias project.ext.releaseKeyAlias
+                keyPassword project.ext.releaseKeyPassword
+                // v1/v2 for older installers, v3 because the rotation lineage
+                // that lets a new key replace the old one lives in the v3 block.
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (project.ext.hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

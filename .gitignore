@@ -28,3 +28,12 @@ logs
 .claude/worktrees/
 apk file/
 android/app/release/
+
+# Release signing. Losing these means never being able to update an installed
+# app again; committing them means anyone can sign a build that replaces it.
+# Keep the keystore AND the lineage backed up somewhere private.
+keystore.properties
+android/keystore.properties
+*.jks
+*.keystore
+android/signing-lineage.bin
