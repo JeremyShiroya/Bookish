@@ -16,7 +16,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
 
 /**
- * Hands a downloaded APK to Android's package installer.
+ * Handles APK files the app deals with directly: the update it downloads for
+ * itself, and its own installer file when the reader shares the app.
  *
  * Pages installs outside the Play Store, so it ships its own update flow. The
  * web layer downloads the APK itself (so the progress bar lives in the app's
@@ -127,6 +128,98 @@ public class ApkInstallerPlugin extends Plugin {
             call.resolve();
         } catch (Exception error) {
             call.reject("Could not open the installer for this update.", error);
+        }
+    }
+
+    /**
+     * Share this app's own APK through the system share sheet, so it reaches
+     * WhatsApp, Gmail, Bluetooth, Nearby Share — whatever the phone offers.
+     *
+     * The installed APK lives under /data/app in a directory another app cannot
+     * read, so it cannot be shared in place: it is copied into our cache, where
+     * the FileProvider can grant per-recipient read access. The copy is named
+     * for the app and version rather than "base.apk", because that filename is
+     * what the recipient sees and has to trust enough to install.
+     *
+     * Split APKs are deliberately not handled. A build produced by this project
+     * is a single APK; a split install would need every part plus a session
+     * install on the far side, and sharing only the base would hand someone a
+     * file that fails to install with no useful explanation.
+     */
+    @PluginMethod
+    public void shareApk(PluginCall call) {
+        try {
+            android.content.pm.ApplicationInfo info = getContext().getApplicationInfo();
+
+            String[] splits = info.splitSourceDirs;
+            if (splits != null && splits.length > 0) {
+                call.reject("SPLIT_APK");
+                return;
+            }
+
+            File source = new File(info.sourceDir);
+            if (!source.exists() || source.length() <= 0) {
+                call.reject("This app's installer file could not be found on the device.");
+                return;
+            }
+
+            String version = call.getString("version", "");
+            String label = "Pages" + (version == null || version.isEmpty() ? "" : "-" + version) + ".apk";
+
+            File dir = new File(getContext().getCacheDir(), "shared-apk");
+            if (!dir.exists() && !dir.mkdirs()) {
+                call.reject("Could not prepare the app file for sharing.");
+                return;
+            }
+
+            // One copy, replaced each time: this is a ~10MB file and there is no
+            // reason to accumulate one per share.
+            File target = new File(dir, label);
+            for (File stale : dir.listFiles() != null ? dir.listFiles() : new File[0]) {
+                if (!stale.equals(target)) stale.delete();
+            }
+            copy(source, target);
+
+            Uri uri = FileProvider.getUriForFile(
+                getContext(),
+                getContext().getPackageName() + ".fileprovider",
+                target
+            );
+
+            Intent send = new Intent(Intent.ACTION_SEND)
+                .setType(APK_MIME)
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .putExtra(Intent.EXTRA_SUBJECT, call.getString("subject", "Pages"))
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            final String text = call.getString("text", "");
+            if (!text.isEmpty()) send.putExtra(Intent.EXTRA_TEXT, text);
+
+            Intent chooser = Intent.createChooser(send, call.getString("title", "Share Pages"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                // Bluetooth and some mail clients read the stream from the
+                // chooser intent rather than the inner one, and get a
+                // SecurityException without their own grant.
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            getContext().startActivity(chooser);
+
+            JSObject result = new JSObject();
+            result.put("shared", true);
+            result.put("bytes", target.length());
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("The app could not be shared.", error);
+        }
+    }
+
+    private void copy(File from, File to) throws java.io.IOException {
+        try (java.io.InputStream in = new java.io.FileInputStream(from);
+             java.io.OutputStream out = new java.io.FileOutputStream(to)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
+            out.flush();
         }
     }
 

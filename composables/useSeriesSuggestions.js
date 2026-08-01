@@ -616,76 +616,6 @@ export const fetchSeriesInstallments = async (seriesName, seedBooks = [], needed
 // app open, so a series page rendered blank slots and only filled them after
 // its own fetch resolved — a visible wait for data already on disk. Hydrating
 // up front means the page paints from the store on first render.
-// Rosters shipped with the app (public/series-seed.json).
-//
-// Resolving a series costs a Goodreads scrape that is rate-limited per network,
-// or an AI call drawn from one shared quota — and every reader who owns a given
-// series pays that same cost to learn the same unchanging answer. Series that
-// have already been resolved and verified are therefore bundled, so a common
-// series is complete the moment the app opens: no network, no quota, no wait,
-// and it works offline.
-//
-// It is a SEED, not an authority: anything already on the device wins, and a
-// seeded series is a normal cache entry afterwards — the sweep can still top it
-// up or correct it. Regenerate with scripts/build-series-seed.mjs.
-let _seeded = false
-
-export const seedSeriesSuggestions = async () => {
-  if (_seeded || typeof localStorage === 'undefined' || typeof fetch !== 'function') return 0
-  _seeded = true
-
-  let payload = null
-  try {
-    const response = await fetch('/series-seed.json', { cache: 'force-cache' })
-    if (!response.ok) return 0
-    payload = await response.json()
-  } catch {
-    // No seed shipped, or unreadable — the normal resolution path still works.
-    return 0
-  }
-
-  const entries = Object.entries(payload?.series || {})
-  if (!entries.length) return 0
-
-  const store = useSuggestionsStore()
-  const next = { ...store.value }
-  let added = 0
-
-  for (const [key, series] of entries) {
-    const installments = series?.installments
-    if (!key || !installments || !Object.keys(installments).length) continue
-
-    // Merge rather than replace: the device's own resolutions are newer and
-    // came from this reader's own lookups, so they take precedence field by
-    // field. A seed only ever fills blanks.
-    let existing = null
-    try {
-      const raw = JSON.parse(localStorage.getItem(CACHE_PREFIX + key) || 'null')
-      existing = raw?.installments || null
-    } catch {
-      existing = null
-    }
-
-    const merged = mergeInstallments(existing || {}, installments)
-    if (existing && Object.keys(merged).length === Object.keys(existing).length) {
-      // Nothing gained; leave the stored entry (and its savedAt) untouched.
-      next[key] = merged
-      continue
-    }
-
-    try {
-      localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ savedAt: Date.now(), installments: merged }))
-    } catch {
-      // Quota — the store still gets it for this session.
-    }
-    next[key] = merged
-    added += 1
-  }
-
-  store.value = next
-  return added
-}
-
 export const hydrateSeriesSuggestions = () => {
   if (typeof localStorage === 'undefined') return 0
   const store = useSuggestionsStore()
@@ -1031,10 +961,6 @@ export const useSeriesSuggestions = (seriesNameRef) => {
   if (!_hydrated) {
     _hydrated = true
     hydrateSeriesSuggestions()
-    // Bundled rosters fill anything the device has never resolved. Not awaited:
-    // the page paints from what is already stored, and seeded series appear as
-    // soon as the file is read — which is local, so effectively immediately.
-    seedSeriesSuggestions().catch(() => {})
   }
   const installments = computed(() => store.value[normalizeSeriesKey(seriesNameRef?.value)] || {})
   return {

@@ -39,10 +39,12 @@
 import { computed } from 'vue'
 import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue'
 import { useBookishSettings } from '~/composables/useBookishSettings'
+import { useShareApp } from '~/composables/useShareApp'
 import { useToast } from '~/composables/useToast'
 
 const runtimeConfig = useRuntimeConfig()
 const { settings, updateSettings } = useBookishSettings()
+const { canShareApp, shareApp } = useShareApp()
 const { addToast } = useToast()
 const router = useRouter()
 const appVersion = computed(() => runtimeConfig.public.appVersion || '0.0.0')
@@ -52,6 +54,9 @@ const mobileSettingsRows = [
   { label: 'Preferences', icon: 'ri-edit-box-line', to: '/settings/preferences' },
   { label: 'Storage', icon: 'ri-database-2-line', to: '/settings/storage' },
   { label: 'Connection test', icon: 'ri-stethoscope-line', to: '/settings/connection' },
+  // Sideloaded app, so there is no store link to send — sharing means handing
+  // over the APK itself. Only offered where that is possible.
+  ...(canShareApp() ? [{ label: 'Share Pages', icon: 'ri-share-forward-line', type: 'share' }] : []),
   { label: 'About', icon: 'ri-information-line', to: '/settings/about' },
   { label: 'Privacy Policy', icon: 'ri-lock-line', to: '/settings/privacy' },
   { label: 'Support the Project', icon: 'ri-hand-heart-line', comingSoon: true },
@@ -61,9 +66,18 @@ const navigate = (path) => {
   router.push(path)
 }
 
-const handleSettingsRow = (row) => {
+const handleSettingsRow = async (row) => {
   if (row.type === 'theme') {
     setReaderTheme(settings.value.readerTheme === 'dark' ? 'light' : 'dark')
+    return
+  }
+
+  if (row.type === 'share') {
+    // Copying ~10MB before the sheet opens is quick but not instant, so say
+    // something rather than leaving the tap looking ignored.
+    addToast('Preparing the app file…', 'info')
+    const { ok, reason } = await shareApp()
+    if (!ok) addToast(reason, 'error')
     return
   }
 

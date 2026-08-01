@@ -1,5 +1,5 @@
 import { syncDeviceLibrary } from '~/composables/useDeviceLibrarySync'
-import { hydrateSeriesSuggestions, seedSeriesSuggestions } from '~/composables/useSeriesSuggestions'
+import { hydrateSeriesSuggestions } from '~/composables/useSeriesSuggestions'
 import { isNativeCapacitorPlatform } from '~/composables/useNativePlatform'
 
 // Repeating background scans keep the library current without reopening the
@@ -20,11 +20,6 @@ export default defineNuxtPlugin((nuxtApp) => {
     // waiting on its own lookup.
     nuxtApp.runWithContext(() => hydrateSeriesSuggestions())
 
-    // Then the rosters bundled with the app, for series this device has never
-    // resolved. At app start rather than on a series page, so the very first
-    // series a reader opens is already complete — the whole point is that a
-    // common series costs no lookup, no quota and no wait.
-    nuxtApp.runWithContext(() => seedSeriesSuggestions().catch(() => {}))
 
     // setTimeout drops the Nuxt context, and the sync uses useState-backed
     // composables — restore the context or every composable call throws.

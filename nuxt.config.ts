@@ -63,11 +63,18 @@ export default defineNuxtConfig({
       // is unreachable; every proposed title is then verified against the real
       // metadata providers before anything is stored.
       //
-      // Set these ONLY for native builds, and only knowingly: like the Books key
-      // above, anything public is baked into the APK and can be extracted. The
-      // server path (BOOKISH_AI_* / *_API_KEY without the NUXT_PUBLIC_ prefix)
-      // keeps the key server-side and is preferred wherever a server exists.
-      // Leaving these empty simply disables the fallback on device.
+      // LEAVE THESE EMPTY for any build that will be shared. The app can share
+      // its own APK (Settings → Share Pages), and anything public is baked into
+      // that file — so a key here is handed to every recipient, spending one
+      // quota between all of them and leaking a credential to strangers.
+      //
+      // The way this scales is apiBaseUrl above: point it at a deployment, keep
+      // the key server-side as GEMINI_API_KEY, and the server caches per SERIES
+      // so the hundredth reader to ask about a series costs nothing. Recipients
+      // then get the fallback with no configuration at all.
+      //
+      // Empty simply disables the on-device fallback: the Goodreads roster still
+      // resolves most series, so the app remains fully usable without it.
       aiSeriesProvider: process.env.NUXT_PUBLIC_AI_SERIES_PROVIDER || '',
       aiSeriesApiKey: process.env.NUXT_PUBLIC_AI_SERIES_API_KEY || '',
       aiSeriesModel: process.env.NUXT_PUBLIC_AI_SERIES_MODEL || '',
