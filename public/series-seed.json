@@ -277,6 +277,12 @@
   "grantcounty": {
    "name": "Grant County",
    "installments": {
+    "1": {
+     "title": "Blindsighted",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1390283925i/21718.jpg",
+     "year": 2001
+    },
     "2": {
      "title": "Kisscut",
      "author": "Karin Slaughter",
@@ -341,6 +347,874 @@
      "author": "Rebecca Yarros",
      "cover": "https://archive.org/services/img/untitled_20240321",
      "year": null
+    }
+   }
+  },
+  "wesleypeterson": {
+   "name": "Wesley Peterson",
+   "installments": {
+    "1": {
+     "title": "The Merchant's House",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1312013623i/530487.jpg",
+     "year": 1998
+    },
+    "2": {
+     "title": "The Armada Boy",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1311980321i/757722.jpg",
+     "year": 1999
+    },
+    "3": {
+     "title": "An Unhallowed Grave",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1312013813i/757723.jpg",
+     "year": 1999
+    },
+    "4": {
+     "title": "The Funeral Boat",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1312008615i/2564974.jpg",
+     "year": 2002
+    },
+    "5": {
+     "title": "The Bone Garden",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1311986295i/757726.jpg",
+     "year": 2007
+    },
+    "6": {
+     "title": "A Painted Doom",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1328819435i/3378412.jpg",
+     "year": 2002
+    },
+    "7": {
+     "title": "The Skeleton Room",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1328819418i/757724.jpg",
+     "year": 2003
+    },
+    "8": {
+     "title": "The Plague Maiden",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1328819419i/894245.jpg",
+     "year": 2004
+    },
+    "9": {
+     "title": "A Cursed Inheritance",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1328819421i/2182698.jpg",
+     "year": 2005
+    },
+    "10": {
+     "title": "The Marriage Hearse",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1348622832i/2180573.jpg",
+     "year": 2006
+    },
+    "11": {
+     "title": "The Shining Skull",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1178877196i/848456.jpg",
+     "year": 2007
+    },
+    "12": {
+     "title": "The Blood Pit",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1415580894i/4004291.jpg",
+     "year": 2008
+    },
+    "13": {
+     "title": "A Perfect Death",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1328821062i/4004303.jpg",
+     "year": 2009
+    },
+    "14": {
+     "title": "The Flesh Tailor",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1328821070i/7687156.jpg",
+     "year": 2010
+    },
+    "15": {
+     "title": "The Jackal Man",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1327958028i/9418825.jpg",
+     "year": 2011
+    },
+    "16": {
+     "title": "The Cadaver Game",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1333003105i/12034924.jpg",
+     "year": 2012
+    },
+    "17": {
+     "title": "The Shadow Collector",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1354327843i/16009523.jpg",
+     "year": 2013
+    },
+    "18": {
+     "title": "The Shroud Maker",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1384158465i/18595446.jpg",
+     "year": 2014
+    },
+    "19": {
+     "title": "The Death Season",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1399512617i/22051334.jpg",
+     "year": 2015
+    },
+    "20": {
+     "title": "The House of Eyes",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1441287110i/26218860.jpg",
+     "year": 2016
+    },
+    "21": {
+     "title": "The Mermaid's Scream",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1471285057i/30168744.jpg",
+     "year": 2017
+    },
+    "22": {
+     "title": "The Mechanical Devil",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1495993902i/35172119.jpg",
+     "year": 2018
+    },
+    "23": {
+     "title": "Dead Man's Lane",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1538184267i/42092410.jpg",
+     "year": 2019
+    },
+    "24": {
+     "title": "The Burial Circle",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1568303555i/44153053.jpg",
+     "year": 2020
+    },
+    "25": {
+     "title": "The Stone Chamber",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1620978333i/56177462.jpg",
+     "year": 2021
+    },
+    "26": {
+     "title": "Serpent's Point",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1644880302i/60417730.jpg",
+     "year": 2022
+    },
+    "27": {
+     "title": "The Killing Place",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1673242588i/75667994.jpg",
+     "year": 2024
+    },
+    "28": {
+     "title": "Coffin Island",
+     "author": "Kate Ellis",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1718473432i/198296831.jpg",
+     "year": 2024
+    }
+   }
+  },
+  "hierarchy": {
+   "name": "Hierarchy",
+   "installments": {
+    "1": {
+     "title": "The Will of the Many",
+     "author": "James Islington",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1670363463i/58416952.jpg",
+     "year": 2023
+    },
+    "2": {
+     "title": "The Strength of the Few",
+     "author": "James Islington",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1742965949i/169485073.jpg",
+     "year": 2025
+    },
+    "3": {
+     "title": "The Justice of One",
+     "author": "James Islington",
+     "cover": "https://archive.org/services/img/lawinterstatere00scotgoog",
+     "year": 2027
+    }
+   }
+  },
+  "lucasdavenport": {
+   "name": "Lucas Davenport",
+   "installments": {
+    "1": {
+     "title": "Rules of Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1442064932i/37301.jpg",
+     "year": 1989
+    },
+    "2": {
+     "title": "Shadow Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1422410645i/168571.jpg",
+     "year": 1990
+    },
+    "3": {
+     "title": "Eyes of Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1400408527i/37297.jpg",
+     "year": 1991
+    },
+    "4": {
+     "title": "Silent Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1309286873i/37303.jpg",
+     "year": 1992
+    },
+    "5": {
+     "title": "Winter Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1764799108i/37304.jpg",
+     "year": 1993
+    },
+    "6": {
+     "title": "Night Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1341920902i/37296.jpg",
+     "year": 1994
+    },
+    "7": {
+     "title": "Mind Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1435027890i/37298.jpg",
+     "year": 1995
+    },
+    "8": {
+     "title": "Sudden Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1388204671i/168569.jpg",
+     "year": 1996
+    },
+    "9": {
+     "title": "Secret Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1348127756i/216131.jpg",
+     "year": 1998
+    },
+    "10": {
+     "title": "Certain Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1348125158i/37302.jpg",
+     "year": 1999
+    },
+    "11": {
+     "title": "Easy Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1348124039i/6838.jpg",
+     "year": 2000
+    },
+    "12": {
+     "title": "Chosen Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1434789948i/14785.jpg",
+     "year": 2001
+    },
+    "13": {
+     "title": "Mortal Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1421292490i/85310.jpg",
+     "year": 2002
+    },
+    "14": {
+     "title": "Naked Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1348906827i/168568.jpg",
+     "year": 2003
+    },
+    "15": {
+     "title": "Hidden Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1428363059i/888927.jpg",
+     "year": 2004
+    },
+    "16": {
+     "title": "Broken Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1388245666i/37300.jpg",
+     "year": 2005
+    },
+    "17": {
+     "title": "Invisible Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1442274826i/22411.jpg",
+     "year": 2007
+    },
+    "18": {
+     "title": "Phantom Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1440350367i/2014625.jpg",
+     "year": 2008
+    },
+    "19": {
+     "title": "Wicked Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1439318672i/5867331.jpg",
+     "year": 2009
+    },
+    "20": {
+     "title": "Storm Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1272913373i/6878614.jpg",
+     "year": 2010
+    },
+    "21": {
+     "title": "Buried Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1439147974i/9440448.jpg",
+     "year": 2011
+    },
+    "22": {
+     "title": "Stolen Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1391798162i/13093001.jpg",
+     "year": 2012
+    },
+    "23": {
+     "title": "Silken Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1355077509i/16158527.jpg",
+     "year": 2012
+    },
+    "24": {
+     "title": "Field of Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1382035214i/18667817.jpg",
+     "year": 2014
+    },
+    "25": {
+     "title": "Gathering Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1417985559i/23281640.jpg",
+     "year": 2015
+    },
+    "26": {
+     "title": "Extreme Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1438630553i/26025992.jpg",
+     "year": 2016
+    },
+    "27": {
+     "title": "Golden Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1471281757i/31379212.jpg",
+     "year": 2017
+    },
+    "28": {
+     "title": "Twisted Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1504364758i/36168749.jpg",
+     "year": 2018
+    },
+    "29": {
+     "title": "Neon Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1532908075i/40982957.jpg",
+     "year": 2019
+    },
+    "30": {
+     "title": "Masked Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1567045656l/52752171.jpg",
+     "year": 2020
+    },
+    "31": {
+     "title": "Ocean Prey",
+     "author": "John Sandford",
+     "cover": "https://books.google.com/books/content?id=3J0jEAAAQBAJ&printsec=frontcover&img=1&zoom=6&source=gbs_api",
+     "year": 2021
+    },
+    "32": {
+     "title": "Righteous Prey",
+     "author": "John Sandford",
+     "cover": "https://books.google.com/books/content?id=pahXEAAAQBAJ&printsec=frontcover&img=1&zoom=6&source=gbs_api",
+     "year": 2022
+    },
+    "33": {
+     "title": "Judgment Prey",
+     "author": "John Sandford",
+     "cover": "https://books.google.com/books/content?id=dm8GEQAAQBAJ&printsec=frontcover&img=1&zoom=6&source=gbs_api",
+     "year": 2023
+    },
+    "34": {
+     "title": "Toxic Prey",
+     "author": "John Sandford",
+     "cover": "https://books.google.com/books/content?id=zEoSEQAAQBAJ&printsec=frontcover&img=1&zoom=6&source=gbs_api",
+     "year": 2024
+    },
+    "36": {
+     "title": "Revenge Prey",
+     "author": "John Sandford",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1767833525i/238228541.jpg",
+     "year": 2026
+    }
+   }
+  },
+  "redrising": {
+   "name": "Red Rising",
+   "installments": {
+    "1": {
+     "title": "Red Rising",
+     "author": "Pierce Brown",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1461354651i/15839976.jpg",
+     "year": 2014
+    },
+    "2": {
+     "title": "Golden Son",
+     "author": "Pierce Brown",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1394684475i/18966819.jpg",
+     "year": 2015
+    },
+    "3": {
+     "title": "Morning Star",
+     "author": "Pierce Brown",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1461354277i/18966806.jpg",
+     "year": 2016
+    },
+    "4": {
+     "title": "Iron Gold",
+     "author": "Pierce Brown",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1716325988i/33257757.jpg",
+     "year": 2018
+    },
+    "5": {
+     "title": "Dark Age",
+     "author": "Pierce Brown",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1525464420i/29226553.jpg",
+     "year": 2019
+    },
+    "6": {
+     "title": "Light Bringer",
+     "author": "Pierce Brown",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1667655583i/29227774.jpg",
+     "year": 2023
+    },
+    "7": {
+     "title": "Red God",
+     "author": "Pierce Brown",
+     "cover": "https://s.gr-assets.com/assets/facebook/goodreads_wide-e23f6858b6bf20dcaf8493237a214a0e.png",
+     "year": 2017
+    }
+   }
+  },
+  "lordsoftemptation": {
+   "name": "Lords of Temptation",
+   "installments": {
+    "1": {
+     "title": "A Bet with a Baron",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1668141219i/63274996.jpg",
+     "year": 2022
+    },
+    "2": {
+     "title": "A Romp with a Rogue",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1674501415i/84056225.jpg",
+     "year": 2023
+    },
+    "3": {
+     "title": "A Score with a Scoundrel",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1674603515i/85127682.jpg",
+     "year": 2023
+    },
+    "4": {
+     "title": "A Bargain with a Beast",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1677622561i/123078102.jpg",
+     "year": 2023
+    },
+    "5": {
+     "title": "A Wager With an Earl",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1682069207i/123522330.jpg",
+     "year": 2023
+    },
+    "6": {
+     "title": "A Rendezvous with a Rake",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1682314109i/128459695.jpg",
+     "year": 2023
+    },
+    "7": {
+     "title": "A Deal With a Duke",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1698472749i/200871977.jpg",
+     "year": 2023
+    },
+    "8": {
+     "title": "A Masquerade With a Marquess",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1695570098i/199127514.jpg",
+     "year": 2023
+    },
+    "9": {
+     "title": "A Vengeful Viscount",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1710803681i/201509441.jpg",
+     "year": 2024
+    },
+    "11": {
+     "title": "A Devilish Duke",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1712678209i/203798631.jpg",
+     "year": null
+    },
+    "22": {
+     "title": "Marquess of Fortune",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1656439266i/61365954.jpg",
+     "year": null
+    }
+   }
+  },
+  "annlindell": {
+   "name": "Ann Lindell",
+   "installments": {
+    "4": {
+     "title": "The Princess of Burundi",
+     "author": "Kjell Eriksson",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1317793080i/491922.jpg",
+     "year": 2002
+    },
+    "8": {
+     "title": "The Night of the Fire",
+     "author": "Kjell Eriksson",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1598247032i/49127428.jpg",
+     "year": 2019
+    },
+    "9": {
+     "title": "The Deathwatch Beetle",
+     "author": "Kjell Eriksson",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1630356218i/56268948.jpg",
+     "year": 2020
+    },
+    "13": {
+     "title": "Ett dödligt tillstånd",
+     "author": "Kjell Eriksson",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1635724257i/59498605.jpg",
+     "year": 2021
+    }
+   }
+  },
+  "percyjacksonandtheolympians": {
+   "name": "Percy Jackson and the Olympians",
+   "installments": {
+    "1": {
+     "title": "The Lightning Thief",
+     "author": "Rick Riordan",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1684776677i/123675190.jpg",
+     "year": 2005
+    },
+    "2": {
+     "title": "The Sea of Monsters",
+     "author": "Rick Riordan",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1530819367i/40727118.jpg",
+     "year": 2006
+    },
+    "3": {
+     "title": "The Titan’s Curse",
+     "author": "Rick Riordan",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1361038385i/561456.jpg",
+     "year": 2007
+    },
+    "4": {
+     "title": "The Battle of the Labyrinth",
+     "author": "Rick Riordan",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1355333381i/8130423.jpg",
+     "year": 2008
+    },
+    "5": {
+     "title": "The Last Olympian",
+     "author": "Rick Riordan",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1723393514i/4556058.jpg",
+     "year": 2009
+    }
+   }
+  },
+  "thebloodsworn": {
+   "name": "The Bloodsworn",
+   "installments": {
+    "1": {
+     "title": "The Shadow of the Gods",
+     "author": "John Gwynne",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1610375894i/52694527.jpg",
+     "year": 2021
+    },
+    "2": {
+     "title": "The Hunger of the Gods",
+     "author": "John Gwynne",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1639404608i/57341045.jpg",
+     "year": 2022
+    },
+    "3": {
+     "title": "The Fury of the Gods",
+     "author": "John Gwynne",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1711655158i/61755703.jpg",
+     "year": 2024
+    }
+   }
+  },
+  "theinheritancecycle": {
+   "name": "The Inheritance Cycle",
+   "installments": {
+    "1": {
+     "title": "Eragon",
+     "author": "Christopher Paolini",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1366212852i/113436.jpg",
+     "year": 2002
+    },
+    "2": {
+     "title": "Eldest",
+     "author": "Christopher Paolini",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1387119654i/45978.jpg",
+     "year": 2005
+    },
+    "3": {
+     "title": "Brisingr",
+     "author": "Christopher Paolini",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1661030683i/2248573.jpg",
+     "year": 2008
+    },
+    "4": {
+     "title": "Inheritance",
+     "author": "Christopher Paolini",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1390886502i/7664041.jpg",
+     "year": 2011
+    },
+    "5": {
+     "title": "Murtagh",
+     "author": "Christopher Paolini",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1678290705i/123206298.jpg",
+     "year": 2023
+    },
+    "8": {
+     "title": "ブリジンガー―炎に誓う絆〈1〉",
+     "author": "Christopher Paolini",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1592843318i/11058189.jpg",
+     "year": 2010
+    },
+    "9": {
+     "title": "ブリジンガー―炎に誓う絆〈2〉",
+     "author": "Christopher Paolini",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1592868108i/11058188.jpg",
+     "year": 2010
+    },
+    "10": {
+     "title": "ブリジンガー―炎に誓う絆〈3〉",
+     "author": "Christopher Paolini",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1592868033i/11058187.jpg",
+     "year": 2010
+    },
+    "11": {
+     "title": "ブリジンガー―炎に誓う絆〈4〉",
+     "author": "Christopher Paolini",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1592867957i/11058186.jpg",
+     "year": 2010
+    }
+   }
+  },
+  "poweroffive": {
+   "name": "Power of Five",
+   "installments": {
+    "1": {
+     "title": "Raven's Gate",
+     "author": "Anthony Horowitz",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1328842690i/107664.jpg",
+     "year": 2005
+    },
+    "2": {
+     "title": "Evil Star",
+     "author": "Anthony Horowitz",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1388447187i/107670.jpg",
+     "year": 2006
+    },
+    "3": {
+     "title": "Nightrise",
+     "author": "Anthony Horowitz",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1425529867i/107669.jpg",
+     "year": 2007
+    },
+    "4": {
+     "title": "Necropolis",
+     "author": "Anthony Horowitz",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1348477584i/2870651.jpg",
+     "year": 2008
+    },
+    "5": {
+     "title": "Oblivion",
+     "author": "Anthony Horowitz",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1334922116i/13343752.jpg",
+     "year": 2012
+    }
+   }
+  },
+  "harryhole": {
+   "name": "Harry Hole",
+   "installments": {
+    "1": {
+     "title": "Flaggermusmannen",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1236348090i/1991039.jpg",
+     "year": 1997
+    },
+    "2": {
+     "title": "Cockroaches",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1418343189i/18373214.jpg",
+     "year": 1998
+    },
+    "3": {
+     "title": "The Redbreast",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1320540474i/465226.jpg",
+     "year": 2000
+    },
+    "4": {
+     "title": "Nemesis",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1348360176i/6979826.jpg",
+     "year": 2002
+    },
+    "5": {
+     "title": "The Devil's Star",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1328611163i/498389.jpg",
+     "year": 2003
+    },
+    "6": {
+     "title": "The Redeemer",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1483116047i/33641782.jpg",
+     "year": 2005
+    },
+    "7": {
+     "title": "The Snowman",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1355881478i/9572203.jpg",
+     "year": 2007
+    },
+    "8": {
+     "title": "The Leopard",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1413045306i/23355220.jpg",
+     "year": 2009
+    },
+    "9": {
+     "title": "Phantom",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1333577303i/13256064.jpg",
+     "year": 2011
+    },
+    "10": {
+     "title": "Police",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1373049226i/18142329.jpg",
+     "year": 2013
+    },
+    "11": {
+     "title": "The Thirst",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1493126601i/32775291.jpg",
+     "year": 2017
+    },
+    "12": {
+     "title": "Knife",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1546362399i/40874878.jpg",
+     "year": 2019
+    },
+    "13": {
+     "title": "Killing Moon",
+     "author": "Jo Nesbø",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1684817086i/62312588.jpg",
+     "year": 2022
+    }
+   }
+  },
+  "fallen": {
+   "name": "Fallen",
+   "installments": {
+    "1": {
+     "title": "Fallen",
+     "author": "Lauren Kate",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1440619649i/6487308.jpg",
+     "year": 2009
+    },
+    "2": {
+     "title": "Torment",
+     "author": "Lauren Kate",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1362339749i/7740152.jpg",
+     "year": 2010
+    },
+    "3": {
+     "title": "Passion",
+     "author": "Lauren Kate",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1362339802i/9369720.jpg",
+     "year": 2011
+    },
+    "4": {
+     "title": "Rapture",
+     "author": "Lauren Kate",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1362339818i/12716010.jpg",
+     "year": 2012
+    },
+    "5": {
+     "title": "Unforgiven",
+     "author": "Lauren Kate",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1432630800i/24909485.jpg",
+     "year": 2015
+    }
+   }
+  },
+  "andreaoliver": {
+   "name": "Andrea Oliver",
+   "installments": {
+    "1": {
+     "title": "Pieces of Her",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1523035426i/35887251.jpg",
+     "year": 2018
+    },
+    "2": {
+     "title": "Girl, Forgotten",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1653943157i/59445976.jpg",
+     "year": 2022
+    }
+   }
+  },
+  "thebloodswornsaga": {
+   "name": "The Bloodsworn Saga",
+   "installments": {
+    "1": {
+     "title": "The Shadow of the Gods",
+     "author": "John Gwynne",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1610375894i/52694527.jpg",
+     "year": 2021
+    },
+    "2": {
+     "title": "The Hunger of the Gods",
+     "author": "John Gwynne",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1639404608i/57341045.jpg",
+     "year": 2022
+    },
+    "3": {
+     "title": "The Fury of the Gods",
+     "author": "John Gwynne",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1711655158i/61755703.jpg",
+     "year": 2024
     }
    }
   }
