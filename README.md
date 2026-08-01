@@ -134,7 +134,10 @@ sign a "lineage" authorising the new key; a release APK carrying that lineage
 installs straight over the debug-signed app, keeping everything.
 
 ```bash
-# 1. Create the release keystore (once). Pick your own password.
+# 1. Create the release keystore (once), from the repo root. Pick your own
+#    password. keytool ships inside a JDK and is usually NOT on PATH — on
+#    Windows use the one bundled with Android Studio:
+#      "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe"
 keytool -genkeypair -v -keystore android/bookish-release.jks \
   -alias bookish -keyalg RSA -keysize 4096 -validity 10000
 

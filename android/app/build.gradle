@@ -113,7 +113,11 @@ android {
     signingConfigs {
         if (project.ext.hasReleaseSigning) {
             release {
-                storeFile file(project.ext.releaseStoreFile)
+                // rootProject.file, NOT file(): this script is the :app module,
+                // so a relative path here would resolve under android/app/ while
+                // keystore.properties sits — and is naturally written relative
+                // to — android/. Absolute paths pass through unchanged.
+                storeFile rootProject.file(project.ext.releaseStoreFile)
                 storePassword project.ext.releaseStorePassword
                 keyAlias project.ext.releaseKeyAlias
                 keyPassword project.ext.releaseKeyPassword

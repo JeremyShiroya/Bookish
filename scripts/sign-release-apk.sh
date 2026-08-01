@@ -18,8 +18,10 @@
 # key and the lineage travels with every build.
 #
 # USAGE
-#   1. Create a release keystore (once). Choose your own password; it is never
-#      stored in this repo:
+#   1. Create a release keystore (once), from the repo root. Choose your own
+#      password; it is never stored in this repo. keytool lives inside a JDK and
+#      is usually not on PATH — on Windows use Android Studio's copy at
+#      "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe":
 #        keytool -genkeypair -v -keystore android/bookish-release.jks \
 #          -alias bookish -keyalg RSA -keysize 4096 -validity 10000
 #
@@ -41,6 +43,33 @@ RELEASE_ALIAS="${RELEASE_ALIAS:-bookish}"
 LINEAGE="${LINEAGE:-$ROOT/android/signing-lineage.bin}"
 
 die() { printf '\n  x %s\n\n' "$1" >&2; exit 1; }
+
+# apksigner is a Java program, so it needs a JDK — and on a normal Android dev
+# machine there is one (Android Studio bundles it) that is simply not on PATH.
+# Finding it here means this script works out of the box instead of failing with
+# "JAVA_HOME is not set" in the middle of a signing run.
+ensure_java() {
+  if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then return; fi
+  if command -v java >/dev/null 2>&1; then return; fi
+
+  local candidate
+  for candidate in \
+    "/c/Program Files/Android/Android Studio/jbr" \
+    "/c/Program Files/Android/Android Studio/jre" \
+    "/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+    "/opt/android-studio/jbr" \
+    "$HOME/Android/Studio/jbr"
+  do
+    if [ -x "$candidate/bin/java" ] || [ -x "$candidate/bin/java.exe" ]; then
+      export JAVA_HOME="$candidate"
+      return
+    fi
+  done
+
+  die "No Java found. Install a JDK, or set JAVA_HOME (Android Studio bundles one, e.g. 'C:\\Program Files\\Android\\Android Studio\\jbr')."
+}
+
+ensure_java
 
 find_tool() {
   local name="$1"
