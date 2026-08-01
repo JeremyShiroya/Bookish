@@ -174,6 +174,29 @@ in-app JSON export does not:
 adb exec-out "run-as com.bookish.app tar -cf - ." > bookish-appdata.tar
 ```
 
+### Development builds install alongside, not over
+
+Once the signing key has been rotated, the installed app trusts the release key
+and a debug-signed build can no longer replace it — rotation is one-way, and the
+protection that let the release build land without an uninstall works in reverse.
+
+So debug builds carry `applicationIdSuffix ".debug"`: they install as a second
+app (`com.bookish.app.debug`, shown as **Pages Dev**) with their own data
+directory. The real library is never at risk from a development build, and
+because the dev build is still debuggable, WebView inspection over
+`chrome://inspect` keeps working there.
+
+```bash
+cd android && ./gradlew assembleDebug     # -> Pages Dev, alongside the real app
+adb install -r -t app/build/outputs/apk/debug/app-debug.apk
+```
+
+The two never collide: the FileProvider authority is `${applicationId}.fileprovider`
+and `ApkInstallerPlugin` reads `getPackageName()`, so both follow the suffix.
+`package_name` and `custom_url_scheme` are literals in `main/res`, so they are
+overridden for the variant in `android/app/src/debug/res/values/strings.xml` —
+without that, the dev build would claim the real app's custom url scheme.
+
 ### Sideloaded update checks
 
 Pages APKs install outside the Play Store, so nothing tells a user a newer build

@@ -131,6 +131,24 @@ android {
     }
 
     buildTypes {
+        // Development builds install ALONGSIDE the real app rather than over it.
+        //
+        // Signing keys were rotated (debug -> release), and rotation is one-way:
+        // the installed app now trusts the release key, so a debug-signed build
+        // can no longer replace it — the same protection that let the release
+        // build land without an uninstall works in reverse. Giving debug its own
+        // applicationId sidesteps that entirely: two apps, two data directories,
+        // and the reading library is never at risk from a development build.
+        //
+        // Nothing here is hardcoded to the id: the FileProvider authority is
+        // ${applicationId}.fileprovider and ApkInstallerPlugin reads
+        // getPackageName(), so both follow the suffix. The Capacitor strings
+        // that DO name the package are overridden in src/debug/res.
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-dev"
+        }
+
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

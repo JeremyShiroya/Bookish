@@ -1,0 +1,19 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!--
+  Debug-variant overrides. A build-type source set replaces same-named resources
+  from main, so these apply only to the development build.
+
+  The debug build carries applicationIdSuffix ".debug" so it installs alongside
+  the real app instead of fighting it for the same package. package_name and
+  custom_url_scheme are written out in main/res as literals rather than derived
+  from the applicationId, so without these two the development build would claim
+  the real app's url scheme and report the wrong package to Capacitor.
+
+  app_name is distinct purely so the two are tellable apart in the launcher.
+-->
+<resources>
+    <string name="app_name">Pages Dev</string>
+    <string name="title_activity_main">Pages Dev</string>
+    <string name="package_name">com.bookish.app.debug</string>
+    <string name="custom_url_scheme">com.bookish.app.debug</string>
+</resources>
