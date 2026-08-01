@@ -28,7 +28,11 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   showStreak: true,                // reading-streak pill in the top nav
   formatFilter: 'all',             // 'all' | 'pdf' | 'epub' — legacy, see useLibraryFilters
   hideContent: false,              // preview the app as though the library were empty
-  seriesSuggestions: false,        // show the series installments you don't own yet
+  // Show the series installments you don't own yet. ON by default: it is the
+  // answer to "which book do I read next", it needs no setup, and a reader who
+  // never opens Preferences would otherwise never discover it exists. Resolution
+  // is cached and happens in the background, so it costs nothing visible.
+  seriesSuggestions: true,
   // Which formats the app handles AT ALL. Removing one is not a filter: those
   // books are purged from the library and the device scanner stops detecting
   // that extension, so the app really does become an EPUB-only (or PDF-only)
@@ -212,7 +216,12 @@ export function normalizeBookishSettings(value) {
       ? source.formatFilter
       : DEFAULT_BOOKISH_SETTINGS.formatFilter,
     hideContent: source.hideContent === true,
-    seriesSuggestions: source.seriesSuggestions === true,
+    // undefined means "never chosen", which must fall through to the default —
+    // `=== true` would pin every existing install to off no matter what the
+    // default says, so flipping the default alone would change nothing.
+    seriesSuggestions: source.seriesSuggestions === undefined
+      ? DEFAULT_BOOKISH_SETTINGS.seriesSuggestions
+      : source.seriesSuggestions !== false,
     enabledFormats: normalizeEnabledFormats(source.enabledFormats),
     formatChoiceMade: source.formatChoiceMade === true,
   }

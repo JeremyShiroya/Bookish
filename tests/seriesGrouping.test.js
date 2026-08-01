@@ -39,12 +39,18 @@ describe('library series grouping', () => {
 describe('series suggestion placeholders', () => {
   const read = (file) => readFileSync(resolve(process.cwd(), file), 'utf8')
 
-  test('the preference is defined and defaults to off', () => {
-    expect(DEFAULT_BOOKISH_SETTINGS.seriesSuggestions).toBe(false)
-    expect(normalizeBookishSettings({}).seriesSuggestions).toBe(false)
+  test('the preference is on by default, and opting out is respected', () => {
+    // On by default: it answers "which book next", needs no setup, and a reader
+    // who never opens Preferences would otherwise never learn it exists.
+    expect(DEFAULT_BOOKISH_SETTINGS.seriesSuggestions).toBe(true)
+    // Never chosen -> the default applies. This is the case that matters: with
+    // a strict `=== true` check here, every existing install would stay off
+    // however the default was written.
+    expect(normalizeBookishSettings({}).seriesSuggestions).toBe(true)
+    expect(normalizeBookishSettings({ seriesSuggestions: undefined }).seriesSuggestions).toBe(true)
+    // An explicit choice always wins, in both directions.
+    expect(normalizeBookishSettings({ seriesSuggestions: false }).seriesSuggestions).toBe(false)
     expect(normalizeBookishSettings({ seriesSuggestions: true }).seriesSuggestions).toBe(true)
-    // Anything other than a real `true` stays off.
-    expect(normalizeBookishSettings({ seriesSuggestions: 'yes' }).seriesSuggestions).toBe(false)
   })
 
   test('the series detail page renders placeholders in installment order', () => {
