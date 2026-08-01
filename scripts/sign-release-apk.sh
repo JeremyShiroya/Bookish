@@ -83,6 +83,28 @@ find_tool() {
 APKSIGNER="$(find_tool apksigner)"
 ZIPALIGN="$(find_tool zipalign)"
 
+# Passwords, when android/keystore.properties already holds them.
+#
+# apksigner otherwise prompts, which is fine by hand but makes this unusable
+# from a build script. They are passed as `env:` references rather than on the
+# command line, so they never appear in argv, in `ps`, or in shell history.
+# Without the file, the prompts still happen exactly as before.
+KEYSTORE_PROPS="$ROOT/android/keystore.properties"
+PASS_ARGS_NEW=()
+if [ -f "$KEYSTORE_PROPS" ]; then
+  BOOKISH_STORE_PASS="$(sed -n 's/^storePassword=//p' "$KEYSTORE_PROPS" | tr -d '\r')"
+  BOOKISH_KEY_PASS="$(sed -n 's/^keyPassword=//p' "$KEYSTORE_PROPS" | tr -d '\r')"
+  ALIAS_FROM_PROPS="$(sed -n 's/^keyAlias=//p' "$KEYSTORE_PROPS" | tr -d '\r')"
+  [ -n "$ALIAS_FROM_PROPS" ] && RELEASE_ALIAS="$ALIAS_FROM_PROPS"
+  if [ -n "$BOOKISH_STORE_PASS" ]; then
+    export BOOKISH_STORE_PASS BOOKISH_KEY_PASS
+    PASS_ARGS_NEW=(--ks-pass "env:BOOKISH_STORE_PASS")
+    [ -n "$BOOKISH_KEY_PASS" ] && PASS_ARGS_NEW+=(--key-pass "env:BOOKISH_KEY_PASS")
+  fi
+fi
+# The debug keystore password is the documented public default, not a secret.
+PASS_ARGS_OLD=(--ks-pass "pass:android" --key-pass "pass:android")
+
 case "${1:-}" in
   rotate)
     [ -f "$DEBUG_KEYSTORE" ] || die "No debug keystore at $DEBUG_KEYSTORE — nothing to rotate FROM."
@@ -120,8 +142,8 @@ case "${1:-}" in
     # the old key authorised the new one.
     "$APKSIGNER" sign \
       --lineage "$LINEAGE" \
-      --ks "$DEBUG_KEYSTORE" --ks-key-alias androiddebugkey \
-      --next-signer --ks "$RELEASE_KEYSTORE" --ks-key-alias "$RELEASE_ALIAS" \
+      --ks "$DEBUG_KEYSTORE" --ks-key-alias androiddebugkey "${PASS_ARGS_OLD[@]}" \
+      --next-signer --ks "$RELEASE_KEYSTORE" --ks-key-alias "$RELEASE_ALIAS" "${PASS_ARGS_NEW[@]}" \
       --out "$OUT" \
       "$ALIGNED"
 
