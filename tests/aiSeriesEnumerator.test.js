@@ -349,9 +349,17 @@ describe('years corroborate a placement when no provider will state one', () => 
     expect(yearFitsBetweenAnchors({ installment: 31, year: 2020, anchors })).toBe(true)
   })
 
-  test('too little dated history to judge means no', () => {
-    expect(yearFitsBetweenAnchors({ installment: 3, year: 2001, anchors: { 1: { year: 1999 } } })).toBe(false)
+  test('a single dated anchor is enough to place a book against', () => {
+    // Often all there is: the reader owns one book of a series whose roster
+    // could not be fetched. Book 3 published after book 1 is consistent...
+    expect(yearFitsBetweenAnchors({ installment: 3, year: 2001, anchors: { 1: { year: 1999 } } })).toBe(true)
+    // ...and before it is not.
+    expect(yearFitsBetweenAnchors({ installment: 3, year: 1998, anchors: { 1: { year: 1999 } } })).toBe(false)
+  })
+
+  test('with nothing dated at all there is nothing to judge against', () => {
     expect(yearFitsBetweenAnchors({ installment: 3, year: 2001, anchors: {} })).toBe(false)
+    expect(yearFitsBetweenAnchors({ installment: 3, year: 2001, anchors: { 1: {} } })).toBe(false)
   })
 
   test('a missing or absurd year is never corroboration', () => {

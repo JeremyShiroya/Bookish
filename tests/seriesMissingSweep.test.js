@@ -185,6 +185,20 @@ describe('the two-phase sweep is wired correctly', () => {
     expect(suggestions).toMatch(/if \(!anchored \|\| !books\?\.length\) return \{\}/)
   })
 
+  test('an empty roster does not lock the AI out — owned books are anchors too', () => {
+    // The bug this guards: anchors were built only from the roster cache, so a
+    // series Goodreads refused outright had ZERO anchors, the model was never
+    // asked, and the series stayed blank forever — precisely the case the
+    // fallback exists for. The reader's own shelf carries a verified title,
+    // installment and year, which is the best anchor available.
+    expect(suggestions).toMatch(/for \(const book of seedBooks \|\| \[\]\)/)
+    expect(suggestions).toContain('anchors[installment] = book.title')
+    expect(suggestions).toContain('MIN_AI_ANCHORS = 1')
+    // Each confirmed book then constrains the next, so one owned book can
+    // bootstrap a whole series.
+    expect(suggestions).toContain('dateAnchors[installment] = { year: resolvedYear }')
+  })
+
   test('the AI fallback runs both on demand and in the background, but is rate-limited', () => {
     // The visible sweep uses it for installments the roster never named.
     expect(suggestions).toMatch(/const rosterGaps = missing\.filter/)

@@ -134,7 +134,9 @@ Author: ${author || 'unknown'}
 
 ${knownLines.length ? `Books already confirmed (these MUST appear at these exact numbers):\n${knownLines.join('\n')}` : 'No confirmed books are available.'}
 
-${wanted.length ? `Numbers still needed: ${wanted.join(', ')}` : 'Return the complete series.'}
+Return the COMPLETE series, including the confirmed books above — listing them
+back is how the answer is checked, and an answer that omits them is discarded.
+${wanted.length ? `The numbers still missing are: ${wanted.join(', ')}.` : ''}
 
 Rules:
 - Return only JSON of the shape {"books":[{"installment":1,"title":"...","year":1989}]}.

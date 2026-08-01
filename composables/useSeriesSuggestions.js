@@ -315,8 +315,11 @@ export const yearFitsBetweenAnchors = ({ installment, year, anchors = {} } = {})
       && number !== slot
     ))
 
-  // Two dated books is the least that can establish a direction of travel.
-  if (known.length < 2) return false
+  // One dated book is enough to place another relative to it, and it is often
+  // all there is: a reader owning a single book of a series whose roster could
+  // not be fetched. Each book resolved during a sweep becomes an anchor for the
+  // next, so the constraint tightens as it goes rather than staying at one.
+  if (!known.length) return false
 
   for (const [number, entryYear] of known) {
     // Earlier books cannot be published after this one, later ones cannot come
@@ -332,7 +335,12 @@ export const yearFitsBetweenAnchors = ({ installment, year, anchors = {} } = {})
 // used for writes. The model's contribution is POSITION — which title sits at
 // which number — and anchors are the only way to check it got positions right.
 // With too few, a plausible-but-shifted ordering would be undetectable.
-const MIN_AI_ANCHORS = 2
+// One is enough now that a book the reader OWNS counts: a model that cannot
+// place their own book at the number their own library records is plainly not
+// recalling this series, and every proposal is provider-verified afterwards
+// regardless. Requiring two locked out every series where the reader owns a
+// single book and Goodreads was unreachable — which is most of them.
+const MIN_AI_ANCHORS = 1
 
 // A 40-book roster would make an unwieldy URL and a needlessly expensive prompt,
 // so the model gets an evenly-spread SAMPLE of the confirmed books. Spread
@@ -371,11 +379,28 @@ export const resolveGapsWithAi = async ({
   const gaps = (missing || []).filter((installment) => !cached[installment]?.title)
   if (!seriesName || !gaps.length) return {}
 
-  // Anchors: what the roster already told us, which both steers the model and
-  // catches it when it is reconstructing rather than recalling.
+  // Anchors steer the model and catch it when it is reconstructing rather than
+  // recalling. They come from BOTH the roster and the books the reader owns.
+  //
+  // Owning books used to be ignored here, and that was the bug that made this
+  // whole fallback useless in exactly the case it exists for: when Goodreads
+  // refuses outright the roster cache is EMPTY, so there were no anchors, so the
+  // model was never asked, so the series stayed blank forever. Meanwhile the
+  // reader's own shelf held the best anchor available — a title, an installment
+  // and a year that came from a provider and that they can see is right.
   const anchors = {}
+  const dateAnchors = {}
   for (const [installment, entry] of Object.entries(cached)) {
     if (entry?.title) anchors[installment] = entry.title
+    if (entry?.year) dateAnchors[installment] = { year: entry.year }
+  }
+  for (const book of seedBooks || []) {
+    const installment = Number(book?.seriesInstallment)
+    if (!Number.isSafeInteger(installment) || installment < 1) continue
+    // The reader's own record wins over the roster: it is what they see.
+    if (book.title) anchors[installment] = book.title
+    const year = Number(book.publishYear)
+    if (Number.isFinite(year) && year > 1400) dateAnchors[installment] = { year }
   }
   if (Object.keys(anchors).length < MIN_AI_ANCHORS) return {}
 
@@ -434,7 +459,7 @@ export const resolveGapsWithAi = async ({
           found
           && Number.isFinite(providerYear)
           && wanted.has(candidate)
-          && yearFitsBetweenAnchors({ installment: candidate, year: providerYear, anchors: cached })
+          && yearFitsBetweenAnchors({ installment: candidate, year: providerYear, anchors: dateAnchors })
         ) {
           match = found
           installment = candidate
@@ -454,6 +479,13 @@ export const resolveGapsWithAi = async ({
         year: Number(match.publishYear) || proposal.year || null,
       }
       placed.add(proposedKey)
+      // Each confirmed book tightens the constraint on the ones still to come:
+      // a series resolved from one owned book ends up fully bracketed by the
+      // time it reaches the end, rather than judged against that single date.
+      const resolvedYear = Number(match.publishYear) || Number(proposal.year)
+      if (Number.isFinite(resolvedYear) && resolvedYear > 1400) {
+        dateAnchors[installment] = { year: resolvedYear }
+      }
       onCandidate?.({ installment, title: match.title || proposal.title })
     } catch {
       // Providers unreachable — leave this gap for a later sweep.
