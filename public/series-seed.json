@@ -1,0 +1,348 @@
+{
+ "version": 1,
+ "generatedAt": "2026-08-01",
+ "series": {
+  "willtrent": {
+   "name": "Will Trent",
+   "installments": {
+    "1": {
+     "title": "Triptych",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1442531921i/21717.jpg",
+     "year": 2006
+    },
+    "2": {
+     "title": "Fractured",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1389140280i/2199587.jpg",
+     "year": 2008
+    },
+    "3": {
+     "title": "Undone",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1388843741i/5764902.jpg",
+     "year": 2009
+    },
+    "4": {
+     "title": "Broken",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1430045032i/7093222.jpg",
+     "year": 2010
+    },
+    "5": {
+     "title": "Fallen",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1388240393i/9635495.jpg",
+     "year": 2011
+    },
+    "6": {
+     "title": "Criminal",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1334414049i/12922320.jpg",
+     "year": 2012
+    },
+    "7": {
+     "title": "Unseen",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1361517437i/16071767.jpg",
+     "year": 2013
+    },
+    "8": {
+     "title": "The Kept Woman",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1462032117i/28374062.jpg",
+     "year": 2016
+    },
+    "9": {
+     "title": "The Last Widow",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1555116218i/42599605.jpg",
+     "year": 2019
+    },
+    "10": {
+     "title": "The Silent Wife",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1579051822i/53065750.jpg",
+     "year": 2020
+    },
+    "11": {
+     "title": "After That Night",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1681107221i/63833664.jpg",
+     "year": 2023
+    },
+    "12": {
+     "title": "This Is Why We Lied",
+     "author": "Karin Slaughter",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1721329915i/199793571.jpg",
+     "year": 2024
+    }
+   }
+  },
+  "theforgetting": {
+   "name": "The Forgetting",
+   "installments": {
+    "1": {
+     "title": "The Forgetting",
+     "author": "Sharon Cameron",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1456500484i/28691932.jpg",
+     "year": 2016
+    },
+    "2": {
+     "title": "The Knowing",
+     "author": "Sharon Cameron",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1486156772i/34109606.jpg",
+     "year": 2017
+    }
+   }
+  },
+  "redrisingsaga": {
+   "name": "Red Rising Saga",
+   "installments": {
+    "1": {
+     "title": "Red Rising",
+     "author": "Pierce Brown",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1461354651i/15839976.jpg",
+     "year": 2014
+    },
+    "2": {
+     "title": "Golden Son",
+     "author": "Pierce Brown",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1394684475i/18966819.jpg",
+     "year": 2015
+    },
+    "3": {
+     "title": "Morning Star",
+     "author": "Pierce Brown",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1461354277i/18966806.jpg",
+     "year": 2016
+    },
+    "4": {
+     "title": "Iron Gold",
+     "author": "Pierce Brown",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1716325988i/33257757.jpg",
+     "year": 2018
+    },
+    "5": {
+     "title": "Dark Age",
+     "author": "Pierce Brown",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1525464420i/29226553.jpg",
+     "year": 2019
+    },
+    "6": {
+     "title": "Light Bringer",
+     "author": "Pierce Brown",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1667655583i/29227774.jpg",
+     "year": 2023
+    },
+    "7": {
+     "title": "Red God",
+     "author": "Pierce Brown",
+     "cover": "https://books.google.com/books/content?id=5P9QEQAAQBAJ&printsec=frontcover&img=1&zoom=6&source=gbs_api",
+     "year": 2025
+    }
+   }
+  },
+  "lordsofscandal": {
+   "name": "Lords of Scandal",
+   "installments": {
+    "1": {
+     "title": "Duke of Daring",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1589498561i/48774440.jpg",
+     "year": 2020
+    },
+    "2": {
+     "title": "Marquess of Malice",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1589498042i/48774438.jpg",
+     "year": 2020
+    },
+    "3": {
+     "title": "Earl of Exile",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1601748309i/55547218.jpg",
+     "year": 2020
+    },
+    "4": {
+     "title": "Viscount of Vice",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1589497029i/48774441.jpg",
+     "year": 2020
+    },
+    "5": {
+     "title": "Baron of Bad",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1589496722i/48774445.jpg",
+     "year": 2020
+    },
+    "6": {
+     "title": "Earl of Sin",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1593702161i/54362895.jpg",
+     "year": 2020
+    },
+    "7": {
+     "title": "Earl of Gold",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1607687641i/54397323.jpg",
+     "year": 2020
+    },
+    "9": {
+     "title": "Duke of Decadence",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1612084525i/55695681.jpg",
+     "year": 2021
+    },
+    "10": {
+     "title": "Marquess of Menace",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1615443019i/55980986.jpg",
+     "year": 2021
+    },
+    "11": {
+     "title": "Duke of Dishonor",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1614480515i/56381458.jpg",
+     "year": 2021
+    },
+    "12": {
+     "title": "Baron of Blasphemy",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1618342415i/57731917.jpg",
+     "year": 2021
+    },
+    "13": {
+     "title": "Viscount of Vanity",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1610578128i/56660293.jpg",
+     "year": 2021
+    },
+    "14": {
+     "title": "Earl of Infamy",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1622002978i/56660294.jpg",
+     "year": 2021
+    },
+    "15": {
+     "title": "Laird of Longing",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1626663794i/58505810.jpg",
+     "year": 2021
+    },
+    "16": {
+     "title": "Duke of Chance",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1631127180i/58951897.jpg",
+     "year": 2022
+    },
+    "17": {
+     "title": "Marquess of Diamonds",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1635525836i/59479238.jpg",
+     "year": 2022
+    },
+    "18": {
+     "title": "Queen of Hearts",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1639807375i/59844276.jpg",
+     "year": 2022
+    },
+    "19": {
+     "title": "Baron of Clubs",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1642943479i/60188438.jpg",
+     "year": 2021
+    },
+    "20": {
+     "title": "Earl of Spades",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1644251372i/60341677.jpg",
+     "year": 2022
+    },
+    "21": {
+     "title": "King of Thieves",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1646623551i/60563908.jpg",
+     "year": 1996
+    },
+    "22": {
+     "title": "Marquess of Fortune",
+     "author": "Tammy Andresen",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1656439266i/61365954.jpg",
+     "year": 2022
+    }
+   }
+  },
+  "grantcounty": {
+   "name": "Grant County",
+   "installments": {
+    "2": {
+     "title": "Kisscut",
+     "author": "Karin Slaughter",
+     "cover": "https://books.google.com/books/content?id=Qp9PY9ERDUUC&printsec=frontcover&img=1&zoom=6&source=gbs_api",
+     "year": 1999
+    },
+    "3": {
+     "title": "A faint cold fear",
+     "author": "Karin Slaughter",
+     "cover": "https://books.google.com/books/content?id=rUYCdIKMjbAC&printsec=frontcover&img=1&zoom=6&source=gbs_api",
+     "year": 2003
+    },
+    "4": {
+     "title": "Indelible",
+     "author": "Karin Slaughter",
+     "cover": "https://books.google.com/books/content?id=drLhwAEACAAJ&printsec=frontcover&img=1&zoom=6&source=gbs_api",
+     "year": 2004
+    },
+    "5": {
+     "title": "Faithless",
+     "author": "Karin Slaughter",
+     "cover": "https://books.google.com/books/content?id=hKKmkwEACAAJ&printsec=frontcover&img=1&zoom=6&source=gbs_api",
+     "year": 2005
+    },
+    "6": {
+     "title": "Beyond Reach",
+     "author": "Karin Slaughter",
+     "cover": "https://books.google.com/books/content?id=w2Z24LWkwhkC&printsec=frontcover&img=1&zoom=6&source=gbs_api",
+     "year": 2007
+    }
+   }
+  },
+  "theempyrean": {
+   "name": "The Empyrean",
+   "installments": {
+    "1": {
+     "title": "Fourth Wing",
+     "author": "Rebecca Yarros",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1761312598i/61431922.jpg",
+     "year": 2023
+    },
+    "2": {
+     "title": "Iron Flame",
+     "author": "Rebecca Yarros",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1706724269i/90202302.jpg",
+     "year": 2023
+    },
+    "3": {
+     "title": "Onyx Storm",
+     "author": "Rebecca Yarros",
+     "cover": "https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1766329694i/209439446.jpg",
+     "year": 2025
+    },
+    "4": {
+     "title": "Untitled",
+     "author": "Rebecca Yarros",
+     "cover": "https://archive.org/services/img/untitled_20240321",
+     "year": null
+    },
+    "5": {
+     "title": "Untitled",
+     "author": "Rebecca Yarros",
+     "cover": "https://archive.org/services/img/untitled_20240321",
+     "year": null
+    }
+   }
+  }
+ }
+}

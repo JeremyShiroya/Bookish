@@ -1,5 +1,6 @@
 import { createError, defineEventHandler, getQuery } from 'h3';
 import { enumerateSeriesWithAi } from '../../utils/aiSeriesEnumerator';
+import { seriesCacheKey, withSeriesCache } from '../../utils/seriesCache';
 
 // Candidate ordering for a series, proposed by the configured language model.
 //
@@ -36,12 +37,26 @@ export default defineEventHandler(async (event) => {
     .map((value) => Number(value.trim()))
     .filter((value) => Number.isSafeInteger(value) && value >= 1);
 
-  const { books, provider, anchored } = await enumerateSeriesWithAi({
-    seriesName: series,
-    author,
-    anchors,
-    missing,
-  });
+  // Cached on the series and author ONLY, deliberately not on the anchors or the
+  // missing list: those differ per reader, but the answer — this series' book
+  // list — is the same for everyone. Keying on them would give every reader
+  // their own miss and defeat the point of sharing a quota.
+  //
+  // The anchors are still sent to the model on a miss, so the answer is still
+  // checked against real books before anyone stores it.
+  const { value, cached } = await withSeriesCache(
+    seriesCacheKey('order', series, author),
+    (result: { books: unknown[] }) => !result.books?.length,
+    async () => {
+      const { books, provider, anchored } = await enumerateSeriesWithAi({
+        seriesName: series,
+        author,
+        anchors,
+        missing,
+      });
+      return { books, provider, anchored };
+    },
+  );
 
-  return { series, books, provider, anchored, candidatesOnly: true };
+  return { series, ...value, cached, candidatesOnly: true };
 });

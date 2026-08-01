@@ -120,6 +120,38 @@ GEMINI_MODEL=gemini-flash-latest
 # GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
+### Serving series suggestions to many readers
+
+Resolving a series costs a Goodreads scrape (rate-limited per network, and it
+starts returning 202 anti-bot stubs when hit too often) or an AI call drawn from
+one shared quota. Both get *worse* with more readers, while the answer — this
+series' book list — is identical for everyone. Two layers fix that.
+
+**Bundled seed.** `public/series-seed.json` ships rosters that have already been
+resolved and verified, hydrated at app start. A reader who owns a seeded series
+sees every missing book immediately: no network, no quota, works offline. It is
+a seed, not an authority — anything the device resolved itself wins, and the
+sweep can still top it up.
+
+Only ever build it from real resolved caches, never a hand-written or generated
+list: the entire pipeline exists to guarantee nothing is stored until a provider
+confirmed it, and seeding unverified titles would smuggle around that.
+
+```bash
+node scripts/build-series-seed.mjs dump.json   # see the script header for the dump
+```
+
+**Server cache.** When `NUXT_PUBLIC_API_BASE_URL` points at a deployment, both
+`/api/books/series-books` (Goodreads roster) and `/api/books/series-order` (AI
+ordering) are cached server-side, keyed on the SERIES rather than on the asking
+reader — so the hundredth person to ask about a series costs nothing, and the
+key never leaves the server. Caching the roster also means fewer Goodreads hits
+overall, which is what triggers the walls in the first place.
+
+It uses Nitro's storage layer, so a single instance works out of the box on
+memory. For a real deployment, mount `cache` at Redis/KV in `nitro.storage` and
+the cache becomes shared across instances with no code change.
+
 ### Release signing (and not losing the library)
 
 Android refuses to install an APK whose signing certificate differs from the one
