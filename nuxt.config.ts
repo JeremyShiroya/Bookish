@@ -78,6 +78,17 @@ export default defineNuxtConfig({
       aiSeriesProvider: process.env.NUXT_PUBLIC_AI_SERIES_PROVIDER || '',
       aiSeriesApiKey: process.env.NUXT_PUBLIC_AI_SERIES_API_KEY || '',
       aiSeriesModel: process.env.NUXT_PUBLIC_AI_SERIES_MODEL || '',
+      // Shared series-ordering service (a Supabase Edge Function). THIS is how
+      // the fallback reaches every reader: the model key lives on the server, and
+      // the answer is cached per series, so a series is paid for once and then
+      // served to everyone forever.
+      //
+      // Both values are safe to ship. The endpoint is public by design, and the
+      // key below is a *publishable* key whose only power is calling this
+      // function — the cache table has RLS on with no policies, so it cannot be
+      // read or written with it.
+      aiSeriesEndpoint: process.env.NUXT_PUBLIC_AI_SERIES_ENDPOINT || '',
+      aiSeriesEndpointKey: process.env.NUXT_PUBLIC_AI_SERIES_ENDPOINT_KEY || '',
       // Where the native build looks for version.json (see
       // scripts/generate-version-manifest.mjs). Empty disables the update
       // check entirely, which is the right default for web and desktop.

@@ -188,6 +188,30 @@ const fetchAiSeriesOrder = async ({ seriesName, author, anchors = {}, missing = 
 
   // Read BEFORE any await, while the Nuxt instance is still reachable.
   const aiConfig = nativeAiConfig()
+  const publicConfig = rememberPublicConfig()
+  const sharedEndpoint = publicConfig?.aiSeriesEndpoint
+  const sharedEndpointKey = publicConfig?.aiSeriesEndpointKey
+
+  // PREFERRED path: the shared service. The model key stays on the server, and
+  // the answer is cached per series there, so a series is resolved once for all
+  // readers rather than once per reader — which is the only arrangement that
+  // survives the app being shared widely.
+  const viaSharedService = async () => {
+    const response = await fetch(sharedEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(sharedEndpointKey ? { Authorization: `Bearer ${sharedEndpointKey}` } : {}),
+      },
+      body: JSON.stringify({ series: seriesName, author, anchors, missing }),
+    })
+    if (!response.ok) throw new Error(`Series ordering failed with ${response.status}`)
+    const payload = await response.json()
+    // The service reports its own misconfiguration rather than returning a
+    // silent empty list — surface it instead of looking like an ignorant model.
+    if (payload?.error) console.warn('[AI series] Shared service:', payload.error)
+    return payload
+  }
 
   const onDevice = async () => {
     if (!aiConfig) {
@@ -201,6 +225,9 @@ const fetchAiSeriesOrder = async ({ seriesName, author, anchors = {}, missing = 
   }
 
   try {
+    // Shared service first wherever it is configured: it is the only path that
+    // works for a reader who was handed the APK and has no key of their own.
+    if (sharedEndpoint) return await viaSharedService()
     if (native && !apiBaseUrl) return await onDevice()
 
     const query = new URLSearchParams({ series: seriesName })

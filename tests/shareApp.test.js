@@ -63,3 +63,29 @@ describe('sharing the app', () => {
     expect(config).toMatch(/the key server-side as GEMINI_API_KEY/)
   })
 })
+
+// The fallback has to reach a reader who was handed the APK and has no key of
+// their own — which means the model key cannot live in the app at all.
+describe('shared series-ordering service', () => {
+  const composable = read('composables/useSeriesSuggestions.js')
+  const config = read('nuxt.config.ts')
+
+  test('the shared service is preferred over every local path', () => {
+    expect(composable).toContain('if (sharedEndpoint) return await viaSharedService()')
+    // ...and is tried before the on-device path, which needs a key nobody else has.
+    const shared = composable.indexOf('if (sharedEndpoint) return await viaSharedService()')
+    const device = composable.indexOf('if (native && !apiBaseUrl) return await onDevice()')
+    expect(shared).toBeGreaterThan(-1)
+    expect(device).toBeGreaterThan(shared)
+  })
+
+  test('only publishable values are shipped', () => {
+    expect(config).toContain('aiSeriesEndpoint')
+    expect(config).toContain('aiSeriesEndpointKey')
+    expect(config).toMatch(/RLS on with no policies/)
+  })
+
+  test('a misconfigured service says so instead of looking like an ignorant model', () => {
+    expect(composable).toMatch(/if \(payload\?\.error\) console\.warn/)
+  })
+})
