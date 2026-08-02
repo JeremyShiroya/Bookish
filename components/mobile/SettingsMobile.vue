@@ -53,13 +53,13 @@ const mobileSettingsRows = [
   { label: 'Theme', icon: 'ri-moon-line', type: 'theme' },
   { label: 'Preferences', icon: 'ri-edit-box-line', to: '/settings/preferences' },
   { label: 'Storage', icon: 'ri-database-2-line', to: '/settings/storage' },
-  { label: 'Connection test', icon: 'ri-stethoscope-line', to: '/settings/connection' },
+  // { label: 'Connection test', icon: 'ri-stethoscope-line', to: '/settings/connection' },
   // Sideloaded app, so there is no store link to send — sharing means handing
   // over the APK itself. Only offered where that is possible.
-  ...(canShareApp() ? [{ label: 'Share Pages', icon: 'ri-share-forward-line', type: 'share' }] : []),
+  ...(canShareApp() ? [{ label: 'Share Pages', icon: 'ri-share-line', type: 'share' }] : []),
   { label: 'About', icon: 'ri-information-line', to: '/settings/about' },
   { label: 'Privacy Policy', icon: 'ri-lock-line', to: '/settings/privacy' },
-  { label: 'Support the Project', icon: 'ri-hand-heart-line', comingSoon: true },
+  // { label: 'Support the Project', icon: 'ri-hand-heart-line', comingSoon: true },
 ]
 
 const navigate = (path) => {
