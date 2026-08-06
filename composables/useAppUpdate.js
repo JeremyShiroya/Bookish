@@ -104,6 +104,7 @@ export const useAppUpdate = () => {
       const manifest = normalizeUpdateManifest(await response.json())
       const prompt = shouldPromptForUpdate({
         installedCode: current.code,
+        installedName: current.name,
         manifest,
         // A manual "check now" ignores an earlier skip.
         skippedCode: force ? null : readSkippedCode(),

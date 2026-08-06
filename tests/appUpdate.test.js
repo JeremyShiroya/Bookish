@@ -98,6 +98,10 @@ describe('update prompt decision', () => {
     expect(shouldPromptForUpdate({ installedCode: 201, manifest: manifest() })).toBe(false)
   })
 
+  test('suppresses update prompt when installedName matches manifest versionName', () => {
+    expect(shouldPromptForUpdate({ installedCode: 191, installedName: '1.3.0', manifest: manifest({ versionName: '1.3.0' }) })).toBe(false)
+  })
+
   // App.getInfo() returns build as a string on Android.
   test('handles the string versionCode the native shell reports', () => {
     expect(shouldPromptForUpdate({ installedCode: '191', manifest: manifest() })).toBe(true)

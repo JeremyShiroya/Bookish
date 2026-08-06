@@ -60,13 +60,14 @@ export function normalizeUpdateManifest(raw) {
 
 // Whether `manifest` describes a build newer than what's installed, and whether
 // the user has already chosen to skip it.
-export function shouldPromptForUpdate({ installedCode, manifest, skippedCode = null }) {
+export function shouldPromptForUpdate({ installedCode, installedName, manifest, skippedCode = null }) {
   if (!manifest) return false
   const installed = toVersionCode(installedCode)
   // An unknown installed version means we can't compare — staying silent beats
   // nagging someone who is already up to date.
   if (!installed) return false
   if (manifest.versionCode <= installed) return false
+  if (installedName && manifest.versionName && installedName.trim() === manifest.versionName.trim()) return false
   // A mandatory update ignores an earlier skip.
   if (manifest.mandatory) return true
   const skipped = toVersionCode(skippedCode)
