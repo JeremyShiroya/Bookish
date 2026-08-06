@@ -11,6 +11,11 @@ import { useBookStorage } from '~/composables/useBookStorage'
 import { useLibraryStore } from '~/composables/useLibraryStore'
 import { coverAssetName, isLocalAssetCover } from '~/composables/useCoverImageCache'
 import { useDeviceAssets } from '~/composables/useDeviceAssets'
+import {
+  readImportRegistry,
+  syncDeviceLibrary,
+  writeImportRegistry,
+} from '~/composables/useDeviceLibrarySync'
 
 // Turning a format OFF is not a filter. The app stops handling that format
 // entirely: its books leave the library, and the device scanner stops detecting
@@ -22,6 +27,8 @@ import { useDeviceAssets } from '~/composables/useDeviceAssets'
 // tombstones the import registry, which is right for "delete this book" and
 // wrong here. Re-enabling a format has to let the next scan re-import from the
 // files still sitting on disk.
+
+import { useToast } from '~/composables/useToast'
 
 export const formatLabel = (format) => (format === 'pdf' ? 'PDF' : 'EPUB')
 
@@ -35,9 +42,17 @@ export const formatsRemovedBy = (currentFormats, nextFormats) => {
   return normalizeEnabledFormats(currentFormats).filter((format) => !next.includes(format))
 }
 
+// Formats that are off now and would be on after the change.
+export const formatsAddedBy = (currentFormats, nextFormats) => {
+  const next = normalizeEnabledFormats(nextFormats)
+  const current = normalizeEnabledFormats(currentFormats)
+  return next.filter((format) => !current.includes(format))
+}
+
 export const useFormatEnablement = () => {
   const { settings, updateSettings } = useBookishSettings()
   const { books, fetchAllData } = useBooks()
+  const { addToast } = useToast()
 
   const enabledFormats = computed(() => normalizeEnabledFormats(settings.value.enabledFormats))
   const formatMode = computed(() => formatModeFor(enabledFormats.value))
@@ -57,6 +72,24 @@ export const useFormatEnablement = () => {
       import.meta.client ? deleteBookContent(book.id) : Promise.resolve(),
     ])
 
+    if (import.meta.client) {
+      try {
+        const registry = readImportRegistry()
+        let registryChanged = false
+
+        for (const key of Object.keys(registry)) {
+          const item = registry[key]
+          if (item?.bookId === book.id || key === book.path || key === book.id) {
+            delete registry[key]
+            registryChanged = true
+          }
+        }
+        if (registryChanged) writeImportRegistry(registry)
+      } catch (error) {
+        console.warn('[Formats] Could not clean registry for purged book:', error)
+      }
+    }
+
     if (!import.meta.client) return
     try {
       const name = coverAssetName(book.cover)
@@ -72,38 +105,56 @@ export const useFormatEnablement = () => {
    * @returns {Promise<{removed: number, formats: string[]}>}
    */
   const applyEnabledFormats = async (nextFormats) => {
+    const current = enabledFormats.value
     const next = normalizeEnabledFormats(nextFormats)
-    const removedFormats = formatsRemovedBy(enabledFormats.value, next)
+    const removedFormats = formatsRemovedBy(current, next)
+    const addedFormats = formatsAddedBy(current, next)
 
-    // Write the setting FIRST. If a purge fails halfway the app is already
-    // refusing to import that format again, so a retry converges instead of
-    // racing a scan that re-adds what is being removed.
-    //
-    // The app-wide HIDE (Preferences → "Book format") is a separate control, and
-    // leaving it pointed at a format that no longer exists would show an empty
-    // library with no obvious way back, so it is released here.
-    const hidden = settings.value.formatFilter
-    const orphanedHide = hidden && hidden !== 'all' && !next.includes(hidden)
+    // Write the setting FIRST. Reset formatFilter to 'all' whenever format enablement changes,
+    // so a lingering formatFilter never hides all books after changing modes.
     updateSettings({
       enabledFormats: next,
+      formatFilter: 'all',
       formatChoiceMade: true,
-      ...(orphanedHide ? { formatFilter: 'all' } : {}),
     })
 
     let removed = 0
-    for (const format of removedFormats) {
-      for (const book of booksOfFormat(books.value, format)) {
-        try {
-          await purgeBook(book)
-          removed += 1
-        } catch (error) {
-          console.error('[Formats] Could not remove a book during format purge:', error)
+    if (removedFormats.length > 0) {
+      const removedLabel = removedFormats.map(formatLabel).join(' and ')
+      for (const format of removedFormats) {
+        for (const book of booksOfFormat(books.value, format)) {
+          try {
+            await purgeBook(book)
+            removed += 1
+          } catch (error) {
+            console.error('[Formats] Could not remove a book during format purge:', error)
+          }
         }
       }
+      if (removed > 0) {
+        addToast(`Removed ${removed} ${removedLabel} book${removed === 1 ? '' : 's'} from your library.`, 'info')
+      } else {
+        addToast(`Removed ${removedLabel} format.`, 'info')
+      }
+      await fetchAllData(true)
     }
 
-    if (removed > 0) await fetchAllData()
-    return { removed, formats: removedFormats }
+    if (addedFormats.length > 0) {
+      const addedLabel = addedFormats.map(formatLabel).join(' and ')
+      addToast(`Adding ${addedLabel} books into Pages — scanning your device. This might take a moment…`, 'info')
+
+      if (import.meta.client) {
+        try {
+          await syncDeviceLibrary({ silent: false })
+        } catch (error) {
+          console.warn('[Formats] Could not scan device after format update:', error)
+        }
+      }
+    } else if (removedFormats.length === 0) {
+      await fetchAllData(true)
+    }
+
+    return { removed, addedFormats, removedFormats }
   }
 
   const applyFormatMode = (mode) => applyEnabledFormats(enabledFormatsForMode(mode))

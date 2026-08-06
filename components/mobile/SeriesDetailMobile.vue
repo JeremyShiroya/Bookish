@@ -467,9 +467,8 @@ const startMissingSweep = async () => {
     // disappear (and any newly-found ones show). Trust the roster when it is
     // authoritative (contiguous 1..max) OR when it has trimmed a small "N works"
     // overcount down — i.e. whenever the roster's reconciled total is lower than
-    // what is stored. Never silently raise the total off a gappy roster.
-    const totalCorrectable = effectiveTotal > 0 && effectiveTotal !== derivedSeriesTotal.value
-      && (coverage.contiguous || effectiveTotal < derivedSeriesTotal.value);
+    // Reconcile the stored series total to what the roster actually covers.
+    const totalCorrectable = effectiveTotal > 0 && effectiveTotal !== derivedSeriesTotal.value;
     if (totalCorrectable) {
       await propagateSeriesTotal({
         seriesName: seriesName.value,
@@ -503,6 +502,15 @@ const startMissingSweep = async () => {
     })
     .catch((error) => console.warn('[series detail] Library reconcile failed:', error));
 };
+
+onMounted(() => {
+  reconcileSeriesWithLibrary({
+    seriesName: seriesName.value,
+    missing: allMissingInstallments.value,
+    allBooks: books.value,
+    updateBook,
+  }).catch(() => {});
+});
 
 onUnmounted(() => { _sweepStop = true; });
 
@@ -802,6 +810,7 @@ watch(seriesBooks, async (books) => {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px 14px;
   justify-content: start;
+  align-items: start;
 }
 
 .book-list {
@@ -814,24 +823,29 @@ watch(seriesBooks, async (books) => {
    quiet — a dashed, desaturated placeholder that reads as a gap in the shelf
    rather than as another book competing with the real covers. */
 .missing-book-card {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-content: start;
+  width: 100%;
+  height: 100%;
   opacity: 0.62;
+  box-sizing: border-box;
 }
 
 .missing-cover {
   position: relative;
-  display: grid;
-  overflow: hidden;
+  width: 100%;
   aspect-ratio: 2 / 3;
-  place-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1.5px dashed color-mix(in srgb, var(--color-text-muted) 55%, transparent);
-  /* Match the real book covers (LibraryBookCard .card-cover), so a gap in the
-     shelf sits at the same corner radius as the books around it. */
   border-radius: 8px;
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
+  flex-shrink: 0;
 }
 
 /* A resolved cover fills the card and drops the dashed placeholder look; the
@@ -869,12 +883,27 @@ watch(seriesBooks, async (books) => {
   font-weight: 700;
 }
 
+.missing-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+}
+
 .missing-info h3 {
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--mobile-subtext-size);
   font-weight: 600;
   line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  height: 2.4em;
+  min-height: 2.4em;
+  max-height: 2.4em;
 }
 
 .missing-info p {

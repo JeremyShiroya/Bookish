@@ -106,7 +106,7 @@ import MobileTopNav from './MobileTopNav.vue';
 const { favourites, toggleFavourite, deleteBook, hideBook, loading, initialized } = useBooks();
 const { settings, updateSettings } = useBookishSettings();
 const { addToast } = useToast();
-const favouritesLayout = computed(() => settings.value.favouritesCardLayout || 'grid');
+const favouritesLayout = computed(() => settings.value.favouritesCardLayout || 'list');
 const favouritesBackground = computed(() => settings.value.favouritesCardBackground || 'blur');
 const { play: playTTS, togglePlay: toggleTTS, ttsBook, ttsStatus } = useTTS();
 const router = useRouter();

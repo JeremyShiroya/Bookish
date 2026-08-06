@@ -20,32 +20,24 @@
       </template>
     </EmptyState>
 
-    <!-- A brand-new library gets one welcoming hero, not a page of hollow
-         sections. -->
-    <div v-else-if="initialized && books.length === 0" class="mobile-home mobile-home-empty">
-      <EmptyState
-        illustration="library"
-        title="Your library awaits"
-        description="Add your first book and Pages will keep your reading, listening and progress right here."
-      >
-        <template #action>
-          <NuxtLink to="/add" class="add-btn">
-            <i class="ri-add-line"></i>
-            Add your first book
-          </NuxtLink>
-        </template>
-      </EmptyState>
-    </div>
+    <EmptyState
+      v-else-if="initialized && books.length === 0"
+      illustration="library"
+      title="Welcome to Bookish"
+      description="Import your first PDF or EPUB to build your library shelves."
+    >
+      <template #action>
+        <NuxtLink to="/add" class="add-btn">
+          <i class="ri-add-line"></i>
+          Add Your First Book
+        </NuxtLink>
+      </template>
+    </EmptyState>
 
     <div v-else-if="initialized" class="mobile-home">
       <section class="mobile-search-section">
         <label class="mobile-search-bar">
           <i class="ri-search-line"></i>
-          <!-- Deliberately NOT v-model. Vue's v-model suppresses input events
-               while an IME is composing, and Gboard treats every word as a
-               composition — so results only appeared once a word was committed
-               with a space. Binding the event directly updates per keystroke,
-               which is what the ranking in useLibrarySearch is built for. -->
           <input
             :value="homeSearch"
             type="search"
@@ -88,8 +80,7 @@
         <p v-else-if="homeSearch.trim()" class="mobile-search-empty">No books found</p>
       </section>
 
-      <!-- Sections only render when they have something to show — a reader
-           who hasn't started a book yet just sees their actual content. -->
+      <!-- Currently Reading -->
       <section v-if="currentReadingBook" class="mobile-home-section">
         <h2 class="mobile-section-title">Currently Reading</h2>
         <div class="continue-single">
@@ -102,12 +93,13 @@
         </div>
       </section>
 
-      <section class="mobile-home-section">
+      <!-- Recently Added -->
+      <section v-if="mobileRecentBooks.length > 0" class="mobile-home-section">
         <div class="mobile-section-header">
           <h2 class="mobile-section-title">Recently Added</h2>
           <NuxtLink to="/books" class="mobile-see-all">See all</NuxtLink>
         </div>
-        <div v-if="mobileRecentBooks.length > 0" class="book-grid">
+        <div class="book-grid">
           <HomeBookRailCard
             v-for="book in mobileRecentBooks"
             :key="book.id"
@@ -117,6 +109,7 @@
         </div>
       </section>
 
+      <!-- Series -->
       <section v-if="mobileSeries.length > 0" class="mobile-home-section mobile-series-section">
         <div class="mobile-section-header">
           <h2 class="mobile-section-title">Series</h2>
@@ -229,13 +222,6 @@ const retryLoadLibrary = () => {
 .mobile-home {
   min-height: calc(100vh - 106px);
   padding: 0 var(--mobile-page-padding-inline) 16px;
-}
-
-/* Empty-library hero: one centred welcome fills the page instead of a
-   column of hollow sections. */
-.mobile-home-empty {
-  display: grid;
-  place-items: center;
 }
 
 .mobile-search-section {
@@ -433,4 +419,195 @@ const retryLoadLibrary = () => {
   text-decoration: none;
   cursor: pointer;
 }
+
+/* ── Currently Reading empty state ── */
+.empty-reading-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 130px;
+  overflow: hidden;
+  border-radius: var(--mobile-card-radius);
+  background: linear-gradient(135deg, #6c3fb5 0%, #8a2be2 40%, #a855f7 100%);
+  color: #fff;
+}
+
+.empty-reading-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px;
+  flex: 1;
+  min-width: 0;
+}
+
+.empty-reading-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #fff;
+}
+
+.empty-reading-sub {
+  margin: 0 0 8px;
+  font-size: var(--mobile-caption-size, 0.8125rem);
+  opacity: 0.85;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.empty-reading-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+  font-family: inherit;
+  font-size: var(--mobile-caption-size, 0.8125rem);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: background 0.2s;
+}
+
+.empty-reading-btn:active {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.empty-reading-btn i {
+  font-size: 14px;
+}
+
+.empty-reading-arc {
+  position: absolute;
+  right: -20px;
+  bottom: -20px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+}
+
+.empty-reading-illustration {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 140px;
+  height: 140px;
+  object-fit: contain;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Recently Added empty state ── */
+.empty-recently-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 180px;
+  padding: 0 20px;
+  border-radius: var(--mobile-card-radius);
+  background: #e8e8f1;
+}
+
+:root[data-theme="dark"] .empty-recently-card {
+  background: var(--color-surface-primary);
+}
+
+.empty-recently-illustration {
+  width: 180px;
+  height: auto;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.empty-recently-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.empty-recently-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-text-primary);
+}
+
+.empty-recently-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--color-text-primary, #1e293b);
+  color: var(--color-text-on-brand, #fff);
+  font-family: inherit;
+  font-size: var(--mobile-caption-size, 0.8125rem);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.empty-recently-btn:active {
+  opacity: 0.8;
+}
+
+.empty-recently-btn i {
+  font-size: 14px;
+}
+
+/* ── Series empty state ── */
+.empty-series-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 214px;
+  padding: 20px;
+  border-radius: var(--mobile-card-radius);
+  background: #e8e8f1;
+  text-align: center;
+}
+
+:root[data-theme="dark"] .empty-series-card {
+  background: var(--color-surface-primary);
+}
+
+.empty-series-illustration {
+  width: 180px;
+  height: auto;
+  margin-bottom: 12px;
+  object-fit: contain;
+}
+
+.empty-series-title {
+  margin: 0 0 4px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.empty-series-sub {
+  margin: 0;
+  font-size: var(--mobile-caption-size, 0.8125rem);
+  color: var(--color-text-muted);
+  line-height: 1.45;
+  max-width: 240px;
+}
 </style>
+

@@ -128,6 +128,7 @@ const filterOpen = ref(false);
 // showing a pill that can only ever match everything.
 const formatFilters = computed(() => {
   const enabled = settings.value.enabledFormats || ['epub', 'pdf'];
+  if (enabled.length <= 1) return [];
   return FORMAT_FILTER_CHOICES.filter(
     (choice) => choice.value === 'all' || enabled.includes(choice.value),
   );

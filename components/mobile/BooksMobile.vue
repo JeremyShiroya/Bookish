@@ -175,6 +175,11 @@
             </div>
           </div>
 
+          <!-- Library metrics text summary below filter controls -->
+          <div class="library-metrics-summary">
+            <span>{{ libraryMetricsText }}</span>
+          </div>
+
         <!-- Grid View -->
         <div v-if="viewMode === 'grid'" class="books-grid">
           <LibraryBookCard
@@ -225,8 +230,8 @@
             @delete="openDeleteModal(book)"
           />
         </div>
-        </div>
       </div>
+    </div>
 
       <!-- Empty State -->
       <EmptyState
@@ -351,6 +356,7 @@ const readingStatuses = ["Unread", "Reading", "Read"];
 // there is nothing to choose between.
 const formatFilters = computed(() => {
   const enabled = settings.value.enabledFormats || ["epub", "pdf"];
+  if (enabled.length <= 1) return [];
   return FORMAT_FILTER_CHOICES.filter(
     (choice) => choice.value === "all" || enabled.includes(choice.value),
   );
@@ -365,7 +371,7 @@ const sortDirection = ref(settings.value.librarySortDirection);
 const { filters, setFilter, matches } = useLibraryFilters("books");
 const selectedStatus = computed(() => filters.value.status);
 const selectedFormat = computed(() => filters.value.format);
-const viewMode = ref(settings.value.libraryView);
+const viewMode = ref(settings.value.libraryView || 'table');
 
 // Modal states
 const showDeleteModal = ref(false);
@@ -493,13 +499,29 @@ const filteredBooks = computed(() => {
 });
 
 const bookMetrics = computed(() => {
-  const all = books.value;
+  const all = books.value || [];
+  let unread = 0;
+  let reading = 0;
+  let read = 0;
+
+  for (const b of all) {
+    const status = String(b?.status || '').toLowerCase();
+    if (status === 'reading') reading++;
+    else if (status === 'read' || status === 'completed' || status === 'finished') read++;
+    else unread++;
+  }
+
   return {
     total: all.length,
-    unread: all.filter((b) => !b.status || b.status === 'Unread').length,
-    reading: all.filter((b) => b.status === 'Reading').length,
-    read: all.filter((b) => b.status === 'Read').length,
+    unread,
+    reading,
+    read,
   };
+});
+
+const libraryMetricsText = computed(() => {
+  const m = bookMetrics.value;
+  return `${m.total} ${m.total === 1 ? 'book' : 'books'} · ${m.unread} Unread · ${m.reading} Reading · ${m.read} Read`;
 });
 
 // Reading-status filter dropdown (open/close + outside-click dismissal)
@@ -647,6 +669,17 @@ onUnmounted(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 1rem;
+}
+
+.library-metrics-summary {
+  padding: 0 var(--mobile-page-padding-inline) 0.75rem var(--mobile-page-padding-inline);
+  font-size: 0.81rem;
+  font-weight: 500;
+  color: var(--text-muted, rgba(255, 255, 255, 0.62));
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  user-select: none;
 }
 
 /* Floating add button — fixed above the bottom nav, unaffected by scroll. */

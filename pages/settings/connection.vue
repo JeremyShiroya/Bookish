@@ -8,8 +8,19 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
 import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue'
 import ConnectionTestPanel from '~/components/shared/ConnectionTestPanel.vue'
+import { useBookishSettings } from '~/composables/useBookishSettings'
+
+const { settings } = useBookishSettings()
+const router = useRouter()
+
+onMounted(() => {
+  if (!settings.value.developerMode) {
+    router.replace('/settings')
+  }
+})
 </script>
 
 <style scoped>

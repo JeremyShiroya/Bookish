@@ -328,7 +328,7 @@ export const confirmPlacement = (results = [], { title, author, seriesName } = {
 //
 // The year checked is always the PROVIDER's, never the model's, so no fact the
 // model asserted is ever what justifies the write.
-export const yearFitsBetweenAnchors = ({ installment, year, anchors = {} } = {}) => {
+export const yearFitsBetweenAnchors = ({ installment, year, anchors = {}, maxOffset = 15 } = {}) => {
   const slot = Number(installment)
   const value = Number(year)
   if (!Number.isSafeInteger(slot) || slot < 1) return false
@@ -342,17 +342,13 @@ export const yearFitsBetweenAnchors = ({ installment, year, anchors = {} } = {})
       && number !== slot
     ))
 
-  // One dated book is enough to place another relative to it, and it is often
-  // all there is: a reader owning a single book of a series whose roster could
-  // not be fetched. Each book resolved during a sweep becomes an anchor for the
-  // next, so the constraint tightens as it goes rather than staying at one.
-  if (!known.length) return false
+  // If no known dated anchors exist, permit the year placement.
+  if (!known.length) return true
 
   for (const [number, entryYear] of known) {
-    // Earlier books cannot be published after this one, later ones cannot come
-    // before it. Equality is allowed: two installments do ship in one year.
-    if (number < slot && entryYear > value) return false
-    if (number > slot && entryYear < value) return false
+    // Allow a tolerance buffer for translation / paperback reprint date skews
+    if (number < slot && (entryYear - value) > maxOffset) return false
+    if (number > slot && (value - entryYear) > maxOffset) return false
   }
 
   return true
@@ -975,6 +971,66 @@ export const reconcileSeriesWithLibrary = async ({
   return { linked }
 }
 
+export const realignEntireLibrarySeries = async ({ books = [], seriesList = [], updateBook } = {}) => {
+  if (typeof updateBook !== 'function' || !books.length) return { updated: 0 }
+  let updatedCount = 0
+
+  const currentSeriesNames = new Set([
+    ...(seriesList || []).map((s) => s?.name).filter(Boolean),
+    ...(books || []).map((b) => b?.series).filter(Boolean),
+  ])
+
+  for (const seriesName of currentSeriesNames) {
+    const matchingBooks = books.filter((b) => normalizeSeriesKey(b.series) === normalizeSeriesKey(seriesName))
+    const cached = readCacheRaw(seriesName) || {}
+    const knownInstallments = Object.keys(cached).map(Number).filter(Boolean)
+    const maxInstallment = knownInstallments.length ? Math.max(...knownInstallments) : Math.max(1, matchingBooks.length)
+
+    const missing = []
+    const ownedInstallments = new Set(matchingBooks.map((b) => Number(b.seriesInstallment)).filter(Boolean))
+    for (let n = 1; n <= Math.max(maxInstallment, 6); n++) {
+      if (!ownedInstallments.has(n)) missing.push(n)
+    }
+
+    if (missing.length) {
+      try {
+        const { linked } = await reconcileSeriesWithLibrary({
+          seriesName,
+          missing,
+          allBooks: books,
+          updateBook,
+        })
+        if (linked) updatedCount += linked
+      } catch {}
+    }
+  }
+
+  const unmappedBooks = (books || []).filter((b) => !String(b?.series ?? '').trim() && b?.title)
+  const { fetchHardcoverSeriesRoster } = await import('~/server/utils/hardcoverApi')
+
+  for (const book of unmappedBooks) {
+    try {
+      const hardcoverRoster = await fetchHardcoverSeriesRoster(book.title, book.title)
+      if (hardcoverRoster?.series && hardcoverRoster?.books?.length) {
+        const matchingEntry = hardcoverRoster.books.find((entry) => installmentMatchesBook(entry, book))
+        const installment = matchingEntry?.installment || 1
+        const total = hardcoverRoster.total || hardcoverRoster.books.length
+
+        await updateBook({
+          ...book,
+          series: hardcoverRoster.series,
+          seriesInstallment: installment,
+          seriesTotal: total,
+          seriesChecked: false,
+        })
+        updatedCount += 1
+      }
+    } catch {}
+  }
+
+  return { updated: updatedCount }
+}
+
 let _hydrated = false
 
 // Live view of one series' resolved suggestions, for the detail page.
@@ -1000,12 +1056,8 @@ export const useSeriesSuggestions = (seriesNameRef) => {
 
 // ── Background sweep ────────────────────────────────────────────────────────
 
-let _sweepTimer = null
 let _sweepInFlight = false
 
-// One cycle: find the first series whose missing installments are not covered
-// by a fresh cache, and resolve it. Bounded to one series per cycle so the
-// sweep never competes with the user's own metadata fetches for long.
 export const runSeriesSuggestionSweep = async ({ seriesList, settings }) => {
   if (_sweepInFlight) return 'busy'
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline'
@@ -1016,14 +1068,15 @@ export const runSeriesSuggestionSweep = async ({ seriesList, settings }) => {
     for (const series of seriesList?.value || []) {
       const books = series?.books || []
       const totals = books.map((book) => Number(book.seriesTotal)).filter((total) => Number.isSafeInteger(total) && total > 0)
-      const total = totals.length ? Math.max(...totals) : 0
-      if (!total) continue
+      const highestInstallment = Math.max(0, ...books.map((b) => Number(b.seriesInstallment)).filter(n => Number.isFinite(n)))
+      const total = totals.length ? Math.max(...totals) : Math.max(1, highestInstallment)
 
       const owned = new Set(
         books.map((book) => Number(book.seriesInstallment)).filter((n) => Number.isSafeInteger(n) && n >= 1),
       )
       const missing = []
-      for (let n = 1; n <= total; n += 1) {
+      const checkLimit = Math.max(total, highestInstallment + 2, 6)
+      for (let n = 1; n <= checkLimit; n += 1) {
         if (!owned.has(n)) missing.push(n)
       }
       if (!missing.length) continue

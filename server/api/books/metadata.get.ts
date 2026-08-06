@@ -4,6 +4,10 @@ import { searchGoogleBooks, type GBResult } from '../../utils/googleBooksApi';
 import { searchInternetArchive, type IAResult } from '../../utils/internetArchiveApi';
 import { searchGoodreads, scrapeGoodreadsBook, type GoodreadsBookDetails, type GoodreadsSearchResult } from '../../utils/goodreadsScraper';
 import { searchOpenLibrary, type OLResult } from '../../utils/openLibraryApi';
+import { searchHardcover } from '../../utils/hardcoverApi';
+import { searchWikidata } from '../../utils/wikidataApi';
+import { searchOpenAlex } from '../../utils/openAlexApi';
+import { searchLibraryOfCongress } from '../../utils/libraryOfCongressApi';
 import { buildMetadataResults, type MetadataSource } from '../../utils/metadataAggregator';
 import { searchKnownPublisherSites, searchPublisherMetadata, type PublisherMetadataResult } from '../../utils/publisherMetadata';
 import { verifyBookMetadataResults } from '../../utils/aiMetadataVerifier';
@@ -187,7 +191,13 @@ async function getMetadataResults(
   requestedPublisher: string | undefined,
   onProgress?: ProgressReporter,
 ) {
-  onProgress?.({ id: 'core', status: 'active', detail: 'Searching Goodreads, Google Books, Kobo, Open Library, and Internet Archive' });
+  onProgress?.({ id: 'core', status: 'active', detail: 'Searching Hardcover, Google Books, Open Library, Wikidata, and providers' });
+
+  const hardcoverSourcesPromise = withTimeout('Hardcover', searchHardcover(title, author), [] as MetadataSource[], 5000);
+  const wikidataSourcesPromise = withTimeout('Wikidata', searchWikidata(title, author), [] as MetadataSource[], 5000);
+  const openAlexSourcesPromise = withTimeout('OpenAlex', searchOpenAlex(title, author), [] as MetadataSource[], 5000);
+  const locSourcesPromise = withTimeout('Library of Congress', searchLibraryOfCongress(title, author), [] as MetadataSource[], 5000);
+
   const internetArchiveSourcesPromise = withTimeout(
     'Internet Archive',
     searchInternetArchive(title, author),
@@ -223,12 +233,20 @@ async function getMetadataResults(
   })();
 
   const [
+    hardcoverSources,
+    wikidataSources,
+    openAlexSources,
+    libraryOfCongressSources,
     internetArchiveSources,
     openLibrarySources,
     googleBooksSources,
     koboSources,
     goodreadsSources,
   ] = await Promise.all([
+    hardcoverSourcesPromise,
+    wikidataSourcesPromise,
+    openAlexSourcesPromise,
+    locSourcesPromise,
     internetArchiveSourcesPromise,
     openLibrarySourcesPromise,
     googleBooksSourcesPromise,
@@ -236,7 +254,11 @@ async function getMetadataResults(
     getGoodreadsSources(title, author),
   ]);
 
-  const coreCount = internetArchiveSources.length
+  const coreCount = hardcoverSources.length
+    + wikidataSources.length
+    + openAlexSources.length
+    + libraryOfCongressSources.length
+    + internetArchiveSources.length
     + openLibrarySources.length
     + googleBooksSources.length
     + koboSources.length
@@ -263,8 +285,12 @@ async function getMetadataResults(
       publishYear: null,
       publisher: requestedPublisher,
     }] : []),
+    ...hardcoverSources,
     ...googleBooksSources,
     ...openLibrarySources,
+    ...wikidataSources,
+    ...openAlexSources,
+    ...libraryOfCongressSources,
     ...internetArchiveSources,
     ...koboSources,
     ...goodreadsSources,
@@ -377,6 +403,10 @@ async function getMetadataResults(
     openLibrarySources,
     koboSources,
     publisherSources,
+    hardcoverSources,
+    wikidataSources,
+    openAlexSources,
+    libraryOfCongressSources,
   });
 
   onProgress?.({

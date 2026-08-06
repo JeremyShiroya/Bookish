@@ -108,19 +108,26 @@ export function friendlyMetadataFailure(error) {
 // had no series and — after a genuine lookup — still has none, it is marked
 // `seriesChecked` so a true standalone stops being re-queried. Returns
 // { record, filled }: `record` is null when nothing at all changed.
-export function applyMetadataResult(book, meta, { didLookup = true } = {}) {
+export function applyMetadataResult(book, meta, { didLookup = true, isLightPass = false } = {}) {
   const hadNoSeries = !String(book?.series ?? '').trim()
   const merged = mergeMetadataIntoBook(book, meta)
   const stillNoSeries = !String((merged || book).series ?? '').trim()
 
-  // Only conclude "standalone" when we actually asked and matched a result —
-  // a lookup that found nothing at all must not silently mark the book.
-  const resolveStandalone = didLookup && hadNoSeries && stillNoSeries && !book?.seriesChecked
+  // Only conclude "standalone" when we performed a full deep lookup with a confirmed match.
+  // A light background pass must never mark seriesChecked = true.
+  const resolveStandalone = didLookup && !isLightPass && hadNoSeries && stillNoSeries && !book?.seriesChecked && !!meta?.title
 
   if (!merged && !resolveStandalone) return { record: null, filled: false }
   const record = { ...(merged || book) }
   if (resolveStandalone) record.seriesChecked = true
   return { record, filled: !!merged }
+}
+
+export async function unmarkFalseStandalones(books, updateBook) {
+  const falseStandalones = (books || []).filter((book) => !String(book?.series ?? '').trim())
+  for (const book of falseStandalones) {
+    await updateBook({ ...book, seriesChecked: false, metaCheckedAt: 0 })
+  }
 }
 
 export async function backfillLibraryMetadata({ books, updateBook, onProgress, shouldStop } = {}) {
@@ -138,7 +145,7 @@ export async function backfillLibraryMetadata({ books, updateBook, onProgress, s
       // publisher-site crawl, which costs ~15s a book for occasional extras.
       const results = await fetchBookMetadataResults(book.title, book.author || undefined, undefined, { light: true })
       const match = bestMetadataResultForBook(book, results)
-      const { record, filled } = applyMetadataResult(book, match, { didLookup: !!match })
+      const { record, filled } = applyMetadataResult(book, match, { didLookup: !!match, isLightPass: true })
       if (record) {
         // A record with no fill is a standalone we just confirmed — persist the
         // seriesChecked mark, but it does not count as an update.

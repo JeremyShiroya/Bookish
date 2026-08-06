@@ -76,13 +76,14 @@ export const ensureSeriesTotal = async ({
       const total = metadataSeriesTotal(results, seriesName, highestInstallment);
       if (!total) continue;
 
-      if (total !== storedTotal) {
+      if (total !== storedTotal || (storedTotal === 1 && total > 1)) {
         await propagateSeriesTotal({
           seriesName,
           seriesTotal: total,
           books,
           updateBook,
         });
+        return total;
       }
       return total;
     } catch {

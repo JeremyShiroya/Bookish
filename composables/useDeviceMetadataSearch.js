@@ -16,6 +16,10 @@ import { searchGoodreads, scrapeGoodreadsBook, fetchGoodreadsSeriesBooks } from 
 import { searchGoogleBooks, setGoogleBooksApiKey } from '~/server/utils/googleBooksApi'
 import { searchInternetArchive } from '~/server/utils/internetArchiveApi'
 import { searchOpenLibrary } from '~/server/utils/openLibraryApi'
+import { searchHardcover } from '~/server/utils/hardcoverApi'
+import { searchWikidata } from '~/server/utils/wikidataApi'
+import { searchOpenAlex } from '~/server/utils/openAlexApi'
+import { searchLibraryOfCongress } from '~/server/utils/libraryOfCongressApi'
 import { searchKobo, scrapeKoboBook } from '~/server/utils/koboScraper'
 import { buildMetadataResults } from '~/server/utils/metadataAggregator'
 import { searchKnownPublisherSites, searchPublisherMetadata } from '~/server/utils/publisherMetadata'
@@ -220,25 +224,30 @@ async function getPublisherSources(title, author, publisherCandidates, onProgres
 export async function fetchBookMetadataOnDevice(title, author, publisher, options = {}) {
   applyGoogleBooksKey()
   const onProgress = options.onProgress
-  // Bulk/background lookups set this to skip the slowest, lowest-yield stage.
   const light = options.light === true
-  // Goodreads is the slow one: a 25s search cap plus a scrape per candidate,
-  // against 9s for everything else — so it sets the pace of every lookup it is
-  // part of. It is also the only source carrying a star rating or a dependable
-  // series position, so a caller that needs neither can tell us to leave it
-  // out. Nothing else changes: every field still being filled is still merged
-  // across every source that could supply it.
   const skipGoodreads = options.skipGoodreads === true
   onProgress?.({
     type: 'step',
     id: 'core',
     status: 'active',
-    detail: skipGoodreads
-      ? 'Searching Google Books, Kobo, Open Library, and Internet Archive from this device'
-      : 'Searching Goodreads, Google Books, Kobo, Open Library, and Internet Archive from this device',
+    detail: 'Searching Hardcover, Google Books, Open Library, Wikidata, and providers from this device',
   })
 
-  const [internetArchiveResults, openLibraryResults, googleBooksResults, koboSources, goodreadsSources] = await Promise.all([
+  const [
+    hardcoverSources,
+    wikidataSources,
+    openAlexSources,
+    libraryOfCongressSources,
+    internetArchiveResults,
+    openLibraryResults,
+    googleBooksResults,
+    koboSources,
+    goodreadsSources,
+  ] = await Promise.all([
+    withTimeout(searchHardcover(title, author), [], 5000),
+    withTimeout(searchWikidata(title, author), [], 5000),
+    withTimeout(searchOpenAlex(title, author), [], 5000),
+    withTimeout(searchLibraryOfCongress(title, author), [], 5000),
     withTimeout(searchInternetArchive(title, author), [], 9000),
     withTimeout(searchOpenLibrary(title, author), [], 9000),
     withTimeout(searchGoogleBooks(title, author), [], 9000),
@@ -250,7 +259,11 @@ export async function fetchBookMetadataOnDevice(title, author, publisher, option
   const openLibrarySources = openLibraryResults.map(asSource('openLibrary'))
   const googleBooksSources = googleBooksResults.map(asSource('googleBooks'))
 
-  const coreCount = internetArchiveSources.length
+  const coreCount = hardcoverSources.length
+    + wikidataSources.length
+    + openAlexSources.length
+    + libraryOfCongressSources.length
+    + internetArchiveSources.length
     + openLibrarySources.length
     + googleBooksSources.length
     + koboSources.length
@@ -267,8 +280,12 @@ export async function fetchBookMetadataOnDevice(title, author, publisher, option
   onProgress?.({ type: 'step', id: 'publisherName', status: 'active', detail: 'Reading publisher fields from returned metadata' })
   const publisherCandidates = uniquePublishers([
     ...(publisher ? [{ publisher }] : []),
+    ...hardcoverSources,
     ...googleBooksSources,
     ...openLibrarySources,
+    ...wikidataSources,
+    ...openAlexSources,
+    ...libraryOfCongressSources,
     ...internetArchiveSources,
     ...koboSources,
     ...goodreadsSources,
@@ -282,7 +299,7 @@ export async function fetchBookMetadataOnDevice(title, author, publisher, option
       : 'No publisher field was found; researching major publisher sites by title and author',
   })
 
-  const publisherSources = await getPublisherSources(title, author, publisherCandidates, onProgress, { light })
+  const publisherSources = light ? [] : await getPublisherSources(title, author, publisherCandidates, onProgress, { light })
 
   onProgress?.({ type: 'step', id: 'merge', status: 'active', detail: 'Combining provider and publisher metadata' })
   const results = buildMetadataResults(title, author, {
@@ -292,6 +309,10 @@ export async function fetchBookMetadataOnDevice(title, author, publisher, option
     openLibrarySources,
     koboSources,
     publisherSources,
+    hardcoverSources,
+    wikidataSources,
+    openAlexSources,
+    libraryOfCongressSources,
   })
   onProgress?.({
     type: 'step',
@@ -305,11 +326,16 @@ export async function fetchBookMetadataOnDevice(title, author, publisher, option
   return results
 }
 
-// On-device port of server/api/books/series-books.get.ts: resolve the whole
-// series roster (title/cover per installment) from an owned seed book. Runs in
-// the WebView through CapacitorHttp exactly like the metadata pipeline above.
+import { fetchHardcoverSeriesRoster } from '~/server/utils/hardcoverApi'
+
 export async function fetchSeriesBooksOnDevice(seedTitle, author, seriesName) {
-  return withTimeout(fetchGoodreadsSeriesBooks(seedTitle, author, seriesName), { series: null, books: [] }, 30000)
+  try {
+    const hardcoverRoster = await withTimeout(fetchHardcoverSeriesRoster(seriesName || seedTitle, seedTitle), { series: null, books: [] }, 6000)
+    if (hardcoverRoster.books?.length) {
+      return hardcoverRoster
+    }
+  } catch {}
+  return withTimeout(fetchGoodreadsSeriesBooks(seedTitle, author, seriesName), { series: null, books: [] }, 25000)
 }
 
 // On-device port of server/api/books/series-order.get.ts: ask the configured

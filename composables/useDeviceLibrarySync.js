@@ -238,40 +238,25 @@ export function base64ToFile(base64, name, extension) {
 
 // Ask once per app open via the styled in-app modal; the actual grant happens
 // on the system settings screen, so we re-check when the app regains focus.
-async function ensureStoragePermission(addToast, askForConsent) {
+async function ensureStoragePermission(addToast) {
   const { granted } = await DeviceBooks.check()
   if (granted) return true
 
   const storage = resolveStorage()
-  const alreadyAsked = storage?.getItem(BOOKISH_DEVICE_SYNC_ASKED_KEY)
-
-  const wantsToGrant = await askForConsent()
   try { storage?.setItem(BOOKISH_DEVICE_SYNC_ASKED_KEY, '1') } catch {}
-  if (!wantsToGrant) {
-    if (!alreadyAsked) addToast('Device book scan skipped — you can enable file access any time from Android settings.', 'info')
-    return false
+
+  try {
+    await DeviceBooks.request()
+  } catch (error) {
+    console.warn('[DeviceSync] Native permission request failed:', error)
   }
 
-  await DeviceBooks.request()
-
-  // Wait for the user to come back from the settings screen (or a legacy
-  // permission dialog to close), then re-check.
-  const regained = await new Promise((resolve) => {
-    let settled = false
-    const finish = () => {
-      if (settled) return
-      settled = true
-      document.removeEventListener('visibilitychange', onVisible)
-      resolve()
-    }
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') setTimeout(finish, 350)
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    setTimeout(finish, 120000)
-  }).then(() => DeviceBooks.check())
-
-  return !!regained.granted
+  const recheck = await DeviceBooks.check()
+  if (!recheck.granted) {
+    addToast('Device book scan skipped — file access permission was not granted.', 'info')
+    return false
+  }
+  return true
 }
 
 // Prefer the native plugin's reader (same permission that listed the file);
@@ -411,7 +396,7 @@ export async function syncDeviceLibrary({ silent = false } = {}) {
     if (silent) {
       const { granted } = await DeviceBooks.check()
       if (!granted) return
-    } else if (!(await ensureStoragePermission(addToast, ask))) {
+    } else if (!(await ensureStoragePermission(addToast))) {
       return
     }
 

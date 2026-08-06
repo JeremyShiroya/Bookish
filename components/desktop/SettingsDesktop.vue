@@ -384,18 +384,31 @@
 
       <SettingsStoragePanel id="storage" />
 
-      <ConnectionTestPanel id="connection" />
+      <ConnectionTestPanel v-if="settings.developerMode" id="connection" />
     </section>
 
     <section class="about-section" aria-labelledby="about-title">
-      <img src="/Images/Pages-Logo.png" alt="Pages" class="about-logo" />
+      <img src="/Images/P Logo.png" alt="Pages" class="about-logo" />
       <h2 id="about-title">Pages</h2>
-      <p>Version {{ appVersion }} &bull; Build {{ buildNumber }}</p>
+      <p style="cursor: pointer; user-select: none;" @click="handleVersionClick">Version {{ appVersion }} &bull; Build {{ buildNumber }}</p>
       <nav class="about-links" aria-label="Pages links">
         <a href="#">Support Center</a>
         <a href="#">Release Notes</a>
         <a href="#">Privacy Policy</a>
       </nav>
+      <div v-if="settings.developerMode" class="dev-mode-row" style="margin-top: 16px; display: flex; align-items: center; justify-content: center; gap: 12px;">
+        <span style="font-size: 14px; font-weight: 500; color: var(--color-text-primary);">Developer Mode</span>
+        <button
+          type="button"
+          class="theme-toggle"
+          role="switch"
+          aria-label="Toggle developer mode"
+          :aria-checked="settings.developerMode === true"
+          @click="updateSettings({ developerMode: !settings.developerMode })"
+        >
+          <span></span>
+        </button>
+      </div>
       <small>© 2026 Pages. Made with <i class="ri-heart-fill heart-icon"></i> for readers.</small>
     </section>
   </main>
@@ -426,6 +439,25 @@ const { addToast } = useToast()
 const runtimeConfig = useRuntimeConfig()
 const appVersion = runtimeConfig.public.appVersion || '0.0.0'
 const buildNumber = runtimeConfig.public.buildNumber || 'dev'
+
+const versionClickCount = ref(0)
+let versionClickTimer = null
+
+const handleVersionClick = () => {
+  if (settings.value.developerMode) return
+  versionClickCount.value += 1
+  if (versionClickTimer) clearTimeout(versionClickTimer)
+  versionClickTimer = setTimeout(() => {
+    versionClickCount.value = 0
+  }, 3000)
+
+  if (versionClickCount.value >= 20) {
+    versionClickCount.value = 0
+    if (versionClickTimer) clearTimeout(versionClickTimer)
+    updateSettings({ developerMode: true })
+    addToast('Developer mode has been turned on.', 'success')
+  }
+}
 
 const coverPreviewBooks = computed(() => recentlyAddedBooks.value.slice(0, 3))
 

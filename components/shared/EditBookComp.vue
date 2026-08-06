@@ -593,6 +593,10 @@ const sourceLabel = (source, result = null) => {
     case 'openLibrary': return 'Open Library'
     case 'internetArchive': return 'Internet Archive'
     case 'kobo': return 'Kobo'
+    case 'hardcover': return 'Hardcover'
+    case 'wikidata': return 'Wikidata'
+    case 'openAlex': return 'OpenAlex'
+    case 'libraryOfCongress': return 'Library of Congress'
     case 'publisher': {
       const publisher = result?.publisherSource
       const name = publisher?.name
@@ -618,6 +622,10 @@ const sourceTooltip = (source, result) => {
 const metadataSourceTags = (result) => {
   if (Array.isArray(result?.sourceTags) && result.sourceTags.length) return result.sourceTags
   const id = String(result?.googleId || '')
+  if (id.startsWith('hc:')) return ['hardcover']
+  if (id.startsWith('wd:')) return ['wikidata']
+  if (id.startsWith('oa:')) return ['openAlex']
+  if (id.startsWith('loc:')) return ['libraryOfCongress']
   if (id.startsWith('ia:')) return ['internetArchive']
   if (id.startsWith('/works/')) return ['openLibrary']
   if (id.startsWith('gb:')) return ['googleBooks']

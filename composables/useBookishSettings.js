@@ -3,9 +3,10 @@ import { readonly, ref } from 'vue'
 export const BOOKISH_SETTINGS_KEY = 'bookish:settings'
 
 export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
+  settingsVersion: 2,
   readerTheme: 'light',
   readerZoom: 1.0,
-  libraryView: 'grid',
+  libraryView: 'table',
   groupDetailView: 'table',
   librarySort: 'name',
   librarySortDirection: 'asc',
@@ -17,11 +18,11 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   metadataAutoFill: true,
   trackSplitting: false,
   // ── Appearance preferences (Settings → Preferences) ──────────────────────
-  seriesCardBackground: 'blank',   // 'blank' | 'blur'
+  seriesCardBackground: 'blur',    // 'blank' | 'blur'
   seriesCardLayout: 'fan',         // 'fan' (books centered) | 'cover'
   favouritesCardBackground: 'blur',// 'blur' | 'blank'
-  favouritesCardLayout: 'grid',    // 'grid' | 'list' (set from the Favourites controls row)
-  playlistCardBackground: 'blank', // 'blur' | 'blank' — matches series default
+  favouritesCardLayout: 'list',    // 'grid' | 'list' (set from the Favourites controls row)
+  playlistCardBackground: 'blur',  // 'blur' | 'blank' — matches series default
   playlistCardLayout: 'fan',       // 'fan' | 'cover' — matches series default
   readerHighlight: true,           // highlight the section being read
   listenCoverBlur: true,           // blurred cover backdrop in Listen mode
@@ -39,6 +40,7 @@ export const DEFAULT_BOOKISH_SETTINGS = Object.freeze({
   // reader. Files on the device are never touched.
   enabledFormats: ['epub', 'pdf'],
   formatChoiceMade: false,         // the first-boot chooser has been answered
+  developerMode: false,
 })
 
 export const SUPPORTED_FORMATS = Object.freeze(['epub', 'pdf'])
@@ -212,9 +214,12 @@ export function normalizeBookishSettings(value) {
     showStreak: source.showStreak === undefined
       ? DEFAULT_BOOKISH_SETTINGS.showStreak
       : source.showStreak !== false,
-    formatFilter: FORMAT_FILTER_OPTIONS.includes(source.formatFilter)
-      ? source.formatFilter
-      : DEFAULT_BOOKISH_SETTINGS.formatFilter,
+    formatFilter: (
+      normalizeEnabledFormats(source.enabledFormats).length <= 1
+      || (source.formatFilter !== 'all' && !normalizeEnabledFormats(source.enabledFormats).includes(source.formatFilter))
+    )
+      ? 'all'
+      : (FORMAT_FILTER_OPTIONS.includes(source.formatFilter) ? source.formatFilter : DEFAULT_BOOKISH_SETTINGS.formatFilter),
     hideContent: source.hideContent === true,
     // undefined means "never chosen", which must fall through to the default —
     // `=== true` would pin every existing install to off no matter what the
@@ -224,6 +229,8 @@ export function normalizeBookishSettings(value) {
       : source.seriesSuggestions !== false,
     enabledFormats: normalizeEnabledFormats(source.enabledFormats),
     formatChoiceMade: source.formatChoiceMade === true,
+    developerMode: source.developerMode === true,
+    settingsVersion: Number(source.settingsVersion) || DEFAULT_BOOKISH_SETTINGS.settingsVersion,
   }
 }
 
@@ -258,6 +265,8 @@ const resolveStorage = (storage) => {
   return localStorage
 }
 
+export const CURRENT_SETTINGS_VERSION = 2
+
 export function readBookishSettings(storage) {
   const targetStorage = resolveStorage(storage)
   if (!targetStorage) return { ...DEFAULT_BOOKISH_SETTINGS }
@@ -265,7 +274,42 @@ export function readBookishSettings(storage) {
   try {
     const raw = targetStorage.getItem(BOOKISH_SETTINGS_KEY)
     if (!raw) return { ...DEFAULT_BOOKISH_SETTINGS }
-    return normalizeBookishSettings(JSON.parse(raw))
+
+    const parsed = JSON.parse(raw)
+    const storedVersion = Number(parsed?.settingsVersion || 0)
+
+    if (storedVersion < CURRENT_SETTINGS_VERSION) {
+      // One-time release migration: reset all appearance preferences to the new
+      // defaults while preserving the user's format settings (formatFilter and enabledFormats).
+      const preservedFormatFilter = parsed?.formatFilter
+      const preservedEnabledFormats = parsed?.enabledFormats
+      const preservedFormatChoiceMade = parsed?.formatChoiceMade
+
+      const migrated = normalizeBookishSettings({
+        ...parsed,
+        seriesCardBackground: DEFAULT_BOOKISH_SETTINGS.seriesCardBackground,
+        seriesCardLayout: DEFAULT_BOOKISH_SETTINGS.seriesCardLayout,
+        playlistCardBackground: DEFAULT_BOOKISH_SETTINGS.playlistCardBackground,
+        playlistCardLayout: DEFAULT_BOOKISH_SETTINGS.playlistCardLayout,
+        seriesSuggestions: DEFAULT_BOOKISH_SETTINGS.seriesSuggestions,
+        readerHighlight: DEFAULT_BOOKISH_SETTINGS.readerHighlight,
+        listenCoverBlur: DEFAULT_BOOKISH_SETTINGS.listenCoverBlur,
+        showStreak: DEFAULT_BOOKISH_SETTINGS.showStreak,
+        hideContent: DEFAULT_BOOKISH_SETTINGS.hideContent,
+        formatFilter: 'all',
+        enabledFormats: preservedEnabledFormats !== undefined ? preservedEnabledFormats : DEFAULT_BOOKISH_SETTINGS.enabledFormats,
+        formatChoiceMade: preservedFormatChoiceMade !== undefined ? preservedFormatChoiceMade : DEFAULT_BOOKISH_SETTINGS.formatChoiceMade,
+        settingsVersion: CURRENT_SETTINGS_VERSION,
+      })
+
+      try {
+        targetStorage.setItem(BOOKISH_SETTINGS_KEY, JSON.stringify(migrated))
+      } catch {}
+
+      return migrated
+    }
+
+    return normalizeBookishSettings(parsed)
   } catch {
     return { ...DEFAULT_BOOKISH_SETTINGS }
   }

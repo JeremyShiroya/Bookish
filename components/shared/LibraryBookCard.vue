@@ -582,7 +582,8 @@ const formatPersonalRating = (rating) => {
   .card-cover {
     width: 100%;
     height: auto;
-    aspect-ratio: 96 / 145;
+    aspect-ratio: 2 / 3;
+    align-self: start;
     border-radius: 8px;
     box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
   }

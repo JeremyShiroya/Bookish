@@ -2,7 +2,7 @@
   <div class="conn-test">
     <section class="card intro-card">
       <div class="card-head">
-        <i class="ri-stethoscope-line"></i>
+        <i class="ri-base-station-line"></i>
         <div>
           <h2>Connection test</h2>
           <p>Checks the online services Pages uses to find book covers, descriptions and series information.</p>

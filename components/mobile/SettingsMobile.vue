@@ -24,10 +24,19 @@
           >
             <span></span>
           </span>
+          <span
+            v-else-if="row.type === 'developerMode'"
+            class="theme-toggle"
+            role="switch"
+            aria-label="Toggle developer mode"
+            :aria-checked="settings.developerMode === true"
+          >
+            <span></span>
+          </span>
           <i v-else class="ri-arrow-right-s-line right-icon"></i>
         </div>
 
-        <div class="about-item">
+        <div class="about-item" style="cursor: pointer; user-select: none;" @click="handleVersionClick">
           <span>Version {{ appVersion }}</span>
         </div>
       </section>
@@ -36,7 +45,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import MobileSettingsNav from '~/components/mobile/MobileSettingsNav.vue'
 import { useBookishSettings } from '~/composables/useBookishSettings'
 import { useShareApp } from '~/composables/useShareApp'
@@ -49,18 +58,35 @@ const { addToast } = useToast()
 const router = useRouter()
 const appVersion = computed(() => runtimeConfig.public.appVersion || '0.0.0')
 
-const mobileSettingsRows = [
+const versionClickCount = ref(0)
+let versionClickTimer = null
+
+const handleVersionClick = () => {
+  if (settings.value.developerMode) return
+  versionClickCount.value += 1
+  if (versionClickTimer) clearTimeout(versionClickTimer)
+  versionClickTimer = setTimeout(() => {
+    versionClickCount.value = 0
+  }, 3000)
+
+  if (versionClickCount.value >= 20) {
+    versionClickCount.value = 0
+    if (versionClickTimer) clearTimeout(versionClickTimer)
+    updateSettings({ developerMode: true })
+    addToast('Developer mode has been turned on.', 'success')
+  }
+}
+
+const mobileSettingsRows = computed(() => [
   { label: 'Theme', icon: 'ri-moon-line', type: 'theme' },
   { label: 'Preferences', icon: 'ri-edit-box-line', to: '/settings/preferences' },
   { label: 'Storage', icon: 'ri-database-2-line', to: '/settings/storage' },
-  // { label: 'Connection test', icon: 'ri-stethoscope-line', to: '/settings/connection' },
-  // Sideloaded app, so there is no store link to send — sharing means handing
-  // over the APK itself. Only offered where that is possible.
+  ...(settings.value.developerMode ? [{ label: 'Connection test', icon: 'ri-base-station-line', to: '/settings/connection' }] : []),
   ...(canShareApp() ? [{ label: 'Share Pages', icon: 'ri-share-line', type: 'share' }] : []),
   { label: 'About', icon: 'ri-information-line', to: '/settings/about' },
   { label: 'Privacy Policy', icon: 'ri-lock-line', to: '/settings/privacy' },
-  // { label: 'Support the Project', icon: 'ri-hand-heart-line', comingSoon: true },
-]
+  ...(settings.value.developerMode ? [{ label: 'Developer Mode', icon: 'ri-code-s-slash-line', type: 'developerMode' }] : []),
+])
 
 const navigate = (path) => {
   router.push(path)
@@ -69,6 +95,11 @@ const navigate = (path) => {
 const handleSettingsRow = async (row) => {
   if (row.type === 'theme') {
     setReaderTheme(settings.value.readerTheme === 'dark' ? 'light' : 'dark')
+    return
+  }
+
+  if (row.type === 'developerMode') {
+    updateSettings({ developerMode: !settings.value.developerMode })
     return
   }
 

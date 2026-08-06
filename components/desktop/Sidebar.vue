@@ -8,7 +8,7 @@
       <router-link to="/" class="brand-link">
         <div class="logo-container">
           <div class="logo">
-            <img src="/Images/Pages-Logo.png" alt="Pages" class="logo-image" />
+            <img src="/Images/P Logo.png" alt="Pages" class="logo-image" />
           </div>
           <h1 class="title">Pages</h1>
         </div>

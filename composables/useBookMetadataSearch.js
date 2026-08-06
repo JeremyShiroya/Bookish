@@ -259,15 +259,30 @@ const readJsonResponse = async (response, label) => {
   return response.json();
 };
 
+const metadataQueryCache = new Map();
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
 export const fetchBookMetadataResults = async (title, author, publisher, options = {}) => {
+  const cacheKey = `${normalizeKey(title)}:${normalizeKey(author)}:${normalizeKey(publisher)}:${options.light ? 'light' : 'full'}`;
+  const cached = metadataQueryCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+    return cached.results;
+  }
+
   const { apiUrl, apiBaseUrl } = useApiEndpoint();
   const native = isNativeCapacitorPlatform();
+
+  let results = [];
 
   // Native without a configured server: the bundled app has no /api routes,
   // so go straight to the on-device provider pipeline (Goodreads included).
   if (native && !apiBaseUrl) {
     const { fetchBookMetadataOnDevice } = await loadDeviceSearch();
-    return fetchBookMetadataOnDevice(title, author, publisher, options);
+    results = await fetchBookMetadataOnDevice(title, author, publisher, options);
+    if (results?.length) {
+      metadataQueryCache.set(cacheKey, { timestamp: Date.now(), results });
+    }
+    return results;
   }
 
   const params = new URLSearchParams({ title });
@@ -280,27 +295,39 @@ export const fetchBookMetadataResults = async (title, author, publisher, options
     if (!response.ok) throw new Error(`Metadata request failed with ${response.status}`);
     if (options.onProgress) {
       const streamedResults = await readStreamingMetadataResponse(response, options.onProgress);
-      return streamedResults;
+      results = streamedResults;
     } else {
       const data = await readJsonResponse(response, 'Metadata endpoint');
-      if (data.results?.length) return data.results;
+      if (data.results?.length) results = data.results;
     }
   } catch (error) {
     if (native) {
       // Configured server unreachable — fall back to the on-device pipeline.
       const { fetchBookMetadataOnDevice } = await loadDeviceSearch();
-      return fetchBookMetadataOnDevice(title, author, publisher, options);
+      results = await fetchBookMetadataOnDevice(title, author, publisher, options);
+      if (results?.length) {
+        metadataQueryCache.set(cacheKey, { timestamp: Date.now(), results });
+      }
+      return results;
     }
     options.onProgress?.({ type: 'step', id: 'core', status: 'error', detail: error?.message || 'Metadata endpoint failed' });
     options.onProgress?.({ type: 'step', id: 'publisherSearch', status: 'skipped', detail: 'Skipped because the metadata endpoint failed' });
     options.onProgress?.({ type: 'step', id: 'publisherScrape', status: 'skipped', detail: 'Skipped because the metadata endpoint failed' });
   }
 
-  const [internetArchiveResults, openLibraryResults] = await Promise.all([
-    searchInternetArchive(title, author),
-    searchOpenLibrary(title, author),
-  ]);
-  return mergeResults(title, author, [internetArchiveResults, openLibraryResults]);
+  if (!results.length) {
+    const [internetArchiveResults, openLibraryResults] = await Promise.all([
+      searchInternetArchive(title, author),
+      searchOpenLibrary(title, author),
+    ]);
+    results = mergeResults(title, author, [internetArchiveResults, openLibraryResults]);
+  }
+
+  if (results?.length) {
+    metadataQueryCache.set(cacheKey, { timestamp: Date.now(), results });
+  }
+
+  return results;
 };
 
 export const fetchSeriesTotalResults = async (title, author) => {

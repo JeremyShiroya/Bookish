@@ -25,26 +25,16 @@ import {
   missingMetadataFields,
 } from '~/composables/useMetadataBackfill'
 
-// Pacing.
-//
-// The old schedule spent 70-90% of the wall clock idling: three books were
-// looked up one at a time, then the loop rested four minutes whether or not
-// hundreds of books were still waiting. The rest period is now ADAPTIVE — short
-// while there is a backlog and lookups are succeeding, long once the queue
-// drains or the sources start refusing — and a batch is looked up concurrently
-// rather than in single file.
-const BATCH_SIZE = 3 // books looked up per cycle
-const CONCURRENCY = 3 // ...and how many of them run at once
-const RECHECK_AFTER_MS = 24 * 60 * 60 * 1000 // don't re-hit an unfillable book for a day
-const START_DELAY_MS = 20 * 1000 // let the app settle after launch first
+// Pacing parameters
+const BATCH_SIZE = 3
+const CONCURRENCY = 3
+const RECHECK_AFTER_MS = 24 * 60 * 60 * 1000
+const START_DELAY_MS = 2 * 1000
 
-// Adaptive rest between cycles.
-const BUSY_COOLDOWN_MS = 25 * 1000 // backlog, and the last cycle went fine
-const IDLE_COOLDOWN_MS = 4 * 60 * 1000 // nothing left to do
-const BACKGROUND_COOLDOWN_MS = 4 * 60 * 1000 // app is not on screen — be gentle
-const ERROR_COOLDOWN_MS = 90 * 1000 // sources are refusing; ease off
-// A cycle where most lookups threw means the sources are unhappy, not that the
-// books are unfillable.
+const BUSY_COOLDOWN_MS = 5 * 1000
+const IDLE_COOLDOWN_MS = 4 * 60 * 1000
+const BACKGROUND_COOLDOWN_MS = 4 * 60 * 1000
+const ERROR_COOLDOWN_MS = 90 * 1000
 const ERROR_BACKOFF_RATIO = 0.5
 
 const normalize = (value) => String(value ?? '')
@@ -54,10 +44,6 @@ const normalize = (value) => String(value ?? '')
   .replace(/[^a-z0-9]+/g, ' ')
   .trim()
 
-// Is this search result actually the book we asked about? Titles must match (or
-// one contain the other — subtitles and series suffixes vary between sources),
-// and if the book already has an author, it must agree. This is the gate that
-// stops the unattended fill from writing another book's details into a gap.
 export function metadataResultMatchesBook(book, result) {
   if (!result) return false
   const bookTitle = normalize(book?.title)
@@ -71,8 +57,6 @@ export function metadataResultMatchesBook(book, result) {
 
   const bookAuthor = normalize(book?.author)
   const resultAuthor = normalize(result.author)
-  // Only enforce the author when the book already knows its own — a book that
-  // is missing its author is exactly what we are here to fill.
   if (bookAuthor && resultAuthor) {
     return bookAuthor === resultAuthor
       || bookAuthor.includes(resultAuthor)
@@ -80,10 +64,6 @@ export function metadataResultMatchesBook(book, result) {
   }
   return true
 }
-
-// Goodreads is the slowest source by a wide margin — a 25s search cap plus a
-// scrape per candidate — and it is the ONLY one that carries a star rating or a
-// reliable series position. So it is worth calling when those are what's
 // missing, and pure overhead when they aren't.
 //
 // This is deliberately not "use fewer sources for the same field": every field
@@ -98,10 +78,9 @@ export function needsGoodreads(book) {
   return missingMetadataFields(book).some((field) => GOODREADS_ONLY_FIELDS.has(field))
 }
 
-// Books the user is most likely to look at next come first. Same throughput,
-// but the gaps close where they are actually looking.
 const priorityOf = (book) => {
   const status = String(book?.status || '').toLowerCase()
+  if (!String(book?.series ?? '').trim() && !book?.seriesChecked) return -1
   if (status === 'reading') return 0
   if (book?.lastReadAt) return 1
   return 2
@@ -109,8 +88,6 @@ const priorityOf = (book) => {
 
 const addedAt = (book) => new Date(book?.createdAt || 0).getTime() || 0
 
-// Which books to top up this cycle: those with gaps, skipping any checked
-// within RECHECK_AFTER_MS so an unfillable book is not hammered every cycle.
 export function pickAutoTargets(books, { now = Date.now(), cooldownMs = RECHECK_AFTER_MS, limit = BATCH_SIZE } = {}) {
   return (books || [])
     .filter((book) => bookNeedsMetadata(book))
@@ -184,7 +161,8 @@ async function fillOne(book) {
     { light: true, skipGoodreads: !needsGoodreads(book) },
   )
   const match = bestMetadataResultForBook(book, results)
-  const { record, filled } = applyMetadataResult(book, match, { didLookup: !!match })
+  const { record, filled } = applyMetadataResult(book, match, { didLookup: !!match, isLightPass: true })
+  // Stamp the check either way so an unfillable book waits a day before its
   // Stamp the check either way so an unfillable book waits a day before its
   // next attempt, on top of whatever the result filled (series-checked flag
   // included).
@@ -194,10 +172,7 @@ async function fillOne(book) {
 
 async function runCycle() {
   if (!autoState.enabled || autoState.running) return { attempted: 0, failed: 0 }
-  // The scheduler keeps turning even with the book fill switched off, because
-  // the series sweep shares it — so this phase checks its own setting.
   if (_deps?.isFillEnabled && !_deps.isFillEnabled()) return { attempted: 0, failed: 0 }
-  // Never compete with the manual Settings → Storage sweep.
   if (_deps?.isBackfillRunning?.()) return { attempted: 0, failed: 0 }
   if (!online()) return { attempted: 0, failed: 0 }
 
@@ -282,10 +257,19 @@ export function stopAutoMetadata() {
   }
 }
 
+export function wakeAutoMetadata() {
+  if (!autoState.enabled) return
+  if (_timer) {
+    clearTimeout(_timer)
+    _timer = null
+  }
+}
+
 export const useAutoMetadata = () => ({
   state: readonly(autoState),
   start: startAutoMetadata,
   stop: stopAutoMetadata,
+  wake: wakeAutoMetadata,
 })
 
 export const __private = { missingMetadataFields }

@@ -41,9 +41,9 @@ export default defineNuxtConfig({
         { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
       ],
       link: [
-        { rel: 'icon', type: 'image/png', href: '/Images/Pages-Logo.png' },
-        { rel: 'shortcut icon', type: 'image/png', href: '/Images/Pages-Logo.png' },
-        { rel: 'apple-touch-icon', href: '/Images/Pages-Logo.png' },
+        { rel: 'icon', type: 'image/png', href: '/Images/P Logo.png' },
+        { rel: 'shortcut icon', type: 'image/png', href: '/Images/P Logo.png' },
+        { rel: 'apple-touch-icon', href: '/Images/P Logo.png' },
       ],
     },
   },
@@ -114,13 +114,13 @@ export default defineNuxtConfig({
       start_url: '/',
       icons: [
         {
-          src: '/Images/Pages-Logo.png',
+          src: '/Images/P Logo.png',
           sizes: '192x192',
           type: 'image/png',
           purpose: 'any maskable',
         },
         {
-          src: '/Images/Pages-Logo.png',
+          src: '/Images/P Logo.png',
           sizes: '512x512',
           type: 'image/png',
           purpose: 'any maskable',
@@ -128,6 +128,7 @@ export default defineNuxtConfig({
       ],
     },
     workbox: {
+      maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // 4 MiB — Empty State PNGs are ~2.3 MB
       navigateFallback: '/',
       globPatterns: ['**/*.{js,css,html,png,woff2}'],
       runtimeCaching: [

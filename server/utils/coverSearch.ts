@@ -2,6 +2,9 @@ import { searchGoodreads, scrapeGoodreadsBook, normalizeGoodreadsImage } from '.
 import { searchGoogleBooks } from './googleBooksApi';
 import { searchOpenLibrary } from './openLibraryApi';
 import { searchKobo, scrapeKoboBook } from './koboScraper';
+import { searchHardcover } from './hardcoverApi';
+import { searchInternetArchive } from './internetArchiveApi';
+import { searchWikidata } from './wikidataApi';
 import { addUniqueImage, isUsefulCoverUrl, rankCoverResult, searchGoogleImages } from './imageSearch';
 import { resolvePublisherDomain } from './publisherSites';
 
@@ -10,7 +13,7 @@ import { resolvePublisherDomain } from './publisherSites';
 
 export type CoverImage = {
   url: string;
-  source: string;          // machine-readable: goodreads | googleBooks | openLibrary | kobo | googleImages | publisher
+  source: string;          // machine-readable: goodreads | googleBooks | openLibrary | kobo | hardcover | internetArchive | wikidata | googleImages | publisher
   label: string;           // human-readable e.g. "Goodreads", "Web image search · amazon.com"
 };
 
@@ -20,6 +23,8 @@ const SOURCE_LABELS: Record<string, string> = {
   openLibrary: 'Open Library',
   internetArchive: 'Internet Archive',
   kobo: 'Kobo',
+  hardcover: 'Hardcover',
+  wikidata: 'Wikidata',
   googleImages: 'Web image search',
   publisher: "Publisher's site",
 };
@@ -112,20 +117,23 @@ async function searchPublisherCoverImages(title: string, author: string | undefi
 }
 
 export async function searchBookCovers(title: string, author?: string, publisher?: string) {
-  // The original four working sources — these stay exactly as they were.
-  // Publisher-website results are a *separate* augmenting search that runs in
-  // parallel and gets appended at the end (when a publisher is provided).
   const [
+    hardcoverResult,
     goodreadsResult,
     gbResult,
     olResult,
+    iaResult,
+    wikidataResult,
     koboResult,
     googleImageResult,
     publisherImageResult,
   ] = await Promise.allSettled([
+    searchHardcover(title, author),
     searchGoodreads(title, author),
     searchGoogleBooks(title, author),
     searchOpenLibrary(title, author),
+    searchInternetArchive(title, author),
+    searchWikidata(title, author),
     searchKobo(title, author),
     searchGoogleCoverImages(title, author),
     publisher
@@ -133,9 +141,12 @@ export async function searchBookCovers(title: string, author?: string, publisher
       : Promise.resolve([]),
   ]);
 
+  const hardcover = hardcoverResult.status === 'fulfilled' ? hardcoverResult.value : [];
   const goodreads = goodreadsResult.status === 'fulfilled' ? goodreadsResult.value : [];
   const google = gbResult.status === 'fulfilled' ? gbResult.value : [];
   const openLibrary = olResult.status === 'fulfilled' ? olResult.value : [];
+  const internetArchive = iaResult.status === 'fulfilled' ? iaResult.value : [];
+  const wikidata = wikidataResult.status === 'fulfilled' ? wikidataResult.value : [];
   const koboUrls = koboResult.status === 'fulfilled' ? koboResult.value : [];
   const googleImages = googleImageResult.status === 'fulfilled' ? googleImageResult.value : [];
   const publisherImages = publisherImageResult.status === 'fulfilled' ? publisherImageResult.value : [];
@@ -149,6 +160,7 @@ export async function searchBookCovers(title: string, author?: string, publisher
   const seen = new Set<string>();
   const sourceByUrl = new Map<string, { source: string; label: string }>();
 
+  hardcover.forEach((item) => addCover(urls, seen, sourceByUrl, item.cover, 'hardcover'));
   goodreads.forEach((item) => addCover(urls, seen, sourceByUrl, item.cover, 'goodreads'));
   if (goodreadsDetails.status === 'fulfilled') {
     goodreadsDetails.value.forEach((entry) => {
@@ -169,9 +181,9 @@ export async function searchBookCovers(title: string, author?: string, publisher
 
   google.forEach((item) => addCover(urls, seen, sourceByUrl, item.cover, 'googleBooks'));
   openLibrary.forEach((item) => addCover(urls, seen, sourceByUrl, item.cover, 'openLibrary'));
+  internetArchive.forEach((item) => addCover(urls, seen, sourceByUrl, item.cover, 'internetArchive'));
+  wikidata.forEach((item) => addCover(urls, seen, sourceByUrl, item.cover, 'wikidata'));
 
-  // Append publisher-site hi-res covers at the end so they augment rather than
-  // displace the established sources.
   publisherImages.forEach((item) => {
     addCover(urls, seen, sourceByUrl, item.url, 'publisher', item.context);
     addCover(urls, seen, sourceByUrl, item.thumbnail, 'publisher', item.context);

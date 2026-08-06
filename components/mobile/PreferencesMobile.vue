@@ -212,7 +212,7 @@
           </button>
         </div>
 
-        <div class="pref-row">
+        <div v-if="settings.developerMode" class="pref-row">
           <div class="pref-copy">
             <span class="pref-label">Hide content</span>
             <span class="pref-hint">Preview the app as though your library were empty. Nothing is deleted.</span>

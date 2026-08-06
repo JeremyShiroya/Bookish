@@ -935,15 +935,23 @@ function chunkIndexForCurrentPosition() {
   const anchorY = 80
   // Only the section under the anchor line can hold the answer, so map that one
   // rather than forcing the whole book's map to exist first.
+  let anchorSection = -1
   if (import.meta.client) {
     const anchorEl = document.elementFromPoint(Math.round(window.innerWidth / 2), anchorY)
-    const anchorSection = Number(anchorEl?.closest?.('[id^="ch-"]')?.id?.slice(3))
+    anchorSection = Number(anchorEl?.closest?.('[id^="ch-"]')?.id?.slice(3))
     if (Number.isFinite(anchorSection)) _mapOneSection(anchorSection)
   }
-  if (import.meta.client && _chunkEls.length) {
+  // Scope the search to just the visible section's chunk range. Iterating the
+  // full _chunkEls array from 0 caused off-screen chapters above the viewport
+  // (negative getBoundingClientRect().top) to satisfy the `<= anchorY` check,
+  // returning a chunk from Chapter 0 and wiping the user's progress.
+  if (import.meta.client && _chunkEls.length && Number.isFinite(anchorSection)) {
+    const counts = epubSectionCounts.value
+    const rangeStart = sectionStartChunk(anchorSection)
+    const rangeEnd = rangeStart + (counts[anchorSection] || 0)
     let best = -1
     let firstConnected = -1
-    for (let i = 0; i < _chunkEls.length; i += 1) {
+    for (let i = rangeStart; i < rangeEnd && i < _chunkEls.length; i += 1) {
       const el = _chunkEls[i]
       if (!el?.isConnected) continue
       if (firstConnected === -1) firstConnected = i
@@ -1528,8 +1536,12 @@ function updateBookEdge() {
 }
 
 let _scrollRaf = null
+// Set while restoring a saved scroll position so that scroll events fired during
+// the restore don't overwrite the saved chunk with a stale top-of-chapter value.
+let _scrollRestoringPosition = false
 
 function updateCurrentChapterFromScroll() {
+  if (_scrollRestoringPosition) return
   if (!readsAsEpub.value || !chapterList.value.length || !import.meta.client) return
 
   // O(1) hit-test at the reading anchor line instead of measuring every
@@ -1686,48 +1698,73 @@ async function loadBook(id) {
 
   if (readsAsEpub.value && chapterList.value.length > 0
     && (hasSavedPosition || isCurrentBookNarrating.value)) {
-    // Same formula as the mounting window seed, so the target is mounted.
-    const safeIndex = initialSectionIndex()
+    const targetChunk = initialReadingChunk()
+    const safeIndex = sectionForChunk(targetChunk)
     currentChapterIdx.value = safeIndex
-    // Seed the shared position BEFORE the surface reports one, so a mode switch
-    // straight after opening still knows where the reader actually is.
-    currentReadingChunk.value = initialReadingChunk()
+    currentReadingChunk.value = targetChunk
 
-    const el = document.getElementById(`ch-${safeIndex}`)
-    if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' })
+    if (!usePagedReader.value) {
+      _scrollRestoringPosition = true
+      await scrollToChunk(targetChunk)
+      await new Promise(resolve => setTimeout(resolve, 50))
+      const targetElRefined = _chunkEls[targetChunk]
+      if (targetElRefined?.isConnected) {
+        targetElRefined.scrollIntoView({ behavior: 'instant', block: 'start' })
+      }
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          _scrollRestoringPosition = false
+        })
+      })
+    } else {
+      const el = document.getElementById(`ch-${safeIndex}`)
+      if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' })
+    }
 
-    // Refine to the exact sentence once the highlight spans exist. Scroll mode
-    // restores the sentence, not just the chapter — landing at the top of a long
-    // chapter was the visible half of "scroll mode starts at the beginning".
     if (isCurrentBookNarrating.value) {
       setTimeout(() => {
         if (isCurrentBookNarrating.value) jumpToNarration()
-      }, 400)
-    } else if (!usePagedReader.value) {
-      setTimeout(() => scrollToChunk(currentReadingChunk.value), 400)
+      }, 200)
     }
   }
 
   if (!isPdfRenderable.value) {
     readerReady.value = true
-    updateCurrentChapterFromScroll()
+    if (!_scrollRestoringPosition) updateCurrentChapterFromScroll()
   }
 }
 
 // Scroll mode's counterpart to the paged reader's goToChunk: mount the owning
 // section, then bring that sentence to the reading anchor line.
 function scrollToChunk(chunkIndex) {
-  if (!import.meta.client || !readsAsEpub.value) return
-  const target = Number(chunkIndex)
-  if (!Number.isFinite(target) || target < 0) return
+  return new Promise((resolve) => {
+    if (!import.meta.client || !readsAsEpub.value) return resolve(false)
+    const target = Number(chunkIndex)
+    if (!Number.isFinite(target) || target < 0) return resolve(false)
 
-  const section = sectionForChunk(target)
-  mountSection(section)
-  nextTick(() => {
-    _mapOneSection(section)
-    const el = _chunkEls[target]
-    if (el?.isConnected) el.scrollIntoView({ behavior: 'instant', block: 'start' })
-    else document.getElementById(`ch-${section}`)?.scrollIntoView({ behavior: 'instant', block: 'start' })
+    const section = sectionForChunk(target)
+    mountSection(section)
+
+    const executeScroll = () => {
+      _mapOneSection(section)
+      const el = _chunkEls[target]
+      if (el?.isConnected) {
+        el.scrollIntoView({ behavior: 'instant', block: 'start' })
+        resolve(true)
+      } else {
+        const chEl = document.getElementById(`ch-${section}`)
+        if (chEl) chEl.scrollIntoView({ behavior: 'instant', block: 'start' })
+        resolve(false)
+      }
+    }
+
+    nextTick(() => {
+      if (document.getElementById(`ch-${section}`)) {
+        executeScroll()
+      } else {
+        setTimeout(executeScroll, 50)
+      }
+    })
   })
 }
 

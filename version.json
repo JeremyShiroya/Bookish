@@ -1,0 +1,8 @@
+{
+  "versionCode": 242,
+  "versionName": "1.2.5",
+  "apkUrl": "https://github.com/JeremyShiroya/Bookish/releases/download/v1.2.5/bookish-1.2.5.apk",
+  "notes": "Native storage permission, fixed series card alignment, default list view",
+  "mandatory": false,
+  "releasedAt": "2026-08-06T23:03:18.608Z"
+}

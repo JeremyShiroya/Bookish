@@ -25,6 +25,7 @@
           type="button"
           class="format-option"
           :class="{ selected: chosen === option.mode }"
+          :disabled="saving"
           @click="chosen = option.mode"
         >
           <span class="option-icon"><i :class="option.icon"></i></span>
@@ -45,10 +46,12 @@
 
 <script setup>
 import { ref } from 'vue'
+import { enabledFormatsForMode, useBookishSettings } from '~/composables/useBookishSettings'
 import { useFormatEnablement } from '~/composables/useFormatEnablement'
 
 const emit = defineEmits(['done'])
 
+const { updateSettings } = useBookishSettings()
 const { applyFormatMode } = useFormatEnablement()
 
 const options = [
@@ -80,12 +83,14 @@ const confirm = async () => {
   saving.value = true
   try {
     await applyFormatMode(chosen.value)
-    // The device scan holds off until this choice exists, so it is started here
-    // rather than leaving the library empty until the next background rescan.
-    const { syncDeviceLibrary } = await import('~/composables/useDeviceLibrarySync')
-    syncDeviceLibrary()
   } catch (error) {
     console.error('[Formats] Could not apply the first-boot format choice:', error)
+    // Fallback: make sure format choice is marked as made even if scan threw error
+    updateSettings({
+      enabledFormats: enabledFormatsForMode(chosen.value),
+      formatFilter: 'all',
+      formatChoiceMade: true,
+    })
   } finally {
     saving.value = false
     emit('done')
