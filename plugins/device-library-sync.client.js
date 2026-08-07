@@ -22,15 +22,23 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     // setTimeout drops the Nuxt context, and the sync uses useState-backed
     // composables — restore the context or every composable call throws.
+    let hasRanInitialNarratedScan = false
+
     setTimeout(() => {
-      nuxtApp.runWithContext(() => syncDeviceLibrary())
+      nuxtApp.runWithContext(() => syncDeviceLibrary()).then(() => {
+        hasRanInitialNarratedScan = true
+      })
     }, 1500)
 
     // Listen for app coming back into foreground (e.g. after user grants permission in System Settings)
     import('@capacitor/app').then(({ App }) => {
       App.addListener('appStateChange', ({ isActive }) => {
         if (isActive) {
-          nuxtApp.runWithContext(() => syncDeviceLibrary({ silent: true }))
+          setTimeout(() => {
+            nuxtApp.runWithContext(() => syncDeviceLibrary({ silent: hasRanInitialNarratedScan })).then(() => {
+              hasRanInitialNarratedScan = true
+            })
+          }, 350)
         }
       })
     }).catch((err) => {
