@@ -198,7 +198,6 @@ describe('mobile UX batch', () => {
 
   test('mobile library pages show a per-page empty-state illustration, not an icon', () => {
     const expected = {
-      'components/mobile/HomeMobile.vue': 'illustration="library"',
       'components/mobile/BooksMobile.vue': 'illustration="books"',
       'components/mobile/SeriesMobile.vue': 'illustration="series"',
       'components/mobile/FavouritesMobile.vue': 'illustration="favourites"',
@@ -208,21 +207,16 @@ describe('mobile UX batch', () => {
       expect(read(path), path).toContain(marker)
     }
 
-    // The illustrations are inline SVG so they recolour with the theme.
     const emptyState = read('components/shared/EmptyState.vue')
     expect(emptyState).toContain('empty-illustration')
-    expect(emptyState).toContain('<svg')
+    expect(emptyState).toContain('empty-illustration-img')
   })
 
-  test('home renders one hero empty state and hides sections with no content', () => {
+  test('home renders section empty cards when library is empty', () => {
     const home = read('components/mobile/HomeMobile.vue')
-    // Empty library: a single welcome hero, not an empty state per section.
-    expect(home).toContain('initialized && books.length === 0')
-    // Currently Reading / Series only render when they have content.
-    expect(home).toContain('<section v-if="currentReadingBook"')
-    expect(home).toContain('<section v-if="mobileSeries.length > 0"')
-    // No leftover per-section empty states anywhere on home.
-    expect(home.match(/<EmptyState/g)).toHaveLength(2)
+    expect(home).toContain('empty-reading-card')
+    expect(home).toContain('empty-recently-card')
+    expect(home).toContain('empty-series-card')
   })
 
   test('home search results come straight off the bound input', () => {

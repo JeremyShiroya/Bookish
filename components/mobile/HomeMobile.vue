@@ -20,20 +20,6 @@
       </template>
     </EmptyState>
 
-    <EmptyState
-      v-else-if="initialized && books.length === 0"
-      illustration="library"
-      title="Welcome to Bookish"
-      description="Import your first PDF or EPUB to build your library shelves."
-    >
-      <template #action>
-        <NuxtLink to="/add" class="add-btn">
-          <i class="ri-add-line"></i>
-          Add Your First Book
-        </NuxtLink>
-      </template>
-    </EmptyState>
-
     <div v-else-if="initialized" class="mobile-home">
       <section class="mobile-search-section">
         <label class="mobile-search-bar">
@@ -81,9 +67,9 @@
       </section>
 
       <!-- Currently Reading -->
-      <section v-if="currentReadingBook" class="mobile-home-section">
+      <section class="mobile-home-section">
         <h2 class="mobile-section-title">Currently Reading</h2>
-        <div class="continue-single">
+        <div v-if="currentReadingBook" class="continue-single">
           <HomeContinueReadingCard
             :book="currentReadingBook"
             :is-playing="isBookPlaying(currentReadingBook)"
@@ -91,15 +77,26 @@
             @play="handleContinuePlay"
           />
         </div>
+        <div v-else class="empty-reading-card">
+          <div class="empty-reading-content">
+            <h3 class="empty-reading-title">Start your reading journey</h3>
+            <p class="empty-reading-sub">0 books in library</p>
+            <NuxtLink to="/add" class="empty-reading-btn">
+              Get started <i class="ri-arrow-right-line"></i>
+            </NuxtLink>
+          </div>
+          <div class="empty-reading-arc"></div>
+          <img src="/Images/Empty State 2.png" alt="" class="empty-reading-illustration" />
+        </div>
       </section>
 
       <!-- Recently Added -->
-      <section v-if="mobileRecentBooks.length > 0" class="mobile-home-section">
+      <section class="mobile-home-section">
         <div class="mobile-section-header">
           <h2 class="mobile-section-title">Recently Added</h2>
-          <NuxtLink to="/books" class="mobile-see-all">See all</NuxtLink>
+          <NuxtLink v-if="mobileRecentBooks.length > 0" to="/books" class="mobile-see-all">See all</NuxtLink>
         </div>
-        <div class="book-grid">
+        <div v-if="mobileRecentBooks.length > 0" class="book-grid">
           <HomeBookRailCard
             v-for="book in mobileRecentBooks"
             :key="book.id"
@@ -107,21 +104,33 @@
             @open="openBook"
           />
         </div>
+        <div v-else class="empty-recently-card">
+          <img src="/Images/Empty State 1.png" alt="" class="empty-recently-illustration" />
+          <div class="empty-recently-content">
+            <h3 class="empty-recently-title">Let's build your library<br />One book at a time</h3>
+            <NuxtLink to="/add" class="empty-recently-btn">
+              Add first book <i class="ri-arrow-right-line"></i>
+            </NuxtLink>
+          </div>
+        </div>
       </section>
 
       <!-- Series -->
-      <section v-if="mobileSeries.length > 0" class="mobile-home-section mobile-series-section">
+      <section class="mobile-home-section mobile-series-section">
         <div class="mobile-section-header">
           <h2 class="mobile-section-title">Series</h2>
-          <NuxtLink to="/series" class="mobile-see-all">See all</NuxtLink>
+          <NuxtLink v-if="mobileSeries.length > 0" to="/series" class="mobile-see-all">See all</NuxtLink>
         </div>
-        <div class="series-list">
+        <div v-if="mobileSeries.length > 0" class="series-list">
           <SeriesCollageCard
             v-for="series in mobileSeries"
             :key="series.id"
             :series="series"
             @open="openSeries"
           />
+        </div>
+        <div v-else class="empty-series-card">
+          <img src="/Images/Empty State 3.png" alt="" class="empty-series-illustration" />
         </div>
       </section>
     </div>

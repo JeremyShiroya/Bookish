@@ -20,15 +20,22 @@ export default defineNuxtPlugin((nuxtApp) => {
     // waiting on its own lookup.
     nuxtApp.runWithContext(() => hydrateSeriesSuggestions())
 
-
     // setTimeout drops the Nuxt context, and the sync uses useState-backed
     // composables — restore the context or every composable call throws.
     setTimeout(() => {
-      // The series-suggestion sweep used to get its own interval here. It now
-      // shares the background scheduler in auto-metadata.client.js, so the two
-      // jobs take turns on the same metadata sources rather than colliding.
       nuxtApp.runWithContext(() => syncDeviceLibrary())
-    }, 2500)
+    }, 1500)
+
+    // Listen for app coming back into foreground (e.g. after user grants permission in System Settings)
+    import('@capacitor/app').then(({ App }) => {
+      App.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) {
+          nuxtApp.runWithContext(() => syncDeviceLibrary({ silent: true }))
+        }
+      })
+    }).catch((err) => {
+      console.warn('[DeviceSync] Could not attach appStateChange listener:', err)
+    })
 
     setInterval(() => {
       // Skip while backgrounded — Android throttles the WebView's timers there

@@ -139,18 +139,15 @@ export const useFormatEnablement = () => {
       await fetchAllData(true)
     }
 
-    if (addedFormats.length > 0) {
-      const addedLabel = addedFormats.map(formatLabel).join(' and ')
-      addToast(`Adding ${addedLabel} books into Pages — scanning your device. This might take a moment…`, 'info')
-
-      if (import.meta.client) {
-        try {
-          await syncDeviceLibrary({ silent: false })
-        } catch (error) {
-          console.warn('[Formats] Could not scan device after format update:', error)
-        }
+    if (import.meta.client) {
+      try {
+        await syncDeviceLibrary({ silent: false })
+      } catch (error) {
+        console.warn('[Formats] Could not scan device after format update:', error)
       }
-    } else if (removedFormats.length === 0) {
+    }
+
+    if (removedFormats.length === 0 && addedFormats.length === 0) {
       await fetchAllData(true)
     }
 
