@@ -314,8 +314,14 @@ function applyAiPatches<T extends Record<string, any>>(
       }
     }
 
+    if (item.series) {
+      const hasNumber = Boolean(item.seriesInstallment) || (Number(item.seriesTotal) > 1)
+      item.positionConfidence = hasNumber ? 'confirmed' : 'inferred'
+    }
+
     item.aiVerified = true
     item.aiProvider = provider
+    item.aiConfidenceTag = patch.isBookMatch !== false ? 'CONFIRMED' : 'INFERRED'
     item.aiWarnings = mergeWarnings(item.aiWarnings, ...warnings)
   }
 

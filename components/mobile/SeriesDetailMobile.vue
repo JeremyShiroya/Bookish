@@ -468,7 +468,7 @@ const startMissingSweep = async () => {
     // authoritative (contiguous 1..max) OR when it has trimmed a small "N works"
     // overcount down — i.e. whenever the roster's reconciled total is lower than
     // Reconcile the stored series total to what the roster actually covers.
-    const totalCorrectable = effectiveTotal > 0 && effectiveTotal !== derivedSeriesTotal.value;
+    const totalCorrectable = effectiveTotal > 0 && effectiveTotal !== derivedSeriesTotal.value && (coverage.contiguous || effectiveTotal < derivedSeriesTotal.value);
     if (totalCorrectable) {
       await propagateSeriesTotal({
         seriesName: seriesName.value,

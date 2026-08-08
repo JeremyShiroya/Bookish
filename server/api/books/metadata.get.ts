@@ -8,9 +8,10 @@ import { searchHardcover } from '../../utils/hardcoverApi';
 import { searchWikidata } from '../../utils/wikidataApi';
 import { searchOpenAlex } from '../../utils/openAlexApi';
 import { searchLibraryOfCongress } from '../../utils/libraryOfCongressApi';
-import { buildMetadataResults, type MetadataSource } from '../../utils/metadataAggregator';
+import { buildMetadataResults, evaluateResultsConfidence, type MetadataSource } from '../../utils/metadataAggregator';
 import { searchKnownPublisherSites, searchPublisherMetadata, type PublisherMetadataResult } from '../../utils/publisherMetadata';
 import { verifyBookMetadataResults } from '../../utils/aiMetadataVerifier';
+import { metadataCacheKey, withMetadataCache } from '../../utils/canonicalMetadataCache';
 
 function firstValue<T>(...values: Array<T | null | undefined>) {
   return values.find((value) => value !== null && value !== undefined && value !== '') ?? null;
@@ -189,22 +190,13 @@ async function getMetadataResults(
   title: string,
   author: string | undefined,
   requestedPublisher: string | undefined,
+  isbn: string | undefined,
   onProgress?: ProgressReporter,
 ) {
-  onProgress?.({ id: 'core', status: 'active', detail: 'Searching Hardcover, Google Books, Open Library, Wikidata, and providers' });
+  // Tier 1: Fast & Free APIs (Google Books, Open Library, Hardcover)
+  onProgress?.({ id: 'core', status: 'active', detail: 'Searching Tier 1 providers (Hardcover, Google Books, Open Library)' });
 
   const hardcoverSourcesPromise = withTimeout('Hardcover', searchHardcover(title, author), [] as MetadataSource[], 5000);
-  const wikidataSourcesPromise = withTimeout('Wikidata', searchWikidata(title, author), [] as MetadataSource[], 5000);
-  const openAlexSourcesPromise = withTimeout('OpenAlex', searchOpenAlex(title, author), [] as MetadataSource[], 5000);
-  const locSourcesPromise = withTimeout('Library of Congress', searchLibraryOfCongress(title, author), [] as MetadataSource[], 5000);
-
-  const internetArchiveSourcesPromise = withTimeout(
-    'Internet Archive',
-    searchInternetArchive(title, author),
-    [] as IAResult[],
-    9000,
-  ).then((results) => results.map(fromInternetArchive));
-
   const openLibrarySourcesPromise = withTimeout(
     'Open Library',
     searchOpenLibrary(title, author),
@@ -219,57 +211,77 @@ async function getMetadataResults(
     9000,
   ).then((results) => results.map(fromGoogleBooks));
 
-  const koboSourcesPromise = (async () => {
-    const koboUrls = await withTimeout('Kobo search', searchKobo(title, author), [] as string[], 7000);
-    const koboDetails = await withTimeout(
-      'Kobo details',
-      Promise.allSettled(koboUrls.slice(0, 4).map((url) => scrapeKoboBook(url))),
-      [] as PromiseSettledResult<NonNullable<Awaited<ReturnType<typeof scrapeKoboBook>>>>[],
-      7000,
-    );
-    return koboDetails
-      .filter((entry): entry is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof scrapeKoboBook>>>> => entry.status === 'fulfilled' && entry.value !== null)
-      .map((entry) => fromKobo(entry.value));
-  })();
-
-  const [
-    hardcoverSources,
-    wikidataSources,
-    openAlexSources,
-    libraryOfCongressSources,
-    internetArchiveSources,
-    openLibrarySources,
-    googleBooksSources,
-    koboSources,
-    goodreadsSources,
-  ] = await Promise.all([
+  const [hardcoverSources, openLibrarySources, googleBooksSources] = await Promise.all([
     hardcoverSourcesPromise,
-    wikidataSourcesPromise,
-    openAlexSourcesPromise,
-    locSourcesPromise,
-    internetArchiveSourcesPromise,
     openLibrarySourcesPromise,
     googleBooksSourcesPromise,
-    koboSourcesPromise,
-    getGoodreadsSources(title, author),
   ]);
 
-  const coreCount = hardcoverSources.length
-    + wikidataSources.length
-    + openAlexSources.length
-    + libraryOfCongressSources.length
-    + internetArchiveSources.length
-    + openLibrarySources.length
-    + googleBooksSources.length
-    + koboSources.length
-    + goodreadsSources.length;
-  onProgress?.({
-    id: 'core',
-    status: coreCount ? 'success' : 'error',
-    detail: coreCount ? `Found ${coreCount} source result${coreCount === 1 ? '' : 's'}` : 'No core metadata providers returned results',
+  let intermediateResults = buildMetadataResults(title, author, {
+    hardcoverSources,
+    googleBooksSources,
+    openLibrarySources,
   });
+  let confidence = evaluateResultsConfidence(intermediateResults);
 
-  onProgress?.({ id: 'publisherName', status: 'active', detail: 'Reading publisher fields from returned metadata' });
+  let wikidataSources: MetadataSource[] = [];
+  let openAlexSources: MetadataSource[] = [];
+  let libraryOfCongressSources: MetadataSource[] = [];
+  let internetArchiveSources: MetadataSource[] = [];
+
+  // Tier 2: Bibliographic Authorities (if Tier 1 confidence is below 85 or results incomplete)
+  if (confidence < 85 || !intermediateResults.length) {
+    onProgress?.({ id: 'core', status: 'active', detail: 'Consulting Tier 2 bibliographic authorities (Wikidata, LOC, OpenAlex, IA)' });
+    const wikidataPromise = withTimeout('Wikidata', searchWikidata(title, author), [] as MetadataSource[], 5000);
+    const openAlexPromise = withTimeout('OpenAlex', searchOpenAlex(title, author), [] as MetadataSource[], 5000);
+    const locPromise = withTimeout('Library of Congress', searchLibraryOfCongress(title, author), [] as MetadataSource[], 5000);
+    const iaPromise = withTimeout('Internet Archive', searchInternetArchive(title, author), [] as IAResult[], 9000).then((results) => results.map(fromInternetArchive));
+
+    [wikidataSources, openAlexSources, libraryOfCongressSources, internetArchiveSources] = await Promise.all([
+      wikidataPromise,
+      openAlexPromise,
+      locPromise,
+      iaPromise,
+    ]);
+
+    intermediateResults = buildMetadataResults(title, author, {
+      hardcoverSources,
+      googleBooksSources,
+      openLibrarySources,
+      wikidataSources,
+      openAlexSources,
+      libraryOfCongressSources,
+      internetArchiveSources,
+    });
+    confidence = evaluateResultsConfidence(intermediateResults);
+  }
+
+  let koboSources: MetadataSource[] = [];
+  let goodreadsSources: MetadataSource[] = [];
+  let publisherSources: MetadataSource[] = [];
+
+  // Tier 3: Heavy Scrapers & Publisher Research (if confidence below 80 or requested)
+  if (confidence < 80 || requestedPublisher || !intermediateResults.length) {
+    onProgress?.({ id: 'core', status: 'active', detail: 'Escalating to Tier 3 scrapers (Goodreads, Kobo, Publisher sites)' });
+    const koboSourcesPromise = (async () => {
+      const koboUrls = await withTimeout('Kobo search', searchKobo(title, author), [] as string[], 7000);
+      const koboDetails = await withTimeout(
+        'Kobo details',
+        Promise.allSettled(koboUrls.slice(0, 4).map((url) => scrapeKoboBook(url))),
+        [] as PromiseSettledResult<NonNullable<Awaited<ReturnType<typeof scrapeKoboBook>>>>[],
+        7000,
+      );
+      return koboDetails
+        .filter((entry): entry is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof scrapeKoboBook>>>> => entry.status === 'fulfilled' && entry.value !== null)
+        .map((entry) => fromKobo(entry.value));
+    })();
+
+    [koboSources, goodreadsSources] = await Promise.all([
+      koboSourcesPromise,
+      getGoodreadsSources(title, author),
+    ]);
+  }
+
   const publisherCandidates = uniquePublishers([
     ...(requestedPublisher ? [{
       id: `requested-publisher:${requestedPublisher}`,
@@ -289,114 +301,21 @@ async function getMetadataResults(
     ...googleBooksSources,
     ...openLibrarySources,
     ...wikidataSources,
-    ...openAlexSources,
-    ...libraryOfCongressSources,
-    ...internetArchiveSources,
-    ...koboSources,
     ...goodreadsSources,
   ]);
-  onProgress?.({
-    id: 'publisherName',
-    status: publisherCandidates.length ? 'success' : 'error',
-    detail: publisherCandidates.length
-      ? `Trying ${publisherCandidates.join(', ')}`
-      : 'No publisher name was found, so no publisher site can be searched',
-  });
 
-  let publisherSources: MetadataSource[] = [];
-  if (publisherCandidates.length) {
+  if (publisherCandidates.length && confidence < 80) {
     onProgress?.({ id: 'publisherSearch', status: 'active', detail: 'Finding official publisher book pages' });
     publisherSources = await withTimeout(
       'Publisher site',
-      searchPublisherMetadata(title, author, publisherCandidates, {
-        onProgress: (event) => {
-          onProgress?.({
-            id: event.stage,
-            status: event.status,
-            detail: event.message,
-          });
-        },
-      }),
+      searchPublisherMetadata(title, author, publisherCandidates),
       [] as PublisherMetadataResult[],
-      14000,
+      12000,
     ).then((results) => results.map(fromPublisher));
-
-    if (!publisherSources.length) {
-      onProgress?.({
-        id: 'publisherSearch',
-        status: 'active',
-        detail: 'Publisher-name lookup found no book page; researching major publisher sites by title and author',
-      });
-      publisherSources = await withTimeout(
-        'Publisher site research',
-        searchKnownPublisherSites(title, author, {
-          onProgress: (event) => {
-            onProgress?.({
-              id: event.stage,
-              status: event.status,
-              detail: event.message,
-            });
-          },
-        }),
-        [] as PublisherMetadataResult[],
-        18000,
-      ).then((results) => results.map(fromPublisher));
-    }
-
-    onProgress?.({
-      id: 'publisherSearch',
-      status: publisherSources.length ? 'success' : 'error',
-      detail: publisherSources.length
-        ? 'Found publisher-site metadata'
-        : 'No matching publisher book page was found',
-    });
-    onProgress?.({
-      id: 'publisherScrape',
-      status: publisherSources.length ? 'success' : 'error',
-      detail: publisherSources.length
-        ? `Scraped ${publisherSources.length} publisher result${publisherSources.length === 1 ? '' : 's'}`
-        : 'Publisher pages could not be scraped or did not match this book',
-    });
-  } else {
-    onProgress?.({
-      id: 'publisherName',
-      status: 'skipped',
-      detail: 'No publisher field was found; researching major publisher sites by title and author',
-    });
-    onProgress?.({ id: 'publisherSearch', status: 'active', detail: 'Searching major publisher websites directly' });
-    publisherSources = await withTimeout(
-      'Publisher site research',
-      searchKnownPublisherSites(title, author, {
-        onProgress: (event) => {
-          onProgress?.({
-            id: event.stage,
-            status: event.status,
-            detail: event.message,
-          });
-        },
-      }),
-      [] as PublisherMetadataResult[],
-      18000,
-    ).then((results) => results.map(fromPublisher));
-
-    onProgress?.({
-      id: 'publisherSearch',
-      status: publisherSources.length ? 'success' : 'error',
-      detail: publisherSources.length
-        ? 'Found publisher-site metadata by researching title and author'
-        : 'No matching publisher book page was found during direct site research',
-    });
-    onProgress?.({
-      id: 'publisherScrape',
-      status: publisherSources.length ? 'success' : 'error',
-      detail: publisherSources.length
-        ? `Scraped ${publisherSources.length} publisher result${publisherSources.length === 1 ? '' : 's'}`
-        : 'Publisher pages could not be scraped or did not match this book',
-    });
   }
 
-  onProgress?.({ id: 'merge', status: 'active', detail: 'Combining provider and publisher metadata' });
-  const results = buildMetadataResults(title, author, {
+  onProgress?.({ id: 'merge', status: 'active', detail: 'Combining and verifying metadata options' });
+  const finalResults = buildMetadataResults(title, author, {
     goodreadsSources,
     googleBooksSources,
     internetArchiveSources,
@@ -409,14 +328,7 @@ async function getMetadataResults(
     libraryOfCongressSources,
   });
 
-  onProgress?.({
-    id: 'merge',
-    status: results.length ? 'success' : 'error',
-    detail: results.length ? `Prepared ${results.length} metadata option${results.length === 1 ? '' : 's'}` : 'No metadata options could be prepared',
-  });
-
-  const verifiedResults = await verifyBookMetadataResults(title, author, results);
-
+  const verifiedResults = await verifyBookMetadataResults(title, author, finalResults);
   return verifiedResults;
 }
 
@@ -425,10 +337,14 @@ export default defineEventHandler(async (event) => {
   const title = query.title?.toString().trim();
   const author = query.author?.toString().trim();
   const requestedPublisher = query.publisher?.toString().trim();
+  const isbn = query.isbn?.toString().trim();
 
-  if (!title) {
-    throw createError({ statusCode: 400, statusMessage: 'Title is required for metadata search' });
+  if (!title && !isbn) {
+    throw createError({ statusCode: 400, statusMessage: 'Title or ISBN is required for metadata search' });
   }
+
+  const searchTitle = title || isbn || '';
+  const cacheKey = metadataCacheKey(searchTitle, author, isbn);
 
   if (query.stream?.toString() === '1') {
     const res = event.node.res;
@@ -442,16 +358,16 @@ export default defineEventHandler(async (event) => {
     };
 
     try {
-      const results = await getMetadataResults(title, author, requestedPublisher, (progress) => {
-        send({ type: 'step', ...progress });
-      });
+      const { value: results } = await withMetadataCache(
+        cacheKey,
+        (res) => !res || !res.length,
+        () => getMetadataResults(searchTitle, author, requestedPublisher, isbn, (progress) => {
+          send({ type: 'step', ...progress });
+        }),
+      );
       send({ type: 'result', results });
     } catch (error) {
       console.error('Streaming metadata lookup failed:', error);
-      // Pass the real reason on. A fixed generic string here meant every
-      // failure reached the user as "Failed to fetch metadata from the web"
-      // with the cause discarded on the server, which is unreportable and
-      // undiagnosable from the outside.
       const reason = error instanceof Error ? error.message : String(error);
       send({
         type: 'error',
@@ -463,6 +379,10 @@ export default defineEventHandler(async (event) => {
     return;
   }
 
-  const results = await getMetadataResults(title, author, requestedPublisher);
+  const { value: results } = await withMetadataCache(
+    cacheKey,
+    (res) => !res || !res.length,
+    () => getMetadataResults(searchTitle, author, requestedPublisher, isbn),
+  );
   return { results };
 });

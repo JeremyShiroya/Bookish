@@ -1,0 +1,133 @@
+[
+  {
+    "id": "PROD_FAIL_001",
+    "title": "The Final Empire",
+    "author": "Brandon Sanderson",
+    "legacyState": {
+      "series": null,
+      "seriesInstallment": null,
+      "seriesTotal": null,
+      "seriesChecked": true
+    },
+    "evidenceList": [
+      { "provider": "hardcover", "claim": "SERIES_MEMBERSHIP", "value": "Mistborn", "confidence": 0.95, "weight": 1.0, "independenceGroup": "hardcover" },
+      { "provider": "goodreads", "claim": "SERIES_MEMBERSHIP", "value": "Mistborn", "confidence": 0.95, "weight": 1.0, "independenceGroup": "goodreads" },
+      { "provider": "wikidata", "claim": "SERIES_MEMBERSHIP", "value": "Mistborn", "confidence": 0.98, "weight": 1.0, "independenceGroup": "wikidata" },
+      { "provider": "hardcover", "claim": "SERIES_ORDINAL", "value": 1, "confidence": 0.95, "weight": 1.0, "independenceGroup": "hardcover" }
+    ],
+    "providerTotals": [
+      { "provider": "hardcover", "reportedTotal": 3 },
+      { "provider": "goodreads", "reportedTotal": 3 }
+    ],
+    "expected": {
+      "membershipStatus": "VERIFIED_SERIES",
+      "seriesName": "Mistborn",
+      "ordinal": { "major": 1, "raw": "1" },
+      "mainWorksCount": 3,
+      "repairClassification": "SAFE_AUTO_REPAIR"
+    }
+  },
+  {
+    "id": "PROD_FAIL_002",
+    "title": "Dune",
+    "author": "Frank Herbert",
+    "legacyState": {
+      "series": "Dune",
+      "seriesInstallment": 1,
+      "seriesTotal": 1
+    },
+    "evidenceList": [
+      { "provider": "google_books", "claim": "SERIES_TOTAL", "value": 1, "confidence": 0.3, "weight": 0.3, "independenceGroup": "google_books" },
+      { "provider": "hardcover", "claim": "SERIES_TOTAL", "value": 6, "confidence": 0.95, "weight": 1.0, "independenceGroup": "hardcover" },
+      { "provider": "goodreads", "claim": "SERIES_TOTAL", "value": 6, "confidence": 0.95, "weight": 1.0, "independenceGroup": "goodreads" },
+      { "provider": "hardcover", "claim": "SERIES_ORDINAL", "value": 1, "confidence": 0.95, "weight": 1.0, "independenceGroup": "hardcover" }
+    ],
+    "providerTotals": [
+      { "provider": "google_books", "reportedTotal": 1 },
+      { "provider": "hardcover", "reportedTotal": 6 },
+      { "provider": "goodreads", "reportedTotal": 6 }
+    ],
+    "expected": {
+      "membershipStatus": "VERIFIED_SERIES",
+      "seriesName": "Dune",
+      "ordinal": { "major": 1, "raw": "1" },
+      "mainWorksCount": 6,
+      "repairClassification": "SAFE_AUTO_REPAIR"
+    }
+  },
+  {
+    "id": "PROD_FAIL_003",
+    "title": "The Color of Magic",
+    "author": "Terry Pratchett",
+    "legacyState": {
+      "series": "Discworld",
+      "seriesInstallment": 1,
+      "seriesTotal": 1
+    },
+    "evidenceList": [
+      { "provider": "google_books", "claim": "SERIES_TOTAL", "value": 1, "confidence": 0.3, "weight": 0.3, "independenceGroup": "google_books" },
+      { "provider": "hardcover", "claim": "SERIES_TOTAL", "value": 41, "confidence": 0.95, "weight": 1.0, "independenceGroup": "hardcover" },
+      { "provider": "goodreads", "claim": "SERIES_TOTAL", "value": 41, "confidence": 0.95, "weight": 1.0, "independenceGroup": "goodreads" },
+      { "provider": "hardcover", "claim": "SERIES_ORDINAL", "value": 1, "confidence": 0.95, "weight": 1.0, "independenceGroup": "hardcover" }
+    ],
+    "providerTotals": [
+      { "provider": "google_books", "reportedTotal": 1 },
+      { "provider": "hardcover", "reportedTotal": 41 },
+      { "provider": "goodreads", "reportedTotal": 41 }
+    ],
+    "expected": {
+      "membershipStatus": "VERIFIED_SERIES",
+      "seriesName": "Discworld",
+      "ordinal": { "major": 1, "raw": "1" },
+      "mainWorksCount": 41,
+      "repairClassification": "SAFE_AUTO_REPAIR"
+    }
+  },
+  {
+    "id": "PROD_FAIL_004",
+    "title": "Mistborn: Secret History",
+    "author": "Brandon Sanderson",
+    "legacyState": {
+      "series": "Mistborn",
+      "seriesInstallment": 3.5,
+      "seriesTotal": 4
+    },
+    "evidenceList": [
+      { "provider": "hardcover", "claim": "SERIES_ORDINAL", "value": { "major": 3, "minor": 5, "raw": "3.5" }, "confidence": 0.95, "weight": 1.0, "independenceGroup": "hardcover" }
+    ],
+    "providerTotals": [
+      { "provider": "hardcover", "reportedTotal": 3 }
+    ],
+    "expected": {
+      "membershipStatus": "VERIFIED_SERIES",
+      "seriesName": "Mistborn",
+      "ordinal": { "major": 3, "minor": 5, "raw": "3.5" },
+      "entryType": "NOVELLA",
+      "mainWorksCount": 3,
+      "repairClassification": "SAFE_AUTO_REPAIR"
+    }
+  },
+  {
+    "id": "PROD_FAIL_005",
+    "title": "Single Volume Discovery",
+    "author": "Unknown Author",
+    "legacyState": {
+      "series": "Obscure Series",
+      "seriesInstallment": 1,
+      "seriesTotal": 1
+    },
+    "evidenceList": [
+      { "provider": "google_books", "claim": "SERIES_TOTAL", "value": 1, "confidence": 0.3, "weight": 0.3, "independenceGroup": "google_books" }
+    ],
+    "providerTotals": [
+      { "provider": "google_books", "reportedTotal": 1 }
+    ],
+    "expected": {
+      "membershipStatus": "PROBABLE_SERIES",
+      "seriesName": "Obscure Series",
+      "ordinal": { "major": 1, "raw": "1" },
+      "mainWorksCount": null,
+      "repairClassification": "NEEDS_PROVIDER_VERIFICATION"
+    }
+  }
+]

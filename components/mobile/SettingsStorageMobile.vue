@@ -86,7 +86,15 @@
           Fetch metadata for my library
         </button>
         <p v-if="backfill.finished" class="backfill-summary">
-          Updated {{ backfill.updated }} of {{ backfill.total }} book{{ backfill.total === 1 ? '' : 's' }}.
+          Processed {{ backfill.total }} book{{ backfill.total === 1 ? '' : 's' }} ({{ backfill.repairedCount || 0 }} series repaired, {{ backfill.protectedCount || 0 }} protected).
+          <button
+            v-if="backfill.diagnostics?.length"
+            class="link-btn"
+            type="button"
+            @click="showDiagnostics = true"
+          >
+            View {{ backfill.diagnostics.length }} diagnostics
+          </button>
           <button
             v-if="backfill.failures.length"
             class="link-btn"
@@ -159,8 +167,6 @@
         </div>
       </div>
       <div v-if="hiddenCount" class="hidden-actions">
-        <!-- Reviewing them one by one is the common case; restoring the lot at
-             once is the blunt instrument, so it comes second. -->
         <button class="primary-btn" type="button" @click="router.push('/settings/hidden')">
           <i class="ri-eye-line"></i>
           View hidden books
@@ -172,8 +178,26 @@
       </div>
     </section>
 
-    <!-- Unsuccessful lookups modal -->
+    <!-- Per-book diagnostics modal -->
     <Teleport to="body">
+      <div v-if="showDiagnostics" class="failures-overlay" @click.self="showDiagnostics = false">
+        <section class="failures-modal" role="dialog" aria-modal="true" aria-label="Per-book series diagnostics">
+          <header>
+            <h3>Series Repair Diagnostics ({{ backfill.diagnostics?.length || 0 }} books)</h3>
+            <button type="button" aria-label="Close" @click="showDiagnostics = false">
+              <i class="ri-close-line"></i>
+            </button>
+          </header>
+          <ul>
+            <li v-for="diag in backfill.diagnostics" :key="diag.bookId">
+              <strong>{{ diag.title }} — <span :class="diag.decision.toLowerCase()">{{ diag.decision }}</span></strong>
+              <span>{{ diag.reason }}</span>
+              <span v-if="diag.confidence">Confidence: {{ (diag.confidence * 100).toFixed(0) }}% | Sources: {{ diag.evidenceSources.join(', ') || 'None' }}</span>
+            </li>
+          </ul>
+        </section>
+      </div>
+
       <div v-if="showFailures" class="failures-overlay" @click.self="showFailures = false">
         <section class="failures-modal" role="dialog" aria-modal="true" aria-label="Unsuccessful metadata lookups">
           <header>
@@ -254,6 +278,7 @@ const { state: backfill, start: runLibraryBackfill, stop: stopLibraryBackfill } 
 const { settings, updateSettings } = useBookishSettings()
 const { state: autoMeta } = useAutoMetadata()
 const showFailures = ref(false)
+const showDiagnostics = ref(false)
 
 const setAutoMetadata = (on) => updateSettings({ metadataAutoFill: !!on })
 

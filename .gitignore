@@ -37,3 +37,6 @@ android/keystore.properties
 *.jks
 *.keystore
 android/signing-lineage.bin
+
+# Scratch & temporary diagnostic dumps
+scratch/

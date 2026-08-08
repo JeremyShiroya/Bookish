@@ -1,24 +1,14 @@
 import { reactive, readonly } from 'vue'
 import { fetchBookMetadataResults } from '~/composables/useBookMetadataSearch'
 import { mergeMetadataIntoBook } from '~/composables/useDeviceLibrarySync'
+import { reconcileAndRepairBookSeries } from '~/composables/useSeriesRepair'
 
-// Library-wide metadata backfill used by Settings → Storage. Walks every book
-// that is missing details, fetches metadata, and fills ONLY empty fields.
+// Library-wide metadata backfill & Series Reconciliation used by Settings → Storage.
 
-// A book still needs its SERIES worked out when it has no series name and we
-// have not yet looked. `seriesChecked` records that we asked the sources and
-// they said "standalone" — without it, a genuine standalone would be re-queried
-// forever, and (worse, before this) a book that IS in a series was never
-// queried at all, because a missing series name was not treated as a gap. That
-// is what forced the reader to set so many series by hand.
 export function needsSeriesLookup(book) {
   return !String(book?.series ?? '').trim() && !book?.seriesChecked
 }
 
-// Every gap the details check looks for: an empty cover, author, blurb, genre,
-// year, or Goodreads rating; a book's SERIES name if it hasn't been determined;
-// and, once a series IS known, its installment number and total. Format ("book
-// type") is set at import from the file itself, so it is never missing here.
 export function missingMetadataFields(book) {
   if (!book?.title) return []
   const missing = []
@@ -28,15 +18,11 @@ export function missingMetadataFields(book) {
   }
   if (!book.publishYear) missing.push('publishYear')
   if (!book.cover || String(book.cover).startsWith('data:image/svg+xml')) missing.push('cover')
-  // webReview carries the Goodreads star rating.
   if (!book.webReview || !(Number(book.webReview.rating) > 0)) missing.push('goodreadsRating')
 
   if (needsSeriesLookup(book)) {
-    // The series NAME itself is unknown — go and find out whether this book
-    // belongs to one.
     missing.push('series')
   } else if (String(book.series ?? '').trim()) {
-    // The series is known; top up its installment and total.
     if (!book.seriesInstallment) missing.push('seriesInstallment')
     if (!(Number(book.seriesTotal) > 0)) missing.push('seriesTotal')
   }
@@ -104,18 +90,18 @@ export function friendlyMetadataFailure(error) {
   return 'Details are not available from the metadata sources yet.'
 }
 
-// Apply a fetched result to a book, filling only empty fields. When the book
-// had no series and — after a genuine lookup — still has none, it is marked
-// `seriesChecked` so a true standalone stops being re-queried. Returns
-// { record, filled }: `record` is null when nothing at all changed.
 export function applyMetadataResult(book, meta, { didLookup = true, isLightPass = false } = {}) {
   const hadNoSeries = !String(book?.series ?? '').trim()
   const merged = mergeMetadataIntoBook(book, meta)
   const stillNoSeries = !String((merged || book).series ?? '').trim()
 
-  // Only conclude "standalone" when we performed a full deep lookup with a confirmed match.
-  // A light background pass must never mark seriesChecked = true.
-  const resolveStandalone = didLookup && !isLightPass && hadNoSeries && stillNoSeries && !book?.seriesChecked && !!meta?.title
+  const hasMultiSourceVerification = !meta?.primarySource && !Array.isArray(meta?.sourceTags)
+    ? true
+    : (Array.isArray(meta?.sourceTags)
+      ? meta.sourceTags.some((tag) => ['goodreads', 'hardcover', 'kobo', 'wikidata'].includes(tag))
+      : Boolean(meta?.primarySource && ['goodreads', 'hardcover', 'kobo', 'wikidata'].includes(meta.primarySource)))
+
+  const resolveStandalone = didLookup && !isLightPass && hadNoSeries && stillNoSeries && !book?.seriesChecked && !!meta?.title && hasMultiSourceVerification
 
   if (!merged && !resolveStandalone) return { record: null, filled: false }
   const record = { ...(merged || book) }
@@ -130,47 +116,107 @@ export async function unmarkFalseStandalones(books, updateBook) {
   }
 }
 
-export async function backfillLibraryMetadata({ books, updateBook, onProgress, shouldStop } = {}) {
-  const targets = (books || []).filter(bookNeedsMetadata)
+/**
+ * Two-Pass Sweep:
+ * Pass 1: Missing metadata empty-field backfill
+ * Pass 2: Full-library Series Reconciliation & Safe Repair Pass
+ */
+export async function backfillLibraryMetadata({ books, updateBook, onProgress, shouldStop, searchFn } = {}) {
+  const allBooks = Array.isArray(books) ? books : []
   const failures = []
-  let updated = 0
+  const diagnostics = []
 
-  for (let index = 0; index < targets.length; index += 1) {
+  let updated = 0
+  let repairedCount = 0
+  let protectedCount = 0
+  let lowConfidenceCount = 0
+  let unchangedCount = 0
+
+  const totalSteps = allBooks.length
+  const fetcher = searchFn || fetchBookMetadataResults
+
+  for (let index = 0; index < allBooks.length; index += 1) {
     if (shouldStop?.()) break
-    const book = targets[index]
-    onProgress?.({ current: index + 1, total: targets.length, title: book.title })
+    const book = allBooks[index]
+    onProgress?.({ current: index + 1, total: totalSteps, title: book.title })
 
     try {
-      // light: this is a bulk sweep over the whole library — skip the blind
-      // publisher-site crawl, which costs ~15s a book for occasional extras.
-      const results = await fetchBookMetadataResults(book.title, book.author || undefined, undefined, { light: true })
+      // Step 1: Missing non-series metadata pass (cover, blurb, genre, publishYear)
+      const results = await fetcher(book.title, book.author || undefined, undefined, { light: true })
       const match = bestMetadataResultForBook(book, results)
-      const { record, filled } = applyMetadataResult(book, match, { didLookup: !!match, isLightPass: true })
-      if (record) {
-        // A record with no fill is a standalone we just confirmed — persist the
-        // seriesChecked mark, but it does not count as an update.
-        await updateBook(markMetadataCheck(record))
-        if (filled) updated += 1
-      } else if (!results?.length) {
-        failures.push({ id: book.id, title: book.title, reason: 'No matching details found yet' })
-      } else {
-        failures.push({ id: book.id, title: book.title, reason: 'Returned details did not match this book' })
+      const { record: backfilledRecord, filled } = applyMetadataResult(book, match, { didLookup: !!match, isLightPass: true })
+      
+      if (filled) updated += 1
+
+      // Step 2: Series Reconciliation & Repair Pass against original book state
+      const repairResult = reconcileAndRepairBookSeries(book, results || [])
+      
+      const diagEntry = {
+        bookId: book.id,
+        title: book.title,
+        previousState: repairResult.previousState,
+        proposedState: repairResult.proposedState,
+        confidence: repairResult.confidence,
+        evidenceSources: repairResult.evidenceSources,
+        decision: repairResult.decision,
+        reason: repairResult.reason,
+      }
+      diagnostics.push(diagEntry)
+
+      if (repairResult.decision === 'PROTECTED') {
+        protectedCount += 1
+        if (backfilledRecord) {
+          await updateBook(markMetadataCheck(backfilledRecord))
+        }
+      } else if (repairResult.decision === 'LOW_CONFIDENCE') {
+        lowConfidenceCount += 1
+        if (backfilledRecord) {
+          await updateBook(markMetadataCheck(backfilledRecord))
+        }
+      } else if (repairResult.decision === 'UNCHANGED') {
+        unchangedCount += 1
+        if (backfilledRecord) {
+          await updateBook(markMetadataCheck(backfilledRecord))
+        }
+      } else if (repairResult.decision === 'REPAIRED') {
+        repairedCount += 1
+        const combinedRecord = backfilledRecord
+          ? {
+              ...backfilledRecord,
+              series: repairResult.record.series,
+              seriesInstallment: repairResult.record.seriesInstallment,
+              seriesTotal: repairResult.record.seriesTotal,
+              seriesChecked: true,
+            }
+          : repairResult.record
+        await updateBook(markMetadataCheck(combinedRecord))
       }
     } catch (error) {
       failures.push({ id: book.id, title: book.title, reason: friendlyMetadataFailure(error) })
+      diagnostics.push({
+        bookId: book.id,
+        title: book.title,
+        previousState: { series: book.series, seriesInstallment: book.seriesInstallment, seriesTotal: book.seriesTotal, seriesChecked: Boolean(book.seriesChecked) },
+        proposedState: { series: book.series, seriesInstallment: book.seriesInstallment, seriesTotal: book.seriesTotal, seriesChecked: Boolean(book.seriesChecked) },
+        confidence: 0,
+        evidenceSources: [],
+        decision: 'FAILED',
+        reason: friendlyMetadataFailure(error),
+      })
     }
   }
 
-  return { total: targets.length, updated, failures }
+  return {
+    total: allBooks.length,
+    updated,
+    repairedCount,
+    protectedCount,
+    lowConfidenceCount,
+    unchangedCount,
+    failures,
+    diagnostics,
+  }
 }
-
-// ── Library-wide run that survives navigation ───────────────────────────────
-//
-// The Settings → Storage screen used to own this loop in component scope, so
-// leaving the page took its progress state with it and the run appeared to
-// stop. The run now lives at module scope: the page starts it and merely
-// OBSERVES shared state, so navigating away (or coming back) neither cancels
-// it nor loses the progress.
 
 const backfillState = reactive({
   running: false,
@@ -179,7 +225,12 @@ const backfillState = reactive({
   total: 0,
   currentTitle: '',
   updated: 0,
+  repairedCount: 0,
+  protectedCount: 0,
+  lowConfidenceCount: 0,
+  unchangedCount: 0,
   failures: [],
+  diagnostics: [],
 })
 
 let _stopRequested = false
@@ -195,9 +246,7 @@ export function stopLibraryBackfill() {
   _stopRequested = true
 }
 
-export async function startLibraryBackfill({ books, updateBook, onDone } = {}) {
-  // Already running — hand back the in-flight run so a second visit to the
-  // page attaches to it instead of starting a competing sweep.
+export async function startLibraryBackfill({ books, updateBook, onDone, searchFn } = {}) {
   if (backfillState.running) return _runPromise
 
   _stopRequested = false
@@ -208,7 +257,12 @@ export async function startLibraryBackfill({ books, updateBook, onDone } = {}) {
     total: 0,
     currentTitle: '',
     updated: 0,
+    repairedCount: 0,
+    protectedCount: 0,
+    lowConfidenceCount: 0,
+    unchangedCount: 0,
     failures: [],
+    diagnostics: [],
   })
 
   _runPromise = (async () => {
@@ -216,6 +270,7 @@ export async function startLibraryBackfill({ books, updateBook, onDone } = {}) {
       const result = await backfillLibraryMetadata({
         books,
         updateBook,
+        searchFn,
         shouldStop: () => _stopRequested,
         onProgress: ({ current, total, title }) => {
           backfillState.current = current
@@ -224,8 +279,13 @@ export async function startLibraryBackfill({ books, updateBook, onDone } = {}) {
         },
       })
       backfillState.updated = result.updated
+      backfillState.repairedCount = result.repairedCount
+      backfillState.protectedCount = result.protectedCount
+      backfillState.lowConfidenceCount = result.lowConfidenceCount
+      backfillState.unchangedCount = result.unchangedCount
       backfillState.total = result.total
       backfillState.failures = result.failures
+      backfillState.diagnostics = result.diagnostics || []
       backfillState.finished = true
       onDone?.({ ...result, stopped: _stopRequested })
       return result

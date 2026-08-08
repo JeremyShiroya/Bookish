@@ -69,6 +69,11 @@ export function metadataResultMatchesBook(book, result) {
 // This is deliberately not "use fewer sources for the same field": every field
 // still being filled is still merged across every source that could supply it,
 // so cross-verification is untouched. It only skips a source that has nothing
+// missing, and pure overhead when they aren't.
+//
+// This is deliberately not "use fewer sources for the same field": every field
+// still being filled is still merged across every source that could supply it,
+// so cross-verification is untouched. It only skips a source that has nothing
 // left to contribute.
 const GOODREADS_ONLY_FIELDS = new Set([
   'goodreadsRating', 'series', 'seriesInstallment', 'seriesTotal',
@@ -78,22 +83,28 @@ export function needsGoodreads(book) {
   return missingMetadataFields(book).some((field) => GOODREADS_ONLY_FIELDS.has(field))
 }
 
+const addedAt = (book) => new Date(book?.createdAt || 0).getTime() || 0
+
 const priorityOf = (book) => {
   const status = String(book?.status || '').toLowerCase()
-  if (!String(book?.series ?? '').trim() && !book?.seriesChecked) return -1
+  if (book?.newlyImported) return -2
   if (status === 'reading') return 0
-  if (book?.lastReadAt) return 1
-  return 2
+  if (!String(book?.series ?? '').trim() && !book?.seriesChecked) return 1
+  if (book?.lastReadAt) return 2
+  return 3
 }
-
-const addedAt = (book) => new Date(book?.createdAt || 0).getTime() || 0
 
 export function pickAutoTargets(books, { now = Date.now(), cooldownMs = RECHECK_AFTER_MS, limit = BATCH_SIZE } = {}) {
   return (books || [])
     .filter((book) => bookNeedsMetadata(book))
     .filter((book) => {
       const checkedAt = Number(book?.metaCheckedAt) || 0
-      return now - checkedAt >= cooldownMs
+      const errorCount = Number(book?.metaErrorCount) || 0
+      // Exponential backoff for failed/rate-limited attempts: 1m -> 2m -> 4m -> 8m -> 16m -> 32m -> max 24h
+      const effectiveCooldown = errorCount > 0
+        ? Math.min(cooldownMs, 60 * 1000 * Math.pow(2, Math.min(errorCount - 1, 6)))
+        : cooldownMs
+      return now - checkedAt >= effectiveCooldown
     })
     .sort((a, b) => priorityOf(a) - priorityOf(b) || addedAt(b) - addedAt(a))
     .slice(0, limit)
@@ -152,22 +163,30 @@ export function nextCooldownMs({
 
 // Look one book up and write back whatever could be verified.
 async function fillOne(book) {
-  const results = await fetchBookMetadataResults(
-    book.title,
-    book.author || undefined,
-    undefined,
-    // Skip the slow publisher crawl always, and Goodreads unless this book
-    // actually needs something only Goodreads has.
-    { light: true, skipGoodreads: !needsGoodreads(book) },
-  )
-  const match = bestMetadataResultForBook(book, results)
-  const { record, filled } = applyMetadataResult(book, match, { didLookup: !!match, isLightPass: true })
-  // Stamp the check either way so an unfillable book waits a day before its
-  // Stamp the check either way so an unfillable book waits a day before its
-  // next attempt, on top of whatever the result filled (series-checked flag
-  // included).
-  await _deps.updateBook(markMetadataCheck(record || book, { lookedUp: !!match }))
-  return filled
+  try {
+    const results = await fetchBookMetadataResults(
+      book.title,
+      book.author || undefined,
+      undefined,
+      // Skip the slow publisher crawl always, and Goodreads unless this book
+      // actually needs something only Goodreads has.
+      { light: true, skipGoodreads: !needsGoodreads(book) },
+    )
+    const match = bestMetadataResultForBook(book, results)
+    const { record, filled } = applyMetadataResult(book, match, { didLookup: !!match, isLightPass: true })
+    const updatedRecord = markMetadataCheck(record || book, { lookedUp: !!match })
+    updatedRecord.metaErrorCount = 0
+    await _deps.updateBook(updatedRecord)
+    return filled
+  } catch (error) {
+    const errorCount = (Number(book.metaErrorCount) || 0) + 1
+    await _deps.updateBook({
+      ...book,
+      metaCheckedAt: Date.now(),
+      metaErrorCount: errorCount,
+    })
+    throw error
+  }
 }
 
 async function runCycle() {

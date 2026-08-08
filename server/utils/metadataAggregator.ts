@@ -80,14 +80,27 @@ function authorsCompatible(targetAuthor?: string | null, candidateAuthor?: strin
   return tokenOverlapScore(targetAuthor, candidateAuthor) >= 0.5;
 }
 
-export function scoreSource(targetTitle?: string | null, targetAuthor?: string | null, source?: Pick<MetadataSource, 'title' | 'author'> | null) {
+export function scoreSource(
+  targetTitle?: string | null,
+  targetAuthor?: string | null,
+  source?: Pick<MetadataSource, 'title' | 'author' | 'id'> | null,
+  targetIsbn?: string | null,
+) {
   if (!source) return 0;
+
+  let score = 0;
+  if (targetIsbn && source.id) {
+    const cleanTargetIsbn = targetIsbn.replace(/[^0-9X]/gi, '').toUpperCase();
+    const cleanSourceId = source.id.replace(/[^0-9X]/gi, '').toUpperCase();
+    if (cleanTargetIsbn && cleanSourceId.includes(cleanTargetIsbn)) {
+      score += 100; // ISBN exact match boost
+    }
+  }
 
   const targetTitleKey = normalizedKey(targetTitle);
   const titleKey = normalizedKey(source.title);
   const targetAuthorKey = normalizedKey(targetAuthor);
   const authorKey = normalizedKey(source.author);
-  let score = 0;
 
   if (targetTitleKey && titleKey) {
     if (targetTitleKey === titleKey) score += 80;
@@ -104,6 +117,58 @@ export function scoreSource(targetTitle?: string | null, targetAuthor?: string |
   if (!targetAuthorKey && authorKey) score += 5;
   return score;
 }
+
+export function selectBestCover(sources: MetadataSource[]): string | null {
+  const validCovers = sources
+    .map((s) => s.cover)
+    .filter((cover): cover is string => {
+      if (!cover || typeof cover !== 'string') return false;
+      const url = cover.trim().toLowerCase();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
+      if (url.includes('nophoto') || url.includes('placeholder') || url.includes('blank')) return false;
+      return true;
+    });
+
+  if (!validCovers.length) return null;
+
+  const prioritySources: MetadataSourceName[] = ['hardcover', 'googleBooks', 'kobo', 'openLibrary', 'internetArchive', 'goodreads', 'publisher'];
+  for (const provider of prioritySources) {
+    const providerCover = sources.find((s) => s.source === provider && s.cover && validCovers.includes(s.cover))?.cover;
+    if (providerCover) return providerCover;
+  }
+
+  return validCovers[0] || null;
+}
+
+export function calculateConfidenceScore(result: {
+  title?: string | null;
+  author?: string | null;
+  cover?: string | null;
+  blurb?: string | null;
+  publishYear?: number | null;
+  genre?: string | null;
+  sourceTags?: MetadataSourceName[];
+}): number {
+  let score = 0;
+  if (result.title) score += 30;
+  if (result.author) score += 25;
+  if (result.cover) score += 15;
+  if (result.blurb) score += 15;
+  if (result.publishYear) score += 8;
+  if (result.genre) score += 7;
+
+  const sourceCount = result.sourceTags?.length || 0;
+  if (sourceCount >= 3) score = Math.min(100, score + 10);
+  else if (sourceCount >= 2) score = Math.min(100, score + 5);
+
+  return score;
+}
+
+export function evaluateResultsConfidence(results: Array<ReturnType<typeof mergeMetadata>>): number {
+  if (!results || !results.length) return 0;
+  return Math.max(...results.map((r) => calculateConfidenceScore(r)));
+}
+
 
 function hasValue(value: unknown) {
   return value !== null && value !== undefined && value !== '';
@@ -214,15 +279,7 @@ function mergeMetadata(primary: MetadataSource, matches: MetadataSource[], goodr
     primarySource: primary.source,
     title: firstValue(primary.title, ...sources.map((item) => item.title)),
     author: firstValue(primary.author, ...sources.map((item) => item.author)),
-    cover: firstValue(
-      ...sources.filter((item) => item.source === 'hardcover').map((item) => item.cover),
-      ...sources.filter((item) => item.source === 'googleBooks').map((item) => item.cover),
-      ...sources.filter((item) => item.source === 'kobo').map((item) => item.cover),
-      ...sources.filter((item) => item.source === 'openLibrary').map((item) => item.cover),
-      ...sources.filter((item) => item.source === 'internetArchive').map((item) => item.cover),
-      ...sources.filter((item) => item.source === 'goodreads').map((item) => item.cover),
-      ...sources.filter((item) => item.source === 'publisher').map((item) => item.cover),
-    ),
+    cover: selectBestCover(sources),
     blurb: firstValue(
       ...sources.filter((item) => item.source === 'hardcover').map((item) => item.blurb),
       ...sources.filter((item) => item.source === 'googleBooks').map((item) => item.blurb),

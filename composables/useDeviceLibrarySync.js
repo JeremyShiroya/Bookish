@@ -176,41 +176,60 @@ export function mergeMetadataIntoBook(book, meta) {
   if (!meta) return null
   const updated = { ...book }
   let changed = false
+  const provenance = Array.isArray(updated.provenance) ? [...updated.provenance] : []
+
+  const isLocked = (field) => {
+    if (updated.userDefined === true) return true
+    if (updated.userDefined && typeof updated.userDefined === 'object' && updated.userDefined[field] === true) return true
+    return false
+  }
 
   const fillText = (field) => {
+    if (isLocked(field)) return
     const current = String(updated[field] ?? '').trim()
     const next = String(meta[field] ?? '').trim()
     if (!current && next) {
       updated[field] = next
       changed = true
+      const source = meta.primarySource || meta.source || 'provider'
+      provenance.push(`Filled ${field} from ${source}`)
     }
   }
 
   for (const field of ['author', 'blurb', 'genre', 'series', 'publisher']) fillText(field)
 
-  if (!updated.publishYear && meta.publishYear) {
+  if (!isLocked('publishYear') && !updated.publishYear && meta.publishYear) {
     updated.publishYear = meta.publishYear
     changed = true
+    provenance.push(`Filled publishYear from ${meta.primarySource || meta.source || 'provider'}`)
   }
-  if (!updated.seriesInstallment && updated.series && meta.seriesInstallment) {
+  if (!isLocked('seriesInstallment') && !updated.seriesInstallment && updated.series && meta.seriesInstallment) {
     updated.seriesInstallment = meta.seriesInstallment
     changed = true
+    provenance.push(`Filled seriesInstallment from ${meta.primarySource || meta.source || 'provider'}`)
   }
-  if (!updated.seriesTotal && updated.series && Number(meta.seriesTotal) > 0) {
+  if (!isLocked('seriesTotal') && !updated.seriesTotal && updated.series && Number(meta.seriesTotal) > 0) {
     updated.seriesTotal = meta.seriesTotal
     changed = true
+    provenance.push(`Filled seriesTotal from ${meta.primarySource || meta.source || 'provider'}`)
   }
-  if (!updated.webReview && meta.webReview) {
+  if (!isLocked('webReview') && !updated.webReview && meta.webReview) {
     updated.webReview = meta.webReview
     changed = true
+    provenance.push(`Filled webReview from ${meta.primarySource || meta.source || 'provider'}`)
   }
 
   const hasRealCover = typeof updated.cover === 'string'
     && updated.cover
     && !updated.cover.startsWith('data:image/svg+xml')
-  if (!hasRealCover && meta.cover) {
+  if (!isLocked('cover') && !hasRealCover && meta.cover) {
     updated.cover = meta.cover
     changed = true
+    provenance.push(`Filled cover from ${meta.primarySource || meta.source || 'provider'}`)
+  }
+
+  if (changed) {
+    updated.provenance = [...new Set(provenance)]
   }
 
   return changed ? updated : null

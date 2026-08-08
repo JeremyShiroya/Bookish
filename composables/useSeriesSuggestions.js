@@ -627,6 +627,25 @@ export const fetchSeriesInstallments = async (seriesName, seedBooks = [], needed
     if (needed.length && needed.every((n) => installments[n])) break
   }
 
+  // If gaps remain unfilled after standard roster lookups, automatically
+  // run AI gap resolution so missing books populate without manual clicks.
+  const remainingGaps = needed.filter((n) => !installments[n])
+  if (remainingGaps.length > 0) {
+    try {
+      const aiResolved = await resolveGapsWithAi({
+        seriesName,
+        cached: installments,
+        missing: remainingGaps,
+        seedBooks,
+      })
+      if (aiResolved && Object.keys(aiResolved).length > 0) {
+        installments = mergeInstallments(installments, aiResolved)
+      }
+    } catch {
+      // AI fallback error ignored gracefully
+    }
+  }
+
   bumpAttemptCount(seriesName)
   writeCache(seriesName, installments)
   store.value = { ...store.value, [key]: installments }

@@ -43,7 +43,17 @@ export default defineNuxtPlugin((nuxtApp) => {
 
       startAutoMetadata(deps)
 
+      let lastResumeSweepTime = 0
+      const RESUME_COOLDOWN_MS = 1000 * 60 * 15
+
       const handleAppResume = () => {
+        const now = Date.now()
+        if (now - lastResumeSweepTime < RESUME_COOLDOWN_MS) {
+          wakeAutoMetadata()
+          return
+        }
+        lastResumeSweepTime = now
+
         nuxtApp.runWithContext(async () => {
           try {
             const list = books.value || []
@@ -66,6 +76,12 @@ export default defineNuxtPlugin((nuxtApp) => {
       if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') handleAppResume()
+        })
+      }
+
+      if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+        window.addEventListener('online', () => {
+          wakeAutoMetadata()
         })
       }
     })
