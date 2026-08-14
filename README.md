@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./public/Images/Logo.png" alt="Bookish" width="110" /><br /><br />
+  <img src="./public/Images/P Logo.png" alt="Bookish" width="110" /><br /><br />
   # Bookish
 
   **A local-first reading and listening library.**<br />
@@ -15,7 +15,7 @@
   </p>
   <br />
 
-  <img src="./docs/screenshots/home.png" alt="Bookish home" width="85%" />
+  <img src="./docs/screenshots/Pages Figma Mockup.webp" alt="Pages home" width="85%" />
 </div>
 
 <br />
