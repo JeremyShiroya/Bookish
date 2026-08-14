@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="./public/Images/P Logo.png" alt="Bookish" width="110" /><br /><br />
-  # Bookish
+  <img src="./public/Images/P Logo.png" alt="Pages" width="110" /><br /><br />
+  # Pages
 
   **A local-first reading and listening library.**<br />
   Import EPUB, PDF, and text files, keep your library private on your device, listen with read-aloud controls, and enrich books with web metadata when you want it.
@@ -36,7 +36,7 @@
 
 **Authors, series, playlists, annotations, and favourites** - Browse derived author and genre views, inspect author profiles, highlight passages and take notes, group books into playlists, and surface favourites and current reads from the home screen.
 
-**Storage tools** - Export, import, or wipe a full Bookish backup from Settings. The backup includes library records, playlists, profiles, annotations, reading content, TTS session state, and settings.
+**Storage tools** - Export, import, or wipe a full Pages backup from Settings. The backup includes library records, playlists, profiles, annotations, reading content, TTS session state, and settings.
 
 <br />
 
@@ -44,9 +44,13 @@
 
 ## Gallery
 
-<img src="./docs/gallery/image-1.2.png" width="100%" alt="Your library, always organised" />
-<img src="./docs/gallery/mockup-2.png" width="100%" alt="Read how you want to" />
-<img src="./docs/gallery/image-3.png" width="100%" alt="Every book an audiobook" />
+<img src="./docs/gallery/3.png" width="100%" alt="Your library, always organised" />
+<img src="./docs/gallery/4.png" width="100%" alt="Your library, always organised" />
+<img src="./docs/gallery/5.png" width="100%" alt="Your library, always organised" />
+<img src="./docs/gallery/6.png" width="100%" alt="Your library, always organised" />
+<img src="./docs/gallery/7.png" width="100%" alt="Your library, always organised" />
+<img src="./docs/gallery/8.png" width="100%" alt="Your library, always organised" />
+<img src="./docs/gallery/9.png" width="100%" alt="Your library, always organised" />
 
 <br />
 
