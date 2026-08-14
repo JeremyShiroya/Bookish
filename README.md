@@ -98,7 +98,7 @@ npm install
 
 ### 3. Configure optional environment variables
 
-Bookish can run without a `.env` file. The web app uses its own Nuxt server routes for metadata and TTS during development.
+Pages can run without a `.env` file. The web app uses its own Nuxt server routes for metadata and TTS during development.
 
 For a hosted web app or native app, set an API base URL when metadata/TTS routes live somewhere other than the current origin:
 
@@ -274,7 +274,7 @@ npm run cap:sync   # Generate web output and sync Capacitor
 npm run cap:open:android
 ```
 
-There is no database setup step. Bookish no longer uses Neon, Drizzle, or `DATABASE_URL`.
+There is no database setup step. Pages no longer uses Neon, Drizzle, or `DATABASE_URL`.
 
 Tests are run directly with Vitest:
 
@@ -302,7 +302,7 @@ npm run cap:sync
 npm run cap:open:android
 ```
 
-The native shell needs a reachable Bookish server URL for web metadata and TTS routes unless those features are not being used.
+The native shell needs a reachable Pages server URL for web metadata and TTS routes unless those features are not being used.
 
 <br />
 
@@ -310,7 +310,7 @@ The native shell needs a reachable Bookish server URL for web metadata and TTS r
 
 ## Data Model
 
-Bookish stores user data locally:
+Pages stores user data locally:
 
 | Store | Purpose |
 |:---|:---|
