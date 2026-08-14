@@ -45,7 +45,7 @@
 ## Gallery
 
 <img src="./docs/gallery/image-1.2.png" width="100%" alt="Your library, always organised" />
-<img src="./docs/gallery/image-2.png" width="100%" alt="Read how you want to" />
+<img src="./docs/gallery/image 2.png" width="100%" alt="Read how you want to" />
 <img src="./docs/gallery/image-3.png" width="100%" alt="Every book an audiobook" />
 
 <br />
