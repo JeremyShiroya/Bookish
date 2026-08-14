@@ -24,19 +24,19 @@
 
 ## Features
 
-**Local-first library** - Books, playlists, profiles, settings, reading progress, and extracted reading content are stored in the browser with IndexedDB and localStorage. No account or shared database is required.
+**Local-first library** - Books, playlists, profiles, settings, annotations (highlights & notes), reading progress, and extracted reading content are stored locally in the browser with IndexedDB and localStorage. No account or shared database is required.
 
 **EPUB, PDF, and text import** - Upload documents manually in the web app, or use the Android build to scan selected device folders for EPUB and PDF files. Native PDF files are kept on device storage when available so large documents do not have to live entirely in IndexedDB.
 
-**Reader and progress tracking** - Read EPUBs and PDFs in-app, resume recent books, track unread/reading/read states, favourite books, and keep series grouped with installment and total counts.
+**Sentence-precise reader & progress tracking** - Read EPUBs and PDFs in-app in both Paged (horizontal swipe) and Scroll (vertical flow) modes. Micro-position tracking operates on sentence-level chunks (`readingChunk`) with automatic debounced saving, flush-on-exit route protection, and explicit ready state safeguards. Reopens exact sentences across reloads and mode switches while maintaining derived display progress percentage and reading status ('Unread', 'Reading', 'Read').
 
 **Read aloud** - Use Microsoft Edge neural voices and Kokoro-powered TTS paths with persistent player controls, sentence navigation, playback speed, and word-level highlighting where supported.
 
-**Metadata enrichment** - Search Goodreads, Google Books, Kobo, Open Library, the Internet Archive, publisher pages, and cover image sources to fill in covers, blurbs, publication data, ratings, series fields, and author details. Optional Gemini or Groq verification can clean up risky metadata.
+**Metadata enrichment & series intelligence** - Search Goodreads, Google Books, Kobo, Open Library, the Internet Archive, publisher pages, and cover image sources to fill in covers, blurbs, publication data, ratings, series fields, and author details. Includes translation & edition date-skew tolerance (`yearFitsBetweenAnchors`) and optional Gemini or Groq verification to clean up series orderings.
 
-**Authors, series, playlists, and favourites** - Browse derived author and genre views, inspect author profiles, group books into playlists, and surface favourites and current reads from the home screen.
+**Authors, series, playlists, annotations, and favourites** - Browse derived author and genre views, inspect author profiles, highlight passages and take notes, group books into playlists, and surface favourites and current reads from the home screen.
 
-**Storage tools** - Export, import, or wipe a full Bookish backup from Settings. The backup includes library records, playlists, profiles, reading content, TTS session state, and settings.
+**Storage tools** - Export, import, or wipe a full Bookish backup from Settings. The backup includes library records, playlists, profiles, annotations, reading content, TTS session state, and settings.
 
 <br />
 
@@ -310,10 +310,10 @@ Bookish stores user data locally:
 
 | Store | Purpose |
 |:---|:---|
-| `bookish-library` IndexedDB | books, playlists, local profile records |
-| `bookish-storage` IndexedDB | extracted reading content and PDF source markers |
-| localStorage | settings, TTS session state, API base URL, Android scan preferences |
-| Capacitor Filesystem | native PDF files and cached image assets when available |
+| `bookish-library` IndexedDB | books, playlists, profiles, author details, annotations (highlights & notes) |
+| `bookish-storage` IndexedDB | extracted reading content, PDF page maps, and PDF source markers |
+| localStorage | settings, reader position fallbacks, TTS session state, API base URL, Android scan preferences |
+| Capacitor Filesystem | native PDF files and cached cover image assets when available |
 
 The Settings storage panel can export and import a complete JSON backup of the local data.
 

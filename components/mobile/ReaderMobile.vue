@@ -1022,6 +1022,15 @@ const readerStyleVars = computed(() => ({
 const pagedRef = ref(null);
 const pagedPos = ref({ section: 0, pageInSection: 0, sectionPages: 1 });
 
+watch(pagedRef, (el) => {
+  if (props.readerRefs?.pagedRef) {
+    props.readerRefs.pagedRef.value = el;
+  }
+}, { immediate: true });
+
+const goToChunk = (chunkIdx) => pagedRef.value?.goToChunk?.(chunkIdx);
+defineExpose({ pagedRef, goToChunk });
+
 const onPagedPosition = (pos) => {
   pagedPos.value = pos;
   hideSelectionMenu();

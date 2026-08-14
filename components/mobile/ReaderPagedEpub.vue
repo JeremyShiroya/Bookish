@@ -141,14 +141,14 @@ const pageForChunkEl = (el) => {
   return Math.max(0, Math.min(sectionPages.value - 1, Math.floor((el.offsetLeft + 2) / stride.value)));
 };
 
+const trackingReady = ref(false);
+
 const emitPosition = () => {
+  if (!trackingReady.value) return;
   emit("position-change", {
     section: section.value,
     pageInSection: page.value,
     sectionPages: sectionPages.value,
-    // The chunk on the visible page is the reader's shared unit of position:
-    // it is what the scroll surface reports too, so the two modes can hand the
-    // reading position back and forth without losing the sentence.
     chunk: firstChunkOnCurrentPage(),
   });
   persistPosition();
@@ -197,6 +197,7 @@ const setPage = (target) => {
   if (next === page.value) return;
   animate.value = true;
   page.value = next;
+  trackingReady.value = true;
   emitPosition();
 };
 
@@ -204,6 +205,7 @@ const nextPage = () => {
   if (page.value < sectionPages.value - 1) {
     setPage(page.value + 1);
   } else if (section.value < props.sections.length - 1) {
+    trackingReady.value = true;
     renderSection(section.value + 1, 0);
   }
 };
@@ -212,12 +214,14 @@ const prevPage = () => {
   if (page.value > 0) {
     setPage(page.value - 1);
   } else if (section.value > 0) {
+    trackingReady.value = true;
     renderSection(section.value - 1, "last");
   }
 };
 
 const goToSection = (index) => {
   if (index === section.value) return;
+  trackingReady.value = true;
   renderSection(index, 0);
 };
 
@@ -237,6 +241,7 @@ const goToChunk = async (chunkIdx) => {
   // could be caught mid-flight by the initial layout settling.
   animate.value = false;
   page.value = Math.max(0, Math.min(sectionPages.value - 1, chunkPage));
+  trackingReady.value = true;
   emitPosition();
 };
 
@@ -462,12 +467,17 @@ watch(() => props.sections.length, async (length) => {
 onMounted(async () => {
   if (openJumpPending() && props.sections.length) {
     await goToChunk(props.startChunk);
+    trackingReady.value = true;
     return;
   }
   if (openJumpPending()) return; // sections not ready; a watch will land it
   const restored = restorePosition();
   const startAt = restored?.section ?? props.startSection;
   await renderSection(startAt, restored?.page ?? 0);
+  if (props.startChunk >= 0 && props.sections.length) {
+    await goToChunk(props.startChunk);
+    trackingReady.value = true;
+  }
 });
 
 // A saved position that arrives after mount (the book content loads

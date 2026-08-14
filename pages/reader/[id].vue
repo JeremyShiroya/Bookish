@@ -309,16 +309,15 @@ const readerPageRef = ref(null)
 const chaptersContainerRef = ref(null)
 const pdfViewerRef = ref(null)
 const tocNavRef = ref(null)
-// Bumped every time a slice of the book's sentences gets wrapped in chunk
-// spans. Highlights are anchored to those spans, so the reader cannot paint
-// anything until they exist — and mapping is spread over idle slices, so
-// "content is rendered" is not the same moment as "content is anchorable".
 const chunkMapVersion = ref(0)
+const pagedRef = ref(null)
+const positionTrackingReady = ref(false)
 
 const mobileReaderRefs = {
   readerPageRef,
   chaptersContainerRef,
   pdfViewerRef,
+  pagedRef,
   chunkMapVersion,
 }
 
@@ -857,6 +856,7 @@ function goToTocItem(item) {
 // Mobile paged reader position (section + page) — keep the chapter index and
 // saved progress in step without any scroll observation.
 function handleMobilePosition(position) {
+  if (!positionTrackingReady.value) return
   const section = Number(position?.section)
   if (!Number.isFinite(section)) return
   if (section !== currentChapterIdx.value) currentChapterIdx.value = section
@@ -1498,12 +1498,20 @@ async function saveReadingProgress(position) {
 }
 
 function queueProgressSave() {
-  if (!readerReady.value) return
+  if (!readerReady.value || !positionTrackingReady.value) return
   if (_progressSaveTimer) clearTimeout(_progressSaveTimer)
   _progressSaveTimer = setTimeout(() => {
     _progressSaveTimer = null
     saveReadingProgress()
   }, READING_POSITION_SAVE_DELAY_MS)
+}
+
+async function flushPendingSave(position) {
+  if (_progressSaveTimer) {
+    clearTimeout(_progressSaveTimer)
+    _progressSaveTimer = null
+  }
+  await saveReadingProgress(position)
 }
 
 function updateBookEdge() {
@@ -1541,7 +1549,7 @@ let _scrollRaf = null
 let _scrollRestoringPosition = false
 
 function updateCurrentChapterFromScroll() {
-  if (_scrollRestoringPosition) return
+  if (_scrollRestoringPosition || !positionTrackingReady.value) return
   if (!readsAsEpub.value || !chapterList.value.length || !import.meta.client) return
 
   // O(1) hit-test at the reading anchor line instead of measuring every
@@ -1717,8 +1725,8 @@ async function loadBook(id) {
         })
       })
     } else {
-      const el = document.getElementById(`ch-${safeIndex}`)
-      if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' })
+      await nextTick()
+      await mobileReaderRefs.pagedRef?.value?.goToChunk?.(targetChunk)
     }
 
     if (isCurrentBookNarrating.value) {
@@ -1732,6 +1740,8 @@ async function loadBook(id) {
     readerReady.value = true
     if (!_scrollRestoringPosition) updateCurrentChapterFromScroll()
   }
+
+  positionTrackingReady.value = true
 }
 
 // Scroll mode's counterpart to the paged reader's goToChunk: mount the owning
@@ -1859,12 +1869,15 @@ watch(usePdfReflowView, async (reflowing) => {
 // sections exist.
 watch(usePagedReader, async (paged) => {
   if (!readsAsEpub.value) return
+  await flushPendingSave()
   const target = currentReadingChunk.value
   if (!Number.isFinite(target) || target < 0) return
 
   if (paged) {
     // The paged reader remounts with start-chunk already pointing here.
     currentChapterIdx.value = sectionForChunk(target)
+    await nextTick()
+    await mobileReaderRefs.pagedRef?.value?.goToChunk?.(target)
     return
   }
 
@@ -1889,7 +1902,19 @@ watch(isPdfRenderable, async () => {
   updateBookEdge()
 })
 
+onBeforeRouteLeave(async (to, from, next) => {
+  await flushPendingSave()
+  next()
+})
+
+let _windowUnloadHandler = null
+
 onMounted(async () => {
+  _windowUnloadHandler = () => { flushPendingSave() }
+  if (import.meta.client) {
+    window.addEventListener('beforeunload', _windowUnloadHandler)
+    window.addEventListener('pagehide', _windowUnloadHandler)
+  }
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('resize', updateBookEdge)
   window.addEventListener('scroll', onReaderScroll, { passive: true })
@@ -1913,13 +1938,17 @@ onMounted(async () => {
 })
 
 onUnmounted(async () => {
+  if (import.meta.client && _windowUnloadHandler) {
+    window.removeEventListener('beforeunload', _windowUnloadHandler)
+    window.removeEventListener('pagehide', _windowUnloadHandler)
+    _windowUnloadHandler = null
+  }
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('resize', updateBookEdge)
   window.removeEventListener('scroll', onReaderScroll)
   _viewportQuery?.removeEventListener('change', _syncViewport)
   _viewportQuery = null
   if (_scrollRaf !== null) cancelAnimationFrame(_scrollRaf)
-  if (_progressSaveTimer) clearTimeout(_progressSaveTimer)
   if (_observer) _observer.disconnect()
   _cancelScheduledChunkMapBuild()
   _cancelIdleSectionMounting()
@@ -1928,7 +1957,7 @@ onUnmounted(async () => {
   _ttsWordHighlight = null
 
   if (!book.value) return
-  await saveReadingProgress()
+  await flushPendingSave()
 })
 </script>
 
