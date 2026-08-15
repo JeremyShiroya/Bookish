@@ -3,25 +3,10 @@
     <!-- Per-page illustrations drawn inline so they inherit the theme's
          brand colours in light AND dark mode (a PNG can't). -->
     <div v-if="illustration" class="empty-illustration" aria-hidden="true">
-      <img v-if="illustration === 'library' || illustration === 'books'" class="empty-illustration-img" src="/Images/Empty State 1.png" alt="" />
+      <img v-if="illustration === 'library' || illustration === 'books'" class="empty-illustration-img" src="/Images/Empty State 2.png" alt="" />
       <img v-else-if="illustration === 'series'" class="empty-illustration-img" src="/Images/Empty State 3.png" alt="" />
-      <img v-else-if="illustration === 'favourites'" class="empty-illustration-img" src="/Images/Empty State 2.png" alt="" />
-      <!-- Playlists: a fan of book covers with a count badge -->
-      <svg v-else-if="illustration === 'playlists'" viewBox="0 0 200 150" xmlns="http://www.w3.org/2000/svg">
-        <ellipse class="art-halo" cx="100" cy="92" rx="78" ry="44" />
-        <g transform="rotate(-12 74 118)">
-          <rect class="art-tint" x="52" y="60" width="40" height="58" rx="6" />
-        </g>
-        <g transform="rotate(12 128 118)">
-          <rect class="art-deep" x="108" y="60" width="40" height="58" rx="6" />
-        </g>
-        <rect class="art-ink" x="79" y="52" width="42" height="64" rx="6" />
-        <rect class="art-inner" x="86" y="60" width="28" height="48" rx="4" />
-        <circle class="art-accent" cx="141" cy="112" r="14" />
-        <path class="art-badge-plus" d="M135 112 h12 M141 106 v12" />
-        <path class="art-accent art-float" d="M56 32 l2.8 6.4 6.4 2.8 -6.4 2.8 -2.8 6.4 -2.8 -6.4 -6.4 -2.8 6.4 -2.8 Z" />
-        <circle class="art-dot" cx="150" cy="36" r="4" />
-      </svg>
+      <img v-else-if="illustration === 'favourites'" class="empty-illustration-img" src="/Images/Favourites empty-state.png" alt="" />
+      <img v-else-if="illustration === 'playlists'" class="empty-illustration-img" src="/Images/Playlist empty-state.png" alt="" />
 
       <!-- Filtered view with no matches: a magnifier over the shelf -->
       <svg v-else-if="illustration === 'filter'" viewBox="0 0 200 150" xmlns="http://www.w3.org/2000/svg">

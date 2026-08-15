@@ -36,8 +36,8 @@
     <EmptyState
       v-else-if="showEmpty && !showSkeleton && !seriesSource.length"
       illustration="series"
-      title="No series yet"
-      description="Books that share a series name group here automatically — refresh a book's details to pick up its series."
+      title="Nothing to show yet"
+      description="Books belonging to a series will be shown here"
     >
       <template #action>
         <NuxtLink to="/books" class="add-btn">

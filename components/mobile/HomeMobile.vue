@@ -86,7 +86,7 @@
             </NuxtLink>
           </div>
           <div class="empty-reading-arc"></div>
-          <img src="/Images/Empty State 2.png" alt="" class="empty-reading-illustration" />
+          <img src="/Images/Empty State 1.png" alt="" class="empty-reading-illustration" />
         </div>
       </section>
 
@@ -105,7 +105,7 @@
           />
         </div>
         <div v-else class="empty-recently-card">
-          <img src="/Images/Empty State 1.png" alt="" class="empty-recently-illustration" />
+          <img src="/Images/Empty State 2.png" alt="" class="empty-recently-illustration" />
           <div class="empty-recently-content">
             <h3 class="empty-recently-title">Let's build your library<br />One book at a time</h3>
             <NuxtLink to="/add" class="empty-recently-btn">
@@ -131,6 +131,8 @@
         </div>
         <div v-else class="empty-series-card">
           <img src="/Images/Empty State 3.png" alt="" class="empty-series-illustration" />
+          <h3 class="empty-series-title">Nothing to show yet</h3>
+          <p class="empty-series-sub">Books belonging to a series will be shown here</p>
         </div>
       </section>
     </div>
@@ -427,196 +429,6 @@ const retryLoadLibrary = () => {
   font-weight: 400;
   text-decoration: none;
   cursor: pointer;
-}
-
-/* ── Currently Reading empty state ── */
-.empty-reading-card {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  height: 130px;
-  overflow: hidden;
-  border-radius: var(--mobile-card-radius);
-  background: linear-gradient(135deg, #6c3fb5 0%, #8a2be2 40%, #a855f7 100%);
-  color: #fff;
-}
-
-.empty-reading-content {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 20px;
-  flex: 1;
-  min-width: 0;
-}
-
-.empty-reading-title {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  line-height: 1.25;
-  color: #fff;
-}
-
-.empty-reading-sub {
-  margin: 0 0 8px;
-  font-size: var(--mobile-caption-size, 0.8125rem);
-  opacity: 0.85;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.empty-reading-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: fit-content;
-  padding: 8px 16px;
-  border: 0;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.25);
-  color: #fff;
-  font-family: inherit;
-  font-size: var(--mobile-caption-size, 0.8125rem);
-  font-weight: 500;
-  text-decoration: none;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-  transition: background 0.2s;
-}
-
-.empty-reading-btn:active {
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.empty-reading-btn i {
-  font-size: 14px;
-}
-
-.empty-reading-arc {
-  position: absolute;
-  right: -20px;
-  bottom: -20px;
-  width: 180px;
-  height: 180px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  pointer-events: none;
-}
-
-.empty-reading-illustration {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 140px;
-  height: 140px;
-  object-fit: contain;
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* ── Recently Added empty state ── */
-.empty-recently-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 180px;
-  padding: 0 20px;
-  border-radius: var(--mobile-card-radius);
-  background: #e8e8f1;
-}
-
-:root[data-theme="dark"] .empty-recently-card {
-  background: var(--color-surface-primary);
-}
-
-.empty-recently-illustration {
-  width: 180px;
-  height: auto;
-  flex: 0 0 auto;
-  object-fit: contain;
-}
-
-.empty-recently-content {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-}
-
-.empty-recently-title {
-  margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--color-text-primary);
-}
-
-.empty-recently-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: fit-content;
-  padding: 8px 16px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--color-text-primary, #1e293b);
-  color: var(--color-text-on-brand, #fff);
-  font-family: inherit;
-  font-size: var(--mobile-caption-size, 0.8125rem);
-  font-weight: 500;
-  text-decoration: none;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.empty-recently-btn:active {
-  opacity: 0.8;
-}
-
-.empty-recently-btn i {
-  font-size: 14px;
-}
-
-/* ── Series empty state ── */
-.empty-series-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 214px;
-  padding: 20px;
-  border-radius: var(--mobile-card-radius);
-  background: #e8e8f1;
-  text-align: center;
-}
-
-:root[data-theme="dark"] .empty-series-card {
-  background: var(--color-surface-primary);
-}
-
-.empty-series-illustration {
-  width: 180px;
-  height: auto;
-  margin-bottom: 12px;
-  object-fit: contain;
-}
-
-.empty-series-title {
-  margin: 0 0 4px;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.empty-series-sub {
-  margin: 0;
-  font-size: var(--mobile-caption-size, 0.8125rem);
-  color: var(--color-text-muted);
-  line-height: 1.45;
-  max-width: 240px;
 }
 </style>
 

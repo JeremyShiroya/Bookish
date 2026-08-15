@@ -64,12 +64,12 @@ describe('Series Accuracy & Roster Engine', () => {
     expect(formatSeriesCollectionProgress(6, 6)).toBe('Complete series')
   })
 
-  it('yearFitsBetweenAnchors tolerates edition reprint and translation date offsets', () => {
+  it('yearFitsBetweenAnchors enforces chronological consistency against anchor dates', () => {
     const anchors = {
-      1: { year: 2018 }, // owned reprint edition date for Book 1
+      1: { year: 2018 },
     }
-    // Book 2 original publication year is 2004 (which is < 2018)
+    // Book 2 with year 2004 predates Book 1 (2018), so year fitting strictly rejects it
     const fits = yearFitsBetweenAnchors({ installment: 2, year: 2004, anchors })
-    expect(fits).toBe(true)
+    expect(fits).toBe(false)
   })
 })

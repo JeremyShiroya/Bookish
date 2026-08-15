@@ -214,7 +214,7 @@ describe('formats the app handles at all', () => {
     expect(sync).toContain('enabledExtensionPattern(enabledFormats)')
 
     const modal = read('components/shared/FormatChoiceModal.vue')
-    expect(modal).toContain('syncDeviceLibrary()')
+    expect(modal).toContain('applyFormatMode')
   })
 
   test('removing a format never deletes the file', () => {

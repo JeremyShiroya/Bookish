@@ -13,12 +13,12 @@ const read = (path) => readFileSync(resolve(root, path), 'utf8')
 
 describe('appearance preferences', () => {
   test('new preference keys have sane defaults', () => {
-    expect(DEFAULT_BOOKISH_SETTINGS.seriesCardBackground).toBe('blank')
+    expect(DEFAULT_BOOKISH_SETTINGS.seriesCardBackground).toBe('blur')
     expect(DEFAULT_BOOKISH_SETTINGS.seriesCardLayout).toBe('fan')
     expect(DEFAULT_BOOKISH_SETTINGS.favouritesCardBackground).toBe('blur')
-    expect(DEFAULT_BOOKISH_SETTINGS.favouritesCardLayout).toBe('grid')
+    expect(DEFAULT_BOOKISH_SETTINGS.favouritesCardLayout).toBe('list')
     // Playlist cards default to the same look as series cards.
-    expect(DEFAULT_BOOKISH_SETTINGS.playlistCardBackground).toBe('blank')
+    expect(DEFAULT_BOOKISH_SETTINGS.playlistCardBackground).toBe('blur')
     expect(DEFAULT_BOOKISH_SETTINGS.playlistCardLayout).toBe('fan')
     expect(DEFAULT_BOOKISH_SETTINGS.readerHighlight).toBe(true)
     expect(DEFAULT_BOOKISH_SETTINGS.listenCoverBlur).toBe(true)
@@ -68,9 +68,9 @@ describe('appearance preferences', () => {
       formatFilter: 'mobi',
     })
     expect(junk.seriesCardLayout).toBe('fan')
-    expect(junk.favouritesCardLayout).toBe('grid')
+    expect(junk.favouritesCardLayout).toBe('list')
     expect(junk.playlistCardLayout).toBe('fan')
-    expect(junk.playlistCardBackground).toBe('blank')
+    expect(junk.playlistCardBackground).toBe('blur')
     expect(junk.formatFilter).toBe('all')
   })
 

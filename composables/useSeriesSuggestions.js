@@ -328,7 +328,7 @@ export const confirmPlacement = (results = [], { title, author, seriesName } = {
 //
 // The year checked is always the PROVIDER's, never the model's, so no fact the
 // model asserted is ever what justifies the write.
-export const yearFitsBetweenAnchors = ({ installment, year, anchors = {}, maxOffset = 15 } = {}) => {
+export const yearFitsBetweenAnchors = ({ installment, year, anchors = {} } = {}) => {
   const slot = Number(installment)
   const value = Number(year)
   if (!Number.isSafeInteger(slot) || slot < 1) return false
@@ -342,13 +342,13 @@ export const yearFitsBetweenAnchors = ({ installment, year, anchors = {}, maxOff
       && number !== slot
     ))
 
-  // If no known dated anchors exist, permit the year placement.
-  if (!known.length) return true
+  if (!known.length) return false
 
   for (const [number, entryYear] of known) {
-    // Allow a tolerance buffer for translation / paperback reprint date skews
-    if (number < slot && (entryYear - value) > maxOffset) return false
-    if (number > slot && (value - entryYear) > maxOffset) return false
+    // Earlier books cannot be published after this one, later ones cannot come
+    // before it. Equality is allowed: two installments do ship in one year.
+    if (number < slot && entryYear > value) return false
+    if (number > slot && entryYear < value) return false
   }
 
   return true
